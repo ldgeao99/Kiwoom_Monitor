@@ -1,0 +1,7 @@
+.env
+
+daily_snapshot/*
+
+__pycache__/
+*.pyc
+.idea/

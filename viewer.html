@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>종목 순위 스냅샷 뷰어</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8ec;
+    --muted: #9aa1ac;
+    --accent: #ff5a5f;
+    --pos: #ff5a5f;
+    --neg: #4d8bff;
+    --row-hover: #1f2330;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --border: #e1e3e8;
+      --text: #1a1c22;
+      --muted: #6b7280;
+      --accent: #d63b41;
+      --pos: #d63b41;
+      --neg: #2f6fed;
+      --row-hover: #f0f2f7;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  input[type="file"], input[type="number"], input[type="text"], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+  input[type="number"] { width: 90px; }
+  input[type="text"] { width: 180px; }
+  button {
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  label.checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+
+  .stats {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .stat { display: flex; flex-direction: column; }
+  .stat .value { font-size: 22px; font-weight: 700; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--text); }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody tr:hover { background: var(--row-hover); }
+  .pos { color: var(--pos); font-weight: 600; }
+  .neg { color: var(--neg); font-weight: 600; }
+  .zero { color: var(--muted); }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 0;
+    font-size: 13px;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .pagination button { padding: 5px 10px; }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+
+  .table-wrap { overflow-x: auto; }
+
+  .race-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .race-controls button { min-width: 42px; }
+  .race-time {
+    font-size: 14px;
+    font-weight: 600;
+    margin-left: auto;
+  }
+  #raceSlider { flex: 1 1 100%; }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  #raceContainer {
+    position: relative;
+    width: 100%;
+  }
+  .race-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    transition: top 0.5s ease, opacity 0.4s ease;
+  }
+  .race-bar {
+    height: 26px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: width 0.5s ease, background-color 0.3s ease;
+    min-width: 60px;
+  }
+  .race-rank {
+    width: 26px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .race-meta {
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .race-empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 0;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<h1>📊 종목 순위 스냅샷 뷰어</h1>
+<div class="subtitle">main.py가 저장한 daily_snapshot 폴더의 스냅샷 파일 목록에서 선택해 조회합니다.</div>
+
+<div class="panel">
+  <div class="controls">
+    <div class="field" style="flex: 1 1 260px;">
+      <label>스냅샷 파일 <button id="refreshFiles" style="padding:3px 8px; font-size:11px; margin-left:6px;">새로고침</button></label>
+      <select id="fileSelect">
+        <option value="">-- 파일을 선택하세요 --</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>등락율 임계값 (%)</label>
+      <input type="number" id="threshold" value="1.0" step="0.1">
+    </div>
+    <div class="field">
+      <label>종목명 / 코드 검색</label>
+      <input type="text" id="search" placeholder="예: 삼성전자 또는 005930">
+    </div>
+    <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" id="onlyThreshold">
+        임계값 이상만 보기
+      </label>
+    </div>
+    <div class="field">
+      <label>정렬</label>
+      <select id="sortSelect">
+        <option value="time_desc">시간 최신순</option>
+        <option value="time_asc">시간 오래된순</option>
+        <option value="chgr_desc">등락율 높은순</option>
+        <option value="chgr_asc">등락율 낮은순</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="stats">
+    <div class="stat"><div class="value" id="statSnapshots">-</div><div class="label">불러온 스냅샷 수</div></div>
+    <div class="stat"><div class="value" id="statRows">-</div><div class="label">전체 종목 레코드 수</div></div>
+    <div class="stat"><div class="value" id="statSurge">-</div><div class="label">임계값 이상 이벤트 수</div></div>
+    <div class="stat"><div class="value" id="statRange">-</div><div class="label">시간 범위</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="time">시간</th>
+          <th data-key="rank">순위</th>
+          <th data-key="name">종목명</th>
+          <th data-key="code">코드</th>
+          <th data-key="price">현재가</th>
+          <th data-key="chgr">직전대비 등락율</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div id="emptyMsg" class="empty" style="display:none;">파일을 선택하면 데이터가 표시됩니다.</div>
+  <div class="pagination">
+    <button id="prevPage">이전</button>
+    <span id="pageInfo">-</span>
+    <button id="nextPage">다음</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 style="font-size:16px; margin: 0 0 14px;">🎬 순위 변화 시뮬레이션</h2>
+  <div class="race-controls">
+    <button id="playBtn">▶ 재생</button>
+    <button id="stepBack">◀</button>
+    <button id="stepFwd">▶</button>
+    <div class="field">
+      <label>속도</label>
+      <select id="speedSelect">
+        <option value="1600">0.5x</option>
+        <option value="800" selected>1x</option>
+        <option value="400">2x</option>
+        <option value="150">4x</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>표시 종목 수</label>
+      <select id="topNSelect">
+        <option value="10">Top 10</option>
+        <option value="15" selected>Top 15</option>
+        <option value="20">Top 20</option>
+      </select>
+    </div>
+    <div class="race-time" id="raceTime">-</div>
+    <input type="range" id="raceSlider" min="0" max="0" value="0" step="1">
+  </div>
+  <div id="raceContainer"></div>
+  <div id="raceEmpty" class="race-empty">파일을 선택하면 순위 변화 시뮬레이션이 표시됩니다.</div>
+</div>
+
+<script>
+let rows = [];
+let snapshots = [];
+let snapshotCount = 0;
+const PAGE_SIZE = 100;
+let currentPage = 1;
+
+let raceIndex = 0;
+let racePlaying = false;
+let raceTimer = null;
+const codeColors = {};
+
+const playBtn = document.getElementById('playBtn');
+const stepBackBtn = document.getElementById('stepBack');
+const stepFwdBtn = document.getElementById('stepFwd');
+const speedSelect = document.getElementById('speedSelect');
+const topNSelect = document.getElementById('topNSelect');
+const raceTimeEl = document.getElementById('raceTime');
+const raceSlider = document.getElementById('raceSlider');
+const raceContainer = document.getElementById('raceContainer');
+const raceEmpty = document.getElementById('raceEmpty');
+
+function colorForCode(code) {
+  if (!codeColors[code]) {
+    let hash = 0;
+    for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+    codeColors[code] = `hsl(${hash % 360}, 60%, 45%)`;
+  }
+  return codeColors[code];
+}
+
+const ROW_HEIGHT = 38;
+
+const fileSelect = document.getElementById('fileSelect');
+const refreshFilesBtn = document.getElementById('refreshFiles');
+const thresholdInput = document.getElementById('threshold');
+const searchInput = document.getElementById('search');
+const onlyThresholdInput = document.getElementById('onlyThreshold');
+const sortSelect = document.getElementById('sortSelect');
+const tbody = document.getElementById('tbody');
+const emptyMsg = document.getElementById('emptyMsg');
+const prevPageBtn = document.getElementById('prevPage');
+const nextPageBtn = document.getElementById('nextPage');
+const pageInfo = document.getElementById('pageInfo');
+
+function parseChgr(str) {
+  if (!str) return 0;
+  const v = parseFloat(String(str).replace('+', ''));
+  return isNaN(v) ? 0 : v;
+}
+
+// 가격 필드는 API에서 등락 방향 표시용 +/- 부호가 붙어 오므로 제거하고 절대값으로 표시
+function formatPrice(str) {
+  if (!str) return '';
+  const v = Math.abs(parseFloat(String(str).replace(/[+-]/g, '')));
+  return isNaN(v) ? '' : v.toLocaleString();
+}
+
+async function loadFileList() {
+  try {
+    const res = await fetch('/api/files');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const files = await res.json();
+    const prevValue = fileSelect.value;
+    fileSelect.innerHTML = '<option value="">-- 파일을 선택하세요 --</option>';
+    for (const f of files) {
+      const opt = document.createElement('option');
+      opt.value = f.name;
+      opt.textContent = f.name;
+      fileSelect.appendChild(opt);
+    }
+    if (prevValue && files.some(f => f.name === prevValue)) {
+      fileSelect.value = prevValue;
+    }
+  } catch (err) {
+    fileSelect.innerHTML = '<option value="">서버에 연결할 수 없습니다 (server.py 실행 필요)</option>';
+  }
+}
+
+refreshFilesBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  loadFileList();
+});
+
+fileSelect.addEventListener('change', async () => {
+  const name = fileSelect.value;
+  if (!name) return;
+  const res = await fetch(`/daily_snapshot/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    alert('파일을 불러오지 못했습니다.');
+    return;
+  }
+  const text = await res.text();
+  loadSnapshotText(text);
+});
+
+function loadSnapshotText(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+
+  rows = [];
+  snapshots = [];
+  snapshotCount = 0;
+
+  for (const line of lines) {
+    let record;
+    try {
+      record = JSON.parse(line);
+    } catch (err) {
+      continue;
+    }
+    snapshotCount++;
+    const ts = record.timestamp;
+    const items = record.items || [];
+    const snapItems = [];
+    for (const item of items) {
+      const parsed = {
+        time: ts,
+        rank: parseInt(item.bigd_rank, 10) || 0,
+        name: item.stk_nm || '',
+        code: item.stk_cd || '',
+        price: item.past_curr_prc || '',
+        chgr: parseChgr(item.prev_base_chgr),
+      };
+      rows.push(parsed);
+      snapItems.push(parsed);
+    }
+    snapItems.sort((a, b) => a.rank - b.rank);
+    snapshots.push({ time: ts, items: snapItems });
+  }
+
+  snapshots.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+
+  currentPage = 1;
+  render();
+
+  raceIndex = snapshots.length > 0 ? snapshots.length - 1 : 0;
+  raceSlider.max = Math.max(0, snapshots.length - 1);
+  raceSlider.value = raceIndex;
+  stopRace();
+  renderRace();
+}
+
+function stopRace() {
+  racePlaying = false;
+  playBtn.textContent = '▶ 재생';
+  if (raceTimer) {
+    clearInterval(raceTimer);
+    raceTimer = null;
+  }
+}
+
+function startRace() {
+  if (snapshots.length === 0) return;
+  racePlaying = true;
+  playBtn.textContent = '⏸ 일시정지';
+  const interval = parseInt(speedSelect.value, 10);
+  raceTimer = setInterval(() => {
+    if (raceIndex >= snapshots.length - 1) {
+      stopRace();
+      return;
+    }
+    raceIndex++;
+    raceSlider.value = raceIndex;
+    renderRace();
+  }, interval);
+}
+
+playBtn.addEventListener('click', () => {
+  if (racePlaying) stopRace();
+  else startRace();
+});
+
+stepBackBtn.addEventListener('click', () => {
+  stopRace();
+  if (raceIndex > 0) { raceIndex--; raceSlider.value = raceIndex; renderRace(); }
+});
+
+stepFwdBtn.addEventListener('click', () => {
+  stopRace();
+  if (raceIndex < snapshots.length - 1) { raceIndex++; raceSlider.value = raceIndex; renderRace(); }
+});
+
+raceSlider.addEventListener('input', () => {
+  stopRace();
+  raceIndex = parseInt(raceSlider.value, 10);
+  renderRace();
+});
+
+speedSelect.addEventListener('change', () => {
+  if (racePlaying) { stopRace(); startRace(); }
+});
+
+topNSelect.addEventListener('change', () => renderRace());
+
+function renderRace() {
+  if (snapshots.length === 0) {
+    raceEmpty.style.display = 'block';
+    raceContainer.innerHTML = '';
+    raceContainer.style.height = '0px';
+    raceTimeEl.textContent = '-';
+    return;
+  }
+  raceEmpty.style.display = 'none';
+
+  const topN = parseInt(topNSelect.value, 10);
+  const snap = snapshots[raceIndex];
+  raceTimeEl.textContent = `${(snap.time || '').slice(0, 19).replace('T', ' ')}  (${raceIndex + 1} / ${snapshots.length})`;
+
+  const items = snap.items.filter(it => it.rank >= 1 && it.rank <= topN);
+  raceContainer.style.height = `${topN * ROW_HEIGHT}px`;
+
+  const seen = new Set();
+
+  for (const it of items) {
+    seen.add(it.code);
+    let rowEl = raceContainer.querySelector(`[data-code="${CSS.escape(it.code)}"]`);
+    if (!rowEl) {
+      rowEl = document.createElement('div');
+      rowEl.className = 'race-row';
+      rowEl.dataset.code = it.code;
+      rowEl.style.top = `${(it.rank - 1) * ROW_HEIGHT}px`;
+      rowEl.style.opacity = '0';
+      rowEl.innerHTML = `
+        <div class="race-rank"></div>
+        <div class="race-bar"></div>
+        <div class="race-meta"></div>
+      `;
+      raceContainer.appendChild(rowEl);
+      requestAnimationFrame(() => { rowEl.style.opacity = '1'; });
+    }
+
+    rowEl.style.top = `${(it.rank - 1) * ROW_HEIGHT}px`;
+    rowEl.style.opacity = '1';
+
+    const bar = rowEl.querySelector('.race-bar');
+    bar.style.width = '100%';
+    bar.style.backgroundColor = colorForCode(it.code);
+    bar.textContent = it.name;
+
+    rowEl.querySelector('.race-rank').textContent = it.rank;
+
+    const sign = it.chgr > 0 ? '+' : '';
+    const priceStr = it.price ? `${formatPrice(it.price)}원` : '';
+    const meta = rowEl.querySelector('.race-meta');
+    meta.textContent = `${priceStr}  ${sign}${it.chgr.toFixed(2)}%`;
+    meta.style.color = it.chgr > 0 ? 'var(--pos)' : (it.chgr < 0 ? 'var(--neg)' : 'var(--muted)');
+  }
+
+  raceContainer.querySelectorAll('.race-row').forEach(rowEl => {
+    if (!seen.has(rowEl.dataset.code)) {
+      rowEl.style.opacity = '0';
+    }
+  });
+}
+
+[thresholdInput, searchInput, onlyThresholdInput, sortSelect].forEach(el => {
+  el.addEventListener('input', () => { currentPage = 1; render(); });
+});
+
+prevPageBtn.addEventListener('click', () => { if (currentPage > 1) { currentPage--; render(); } });
+nextPageBtn.addEventListener('click', () => { currentPage++; render(); });
+
+document.querySelectorAll('thead th').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    const map = {
+      time: sortSelect.value === 'time_desc' ? 'time_asc' : 'time_desc',
+      chgr: sortSelect.value === 'chgr_desc' ? 'chgr_asc' : 'chgr_desc',
+    };
+    if (map[key]) {
+      sortSelect.value = map[key];
+      currentPage = 1;
+      render();
+    }
+  });
+});
+
+function render() {
+  const threshold = parseFloat(thresholdInput.value) || 0;
+  const onlyThreshold = onlyThresholdInput.checked;
+  const query = searchInput.value.trim().toLowerCase();
+  const sortMode = sortSelect.value;
+
+  let filtered = rows.filter(r => {
+    if (onlyThreshold && r.chgr < threshold) return false;
+    if (query && !(r.name.toLowerCase().includes(query) || r.code.toLowerCase().includes(query))) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    switch (sortMode) {
+      case 'time_asc': return a.time < b.time ? -1 : a.time > b.time ? 1 : 0;
+      case 'time_desc': return a.time < b.time ? 1 : a.time > b.time ? -1 : 0;
+      case 'chgr_asc': return a.chgr - b.chgr;
+      case 'chgr_desc': return b.chgr - a.chgr;
+      default: return 0;
+    }
+  });
+
+  const surgeCount = rows.filter(r => r.chgr >= threshold).length;
+  document.getElementById('statSnapshots').textContent = snapshotCount.toLocaleString();
+  document.getElementById('statRows').textContent = rows.length.toLocaleString();
+  document.getElementById('statSurge').textContent = surgeCount.toLocaleString();
+
+  if (rows.length > 0) {
+    const times = rows.map(r => r.time).sort();
+    document.getElementById('statRange').textContent = `${times[0]?.slice(0,19).replace('T',' ')} ~ ${times[times.length-1]?.slice(0,19).replace('T',' ')}`;
+  } else {
+    document.getElementById('statRange').textContent = '-';
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + PAGE_SIZE);
+
+  tbody.innerHTML = '';
+  if (pageRows.length === 0) {
+    emptyMsg.style.display = 'block';
+    emptyMsg.textContent = rows.length === 0 ? '파일을 선택하면 데이터가 표시됩니다.' : '조건에 맞는 데이터가 없습니다.';
+  } else {
+    emptyMsg.style.display = 'none';
+    for (const r of pageRows) {
+      const tr = document.createElement('tr');
+      const chgrClass = r.chgr > 0 ? 'pos' : (r.chgr < 0 ? 'neg' : 'zero');
+      const sign = r.chgr > 0 ? '+' : '';
+      tr.innerHTML = `
+        <td>${(r.time || '').slice(0,19).replace('T',' ')}</td>
+        <td>${r.rank}</td>
+        <td>${r.name}</td>
+        <td>${r.code}</td>
+        <td>${formatPrice(r.price)}원</td>
+        <td class="${chgrClass}">${sign}${r.chgr.toFixed(2)}%</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  pageInfo.textContent = `${currentPage} / ${totalPages} 페이지 (총 ${filtered.length.toLocaleString()}건)`;
+  prevPageBtn.disabled = currentPage <= 1;
+  nextPageBtn.disabled = currentPage >= totalPages;
+}
+
+render();
+loadFileList();
+</script>
+</body>
+</html>
