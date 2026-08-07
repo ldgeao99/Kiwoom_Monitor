@@ -22,8 +22,10 @@ def now_kst():
     return datetime.now(KST)
 
 
-# 한국시간 기준 08:00~20:00 기록 시간대인지 확인하는 함수
+# 한국시간 기준 08:00~20:00 기록 시간대(토, 일 제외)인지 확인하는 함수
 def is_recording_hours(now):
+    if now.weekday() >= 5:  # 5=토요일, 6=일요일
+        return False
     return RECORD_START_HOUR <= now.hour < RECORD_END_HOUR
 
 
@@ -55,16 +57,39 @@ def fn_ka00198(token, data):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200:
-            return response.json()
-        else:
+        if response.status_code != 200:
             print(
                 f"[조회 에러] HTTP {response.status_code} - {response.text}"
             )
             return None
+
+        body = response.json()
+        return_code = body.get("return_code")
+        item_count = len(body.get("item_inq_rank") or [])
+        print(f"[응답 수신] return_code={return_code} item_count={item_count}")
+        if return_code not in (None, 0):
+            print(
+                f"[조회 에러] return_code={return_code} return_msg={body.get('return_msg')}"
+            )
+            return None
+        return body
     except Exception as e:
         print(f"[조회 에러] 요청 중 예외 발생: {e}")
         return None
+
+
+# 빈 응답(item_inq_rank가 없거나 비어있음) 시 짧게 대기 후 재시도하는 함수
+def fetch_rank_list(token, data, max_retries=2, retry_delay=0.5):
+    for attempt in range(max_retries + 1):
+        response_data = fn_ka00198(token=token, data=data)
+        items = (response_data or {}).get("item_inq_rank") or []
+        if items:
+            return items
+        if attempt < max_retries:
+            print(f"[경고] 빈 응답 수신 (시도 {attempt + 1}/{max_retries + 1}) - {retry_delay}초 후 재시도")
+            time.sleep(retry_delay)
+    print("[경고] 재시도 후에도 데이터를 가져오지 못했습니다.")
+    return None
 
 
 # 직전 대비 등락율이 +1% 이상인 종목만 걸러서 출력하는 함수
@@ -135,7 +160,7 @@ if __name__ == "__main__":
             if not is_recording_hours(now_kst()):
                 if was_recording_hours:
                     print(
-                        f"\n>>> 기록 시간대({RECORD_START_HOUR:02d}:00~{RECORD_END_HOUR:02d}:00)가 아니므로 대기합니다."
+                        f"\n>>> 기록 시간대({RECORD_START_HOUR:02d}:00~{RECORD_END_HOUR:02d}:00, 평일)가 아니므로 대기합니다."
                     )
                     was_recording_hours = False
                 time.sleep(60)
@@ -150,14 +175,12 @@ if __name__ == "__main__":
             print(f"📊 [실시간 종목 순위 조회] - {current_time}")
             print(f"==================================================")
 
-            # API 호출
-            response_data = fn_ka00198(token=access_token, data=stk_params)
+            # API 호출 (빈 응답 시 자동 재시도)
+            current_rank_list = fetch_rank_list(token=access_token, data=stk_params)
 
-            if response_data and "item_inq_rank" in response_data:
-                current_rank_list = response_data["item_inq_rank"]
+            if current_rank_list:
                 save_snapshot(now_kst(), current_rank_list)
                 print_surge_items(current_rank_list, threshold=1.0)
-                print(f"==================================================")
 
             else:
                 print("[경고] 데이터를 정상적으로 가져오지 못했습니다.")

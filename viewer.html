@@ -144,15 +144,38 @@
 
   #raceContainer {
     position: relative;
-    width: 100%;
+    width: 50%;
+    margin: 0 auto;
   }
+  .race-header {
+    display: grid;
+    grid-template-columns: 32px 1fr 90px 60px 100px 100px 1fr;
+    align-items: center;
+    gap: 8px;
+    width: 50%;
+    margin: 0 auto 6px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .race-header span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .race-header span:nth-child(1) { text-align: center; }
+  .race-header span:nth-child(3),
+  .race-header span:nth-child(4),
+  .race-header span:nth-child(5),
+  .race-header span:nth-child(6) { text-align: right; }
   .race-row {
     position: absolute;
     left: 0;
     right: 0;
     height: 34px;
-    display: flex;
+    display: grid;
+    grid-template-columns: 32px 1fr 90px 60px 100px 100px 1fr;
     align-items: center;
+    gap: 8px;
     transition: top 0.5s ease, opacity 0.4s ease;
   }
   .race-bar {
@@ -166,22 +189,38 @@
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
-    transition: width 0.5s ease, background-color 0.3s ease;
-    min-width: 60px;
+    width: 100%;
+    transition: background-color 0.3s ease;
   }
   .race-rank {
-    width: 26px;
-    flex-shrink: 0;
     text-align: center;
     font-size: 12px;
     color: var(--muted);
     font-weight: 700;
   }
-  .race-meta {
-    margin-left: 8px;
+  .race-price {
+    text-align: right;
     font-size: 12px;
-    color: var(--muted);
-    flex-shrink: 0;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .race-chgr {
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .race-base-chgr {
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .race-rank-change {
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
   }
   .race-empty {
     text-align: center;
@@ -214,7 +253,7 @@
     </div>
     <div class="field">
       <label class="checkbox">
-        <input type="checkbox" id="onlyThreshold">
+        <input type="checkbox" id="onlyThreshold" checked>
         임계값 이상만 보기
       </label>
     </div>
@@ -222,7 +261,7 @@
       <label>정렬</label>
       <select id="sortSelect">
         <option value="time_desc">시간 최신순</option>
-        <option value="time_asc">시간 오래된순</option>
+        <option value="time_asc" selected>시간 오래된순</option>
         <option value="chgr_desc">등락율 높은순</option>
         <option value="chgr_asc">등락율 낮은순</option>
       </select>
@@ -245,10 +284,13 @@
       <thead>
         <tr>
           <th data-key="time">시간</th>
-          <th data-key="rank">순위</th>
+          <th data-key="prevRank">직전순위</th>
+          <th data-key="rank">현재순위</th>
+          <th data-key="rankChange">순위변화</th>
           <th data-key="name">종목명</th>
           <th data-key="code">코드</th>
           <th data-key="price">현재가</th>
+          <th data-key="baseChgr">기준시점 등락율</th>
           <th data-key="chgr">직전대비 등락율</th>
         </tr>
       </thead>
@@ -289,6 +331,14 @@
     <div class="race-time" id="raceTime">-</div>
     <input type="range" id="raceSlider" min="0" max="0" value="0" step="1">
   </div>
+  <div class="race-header">
+    <span>순위</span>
+    <span>종목명</span>
+    <span>주가</span>
+    <span>순위변화</span>
+    <span>기준시점 등락율</span>
+    <span>직전대비 등락율</span>
+  </div>
   <div id="raceContainer"></div>
   <div id="raceEmpty" class="race-empty">파일을 선택하면 순위 변화 시뮬레이션이 표시됩니다.</div>
 </div>
@@ -303,7 +353,6 @@ let currentPage = 1;
 let raceIndex = 0;
 let racePlaying = false;
 let raceTimer = null;
-const codeColors = {};
 
 const playBtn = document.getElementById('playBtn');
 const stepBackBtn = document.getElementById('stepBack');
@@ -314,15 +363,6 @@ const raceTimeEl = document.getElementById('raceTime');
 const raceSlider = document.getElementById('raceSlider');
 const raceContainer = document.getElementById('raceContainer');
 const raceEmpty = document.getElementById('raceEmpty');
-
-function colorForCode(code) {
-  if (!codeColors[code]) {
-    let hash = 0;
-    for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
-    codeColors[code] = `hsl(${hash % 360}, 60%, 45%)`;
-  }
-  return codeColors[code];
-}
 
 const ROW_HEIGHT = 38;
 
@@ -408,13 +448,21 @@ function loadSnapshotText(text) {
     const items = record.items || [];
     const snapItems = [];
     for (const item of items) {
+      const code = item.stk_cd || '';
+      const rank = parseInt(item.bigd_rank, 10) || 0;
+      // 순위변화는 API가 직접 계산해 내려주는 rank_chg(부호 포함)를 그대로 사용
+      const rankChgRaw = parseInt(item.rank_chg, 10);
+      const rankChg = isNaN(rankChgRaw) ? null : rankChgRaw;
       const parsed = {
         time: ts,
-        rank: parseInt(item.bigd_rank, 10) || 0,
+        rank,
+        prevRank: rankChg === null ? null : rank + rankChg,
+        rankChg,
         name: item.stk_nm || '',
-        code: item.stk_cd || '',
+        code,
         price: item.past_curr_prc || '',
         chgr: parseChgr(item.prev_base_chgr),
+        baseChgr: parseChgr(item.base_comp_chgr),
       };
       rows.push(parsed);
       snapItems.push(parsed);
@@ -487,6 +535,16 @@ speedSelect.addEventListener('change', () => {
 
 topNSelect.addEventListener('change', () => renderRace());
 
+function jumpRaceToTime(time) {
+  const idx = snapshots.findIndex(s => s.time === time);
+  if (idx === -1) return;
+  stopRace();
+  raceIndex = idx;
+  raceSlider.value = idx;
+  renderRace();
+  raceContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function renderRace() {
   if (snapshots.length === 0) {
     raceEmpty.style.display = 'block';
@@ -518,27 +576,46 @@ function renderRace() {
       rowEl.innerHTML = `
         <div class="race-rank"></div>
         <div class="race-bar"></div>
-        <div class="race-meta"></div>
+        <div class="race-price"></div>
+        <div class="race-rank-change"></div>
+        <div class="race-base-chgr"></div>
+        <div class="race-chgr"></div>
       `;
       raceContainer.appendChild(rowEl);
       requestAnimationFrame(() => { rowEl.style.opacity = '1'; });
     }
 
+    const prevRank = rowEl.dataset.rank ? parseInt(rowEl.dataset.rank, 10) : null;
+
     rowEl.style.top = `${(it.rank - 1) * ROW_HEIGHT}px`;
     rowEl.style.opacity = '1';
 
     const bar = rowEl.querySelector('.race-bar');
-    bar.style.width = '100%';
-    bar.style.backgroundColor = colorForCode(it.code);
     bar.textContent = it.name;
+
+    bar.style.backgroundColor = (prevRank !== null && it.rank < prevRank) ? 'var(--pos)' : 'var(--neg)';
+    rowEl.dataset.rank = it.rank;
 
     rowEl.querySelector('.race-rank').textContent = it.rank;
 
     const sign = it.chgr > 0 ? '+' : '';
     const priceStr = it.price ? `${formatPrice(it.price)}원` : '';
-    const meta = rowEl.querySelector('.race-meta');
-    meta.textContent = `${priceStr}  ${sign}${it.chgr.toFixed(2)}%`;
-    meta.style.color = it.chgr > 0 ? 'var(--pos)' : (it.chgr < 0 ? 'var(--neg)' : 'var(--muted)');
+    rowEl.querySelector('.race-price').textContent = priceStr;
+
+    const chgrEl = rowEl.querySelector('.race-chgr');
+    chgrEl.textContent = `${sign}${it.chgr.toFixed(2)}%`;
+    chgrEl.style.color = it.chgr > 0 ? 'var(--pos)' : (it.chgr < 0 ? 'var(--neg)' : 'var(--muted)');
+
+    const baseSign = it.baseChgr > 0 ? '+' : '';
+    const baseChgrEl = rowEl.querySelector('.race-base-chgr');
+    baseChgrEl.textContent = `${baseSign}${it.baseChgr.toFixed(2)}%`;
+    baseChgrEl.style.color = it.baseChgr > 0 ? 'var(--pos)' : (it.baseChgr < 0 ? 'var(--neg)' : 'var(--muted)');
+
+    const rankChange = it.rankChg !== null ? it.rankChg : it.rank;
+    const rankChangeSign = rankChange > 0 ? '+' : '';
+    const rankChangeEl = rowEl.querySelector('.race-rank-change');
+    rankChangeEl.textContent = `${rankChangeSign}${rankChange}`;
+    rankChangeEl.style.color = rankChange > 0 ? 'var(--pos)' : (rankChange < 0 ? 'var(--neg)' : 'var(--muted)');
   }
 
   raceContainer.querySelectorAll('.race-row').forEach(rowEl => {
@@ -619,14 +696,25 @@ function render() {
       const tr = document.createElement('tr');
       const chgrClass = r.chgr > 0 ? 'pos' : (r.chgr < 0 ? 'neg' : 'zero');
       const sign = r.chgr > 0 ? '+' : '';
+      const baseChgrClass = r.baseChgr > 0 ? 'pos' : (r.baseChgr < 0 ? 'neg' : 'zero');
+      const baseSign = r.baseChgr > 0 ? '+' : '';
+      const rankChange = r.rankChg !== null ? r.rankChg : r.rank;
+      const rankChangeClass = rankChange > 0 ? 'pos' : (rankChange < 0 ? 'neg' : 'zero');
+      const rankChangeSign = rankChange > 0 ? '+' : '';
       tr.innerHTML = `
         <td>${(r.time || '').slice(0,19).replace('T',' ')}</td>
+        <td>${r.prevRank ?? '-'}</td>
         <td>${r.rank}</td>
+        <td class="${rankChangeClass}">${rankChangeSign}${rankChange}</td>
         <td>${r.name}</td>
         <td>${r.code}</td>
         <td>${formatPrice(r.price)}원</td>
+        <td class="${baseChgrClass}">${baseSign}${r.baseChgr.toFixed(2)}%</td>
         <td class="${chgrClass}">${sign}${r.chgr.toFixed(2)}%</td>
       `;
+      tr.style.cursor = 'pointer';
+      tr.title = '클릭하면 순위 변화 시뮬레이션이 이 시간으로 이동합니다.';
+      tr.addEventListener('click', () => jumpRaceToTime(r.time));
       tbody.appendChild(tr);
     }
   }
