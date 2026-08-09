@@ -268,6 +268,12 @@
       </label>
     </div>
     <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" id="dedupeName">
+        시간단위 종목명 중복 제거 (가장 이른 시간만)
+      </label>
+    </div>
+    <div class="field">
       <label>정렬</label>
       <select id="sortSelect">
         <option value="time_desc">시간 최신순</option>
@@ -384,6 +390,7 @@ const timeFromInput = document.getElementById('timeFrom');
 const timeFromUpBtn = document.getElementById('timeFromUp');
 const timeFromDownBtn = document.getElementById('timeFromDown');
 const onlyThresholdInput = document.getElementById('onlyThreshold');
+const dedupeNameInput = document.getElementById('dedupeName');
 const sortSelect = document.getElementById('sortSelect');
 const tbody = document.getElementById('tbody');
 const emptyMsg = document.getElementById('emptyMsg');
@@ -643,7 +650,7 @@ function renderRace() {
   });
 }
 
-[thresholdInput, searchInput, timeFromInput, onlyThresholdInput, sortSelect].forEach(el => {
+[thresholdInput, searchInput, timeFromInput, onlyThresholdInput, dedupeNameInput, sortSelect].forEach(el => {
   el.addEventListener('input', () => { currentPage = 1; render(); });
 });
 
@@ -684,6 +691,7 @@ function render() {
   const onlyThreshold = onlyThresholdInput.checked;
   const query = searchInput.value.trim().toLowerCase();
   const timeFrom = timeFromInput.value;
+  const dedupeName = dedupeNameInput.checked;
   const sortMode = sortSelect.value;
 
   let filtered = rows.filter(r => {
@@ -693,6 +701,23 @@ function render() {
     if (timeFrom && timeOfDay < timeFrom) return false;
     return true;
   });
+
+  if (dedupeName) {
+    // 같은 종목이 마지막으로 남긴 시점으로부터 1시간 이상 지나야 새 항목으로 인정
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const sortedByTime = [...filtered].sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+    const lastKeptTimeByName = new Map();
+    const kept = [];
+    for (const r of sortedByTime) {
+      const t = new Date(r.time).getTime();
+      const lastT = lastKeptTimeByName.get(r.name);
+      if (lastT === undefined || t - lastT >= ONE_HOUR_MS) {
+        kept.push(r);
+        lastKeptTimeByName.set(r.name, t);
+      }
+    }
+    filtered = kept;
+  }
 
   filtered.sort((a, b) => {
     switch (sortMode) {
