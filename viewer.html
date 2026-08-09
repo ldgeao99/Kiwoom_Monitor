@@ -253,7 +253,13 @@
     </div>
     <div class="field">
       <label>시간 필터 (이 시각 이후)</label>
-      <input type="time" id="timeFrom">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input type="time" id="timeFrom">
+        <div style="display:flex; flex-direction:column;">
+          <button id="timeFromUp" type="button" style="padding:0 6px; font-size:10px; line-height:1.4;">▲</button>
+          <button id="timeFromDown" type="button" style="padding:0 6px; font-size:10px; line-height:1.4;">▼</button>
+        </div>
+      </div>
     </div>
     <div class="field">
       <label class="checkbox">
@@ -375,6 +381,8 @@ const refreshFilesBtn = document.getElementById('refreshFiles');
 const thresholdInput = document.getElementById('threshold');
 const searchInput = document.getElementById('search');
 const timeFromInput = document.getElementById('timeFrom');
+const timeFromUpBtn = document.getElementById('timeFromUp');
+const timeFromDownBtn = document.getElementById('timeFromDown');
 const onlyThresholdInput = document.getElementById('onlyThreshold');
 const sortSelect = document.getElementById('sortSelect');
 const tbody = document.getElementById('tbody');
@@ -638,6 +646,20 @@ function renderRace() {
 [thresholdInput, searchInput, timeFromInput, onlyThresholdInput, sortSelect].forEach(el => {
   el.addEventListener('input', () => { currentPage = 1; render(); });
 });
+
+// 시간 필터를 1분 단위로 증감시키는 함수
+function stepTimeFrom(deltaMinutes) {
+  const [h, m] = (timeFromInput.value || '00:00').split(':').map(Number);
+  let total = (h * 60 + m + deltaMinutes + 1440) % 1440;
+  const newH = String(Math.floor(total / 60)).padStart(2, '0');
+  const newM = String(total % 60).padStart(2, '0');
+  timeFromInput.value = `${newH}:${newM}`;
+  currentPage = 1;
+  render();
+}
+
+timeFromUpBtn.addEventListener('click', () => stepTimeFrom(1));
+timeFromDownBtn.addEventListener('click', () => stepTimeFrom(-1));
 
 prevPageBtn.addEventListener('click', () => { if (currentPage > 1) { currentPage--; render(); } });
 nextPageBtn.addEventListener('click', () => { currentPage++; render(); });
