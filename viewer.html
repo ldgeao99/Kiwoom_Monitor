@@ -391,6 +391,18 @@ function formatPrice(str) {
   return isNaN(v) ? '' : v.toLocaleString();
 }
 
+async function loadSelectedFile(name) {
+  if (!name) return;
+  const res = await fetch(`/daily_snapshot/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    alert('파일을 불러오지 못했습니다.');
+    return;
+  }
+  const text = await res.text();
+  loadSnapshotText(text);
+}
+
+// 파일 목록의 이름이 rank_snapshots_YYYY-MM-DD.jsonl 형식이라 문자열 내림차순 정렬이 곧 최신일자순
 async function loadFileList() {
   try {
     const res = await fetch('/api/files');
@@ -406,6 +418,9 @@ async function loadFileList() {
     }
     if (prevValue && files.some(f => f.name === prevValue)) {
       fileSelect.value = prevValue;
+    } else if (files.length > 0) {
+      fileSelect.value = files[0].name;
+      await loadSelectedFile(files[0].name);
     }
   } catch (err) {
     fileSelect.innerHTML = '<option value="">서버에 연결할 수 없습니다 (viewer_server.py 실행 필요)</option>';
@@ -417,17 +432,7 @@ refreshFilesBtn.addEventListener('click', (e) => {
   loadFileList();
 });
 
-fileSelect.addEventListener('change', async () => {
-  const name = fileSelect.value;
-  if (!name) return;
-  const res = await fetch(`/daily_snapshot/${encodeURIComponent(name)}`);
-  if (!res.ok) {
-    alert('파일을 불러오지 못했습니다.');
-    return;
-  }
-  const text = await res.text();
-  loadSnapshotText(text);
-});
+fileSelect.addEventListener('change', () => loadSelectedFile(fileSelect.value));
 
 function loadSnapshotText(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
