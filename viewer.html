@@ -252,6 +252,10 @@
       <input type="text" id="search" placeholder="예: 삼성전자 또는 005930">
     </div>
     <div class="field">
+      <label>시간 필터 (이 시각 이후)</label>
+      <input type="time" id="timeFrom">
+    </div>
+    <div class="field">
       <label class="checkbox">
         <input type="checkbox" id="onlyThreshold" checked>
         임계값 이상만 보기
@@ -370,6 +374,7 @@ const fileSelect = document.getElementById('fileSelect');
 const refreshFilesBtn = document.getElementById('refreshFiles');
 const thresholdInput = document.getElementById('threshold');
 const searchInput = document.getElementById('search');
+const timeFromInput = document.getElementById('timeFrom');
 const onlyThresholdInput = document.getElementById('onlyThreshold');
 const sortSelect = document.getElementById('sortSelect');
 const tbody = document.getElementById('tbody');
@@ -630,7 +635,7 @@ function renderRace() {
   });
 }
 
-[thresholdInput, searchInput, onlyThresholdInput, sortSelect].forEach(el => {
+[thresholdInput, searchInput, timeFromInput, onlyThresholdInput, sortSelect].forEach(el => {
   el.addEventListener('input', () => { currentPage = 1; render(); });
 });
 
@@ -656,11 +661,14 @@ function render() {
   const threshold = parseFloat(thresholdInput.value) || 0;
   const onlyThreshold = onlyThresholdInput.checked;
   const query = searchInput.value.trim().toLowerCase();
+  const timeFrom = timeFromInput.value;
   const sortMode = sortSelect.value;
 
   let filtered = rows.filter(r => {
     if (onlyThreshold && r.chgr < threshold) return false;
     if (query && !(r.name.toLowerCase().includes(query) || r.code.toLowerCase().includes(query))) return false;
+    const timeOfDay = (r.time || '').slice(11, 16);
+    if (timeFrom && timeOfDay < timeFrom) return false;
     return true;
   });
 
