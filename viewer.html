@@ -367,6 +367,7 @@
           <th data-key="prevRank">직전순위</th>
           <th data-key="rank">현재순위</th>
           <th data-key="rankChange">순위변화</th>
+          <th data-key="apiRankChg">API rank_chg</th>
           <th data-key="name">종목명</th>
           <th data-key="code">코드</th>
           <th data-key="price">현재가</th>
@@ -608,6 +609,10 @@ function loadSnapshotText(text) {
       const code = item.stk_cd || '';
       const rank = parseInt(item.bigd_rank, 10) || 0;
 
+      // 참고용으로 API가 실제로 내려준 rank_chg 원본값도 별도 보관 (신뢰도 낮음, 화면 확인용)
+      const apiRankChgRaw = parseInt(item.rank_chg, 10);
+      const apiRankChg = isNaN(apiRankChgRaw) ? null : apiRankChgRaw;
+
       // 직전 스냅샷에 없던(top20에 새로 진입한) 종목만 API의 rank_chg를 신뢰해서 사용.
       // 이미 추적 중이던 종목은 실측 결과 API의 rank_chg가 우리 폴링 주기와 안 맞아
       // 우리가 직접 기록해둔 이전 순위와 비교해서 계산한다.
@@ -616,8 +621,7 @@ function loadSnapshotText(text) {
         prevRank = lastRankByCode[code];
         rankChg = prevRank - rank;
       } else {
-        const rankChgRaw = parseInt(item.rank_chg, 10);
-        rankChg = isNaN(rankChgRaw) ? null : rankChgRaw;
+        rankChg = apiRankChg;
         prevRank = rankChg === null ? null : rank + rankChg;
       }
       lastRankByCode[code] = rank;
@@ -627,6 +631,7 @@ function loadSnapshotText(text) {
         rank,
         prevRank,
         rankChg,
+        apiRankChg,
         name: item.stk_nm || '',
         code,
         price: item.past_curr_prc || '',
@@ -914,11 +919,13 @@ function render() {
       const rankChange = r.rankChg !== null ? r.rankChg : r.rank;
       const rankChangeClass = rankChange > 0 ? 'pos' : (rankChange < 0 ? 'neg' : 'zero');
       const rankChangeSign = rankChange > 0 ? '+' : '';
+      const apiRankChgSign = r.apiRankChg !== null && r.apiRankChg > 0 ? '+' : '';
       tr.innerHTML = `
         <td>${(r.time || '').slice(0,19).replace('T',' ')}</td>
         <td>${r.prevRank ?? '-'}</td>
         <td>${r.rank}</td>
         <td class="${rankChangeClass}">${rankChangeSign}${rankChange}</td>
+        <td>${r.apiRankChg === null ? '-' : `${apiRankChgSign}${r.apiRankChg}`}</td>
         <td>${r.name}</td>
         <td>${r.code}</td>
         <td>${formatPrice(r.price)}원</td>
