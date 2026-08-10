@@ -17,6 +17,16 @@ RECORD_END_HOUR = 20    # 20:00 (미포함)
 
 SNAPSHOT_DIR = "daily_snapshot"
 
+# 텔레그램 급등 알림 조건: 조회순위가 이 값 이상 상승 & 직전대비 등락율이 이 값 이상
+RANK_JUMP_THRESHOLD = 10
+SURGE_CHGR_THRESHOLD = 0.9
+
+# 장 시작 직후처럼 노이즈가 많아 알림을 보내지 않을 시간대 (시, 분) 구간들
+NOTIFY_BLACKOUT_WINDOWS = [
+    ((8, 0), (8, 1)),
+    ((9, 0), (9, 1)),
+]
+
 
 # 토큰이 만료/무효화되어 재발급이 필요함을 나타내는 예외
 class TokenExpiredError(Exception):
@@ -32,6 +42,99 @@ def is_recording_hours(now):
     if now.weekday() >= 5:  # 5=토요일, 6=일요일
         return False
     return RECORD_START_HOUR <= now.hour < RECORD_END_HOUR
+
+
+# 장 시작 직후 등 노이즈가 많은 시간대(NOTIFY_BLACKOUT_WINDOWS)인지 확인하는 함수
+def is_notify_blackout(now):
+    current = (now.hour, now.minute)
+    return any(start <= current < end for start, end in NOTIFY_BLACKOUT_WINDOWS)
+
+
+# .env 파일에서 지정한 key의 값을 읽어오는 함수
+def load_env_value(key):
+    env_file = ".env"
+    if not os.path.exists(env_file):
+        return None
+    with open(env_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            if k.strip() == key:
+                return v.strip()
+    return None
+
+
+TELEGRAM_BOT_TOKEN = load_env_value("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = load_env_value("TELEGRAM_CHAT_ID")
+
+
+# 텔레그램으로 메시지를 전송하는 함수
+def send_telegram_message(text):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("[텔레그램] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID가 설정되지 않아 메시지를 보내지 않습니다.")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    try:
+        response = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text})
+        if response.status_code != 200:
+            print(f"[텔레그램 에러] HTTP {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"[텔레그램 에러] 전송 중 예외 발생: {e}")
+
+
+# 부호가 붙은 가격 문자열을 부호 없이 천단위 콤마로 포맷하는 함수
+def format_price(price_str):
+    try:
+        value = abs(int(str(price_str).replace("+", "").replace("-", "")))
+        return f"{value:,}"
+    except (ValueError, TypeError):
+        return str(price_str)
+
+
+# 이전 순위 기록과 비교해 조회순위 급등 + 직전대비 급등 조건을 만족하는 종목을 찾아내는 함수
+# (조회순위 변화는 API 값이 아니라 이전 스냅샷과 비교해 직접 계산한다)
+def find_surge_alerts(curr_data, last_rank_by_code):
+    alerts = []
+    for item in curr_data:
+        code = item.get("stk_cd", "")
+        rank = int(item.get("bigd_rank", 0) or 0)
+        prev_rank = last_rank_by_code.get(code)
+
+        if prev_rank is not None:
+            rank_chg = prev_rank - rank
+            try:
+                prev_chgr = float((item.get("prev_base_chgr") or "0").replace("+", ""))
+            except ValueError:
+                prev_chgr = 0.0
+
+            if rank_chg >= RANK_JUMP_THRESHOLD and prev_chgr >= SURGE_CHGR_THRESHOLD:
+                alerts.append(item)
+
+        last_rank_by_code[code] = rank
+
+    return alerts
+
+
+# 급등 종목 리스트를 하나의 텔레그램 메시지로 묶어서 전송하는 함수
+def notify_surge_alerts(alerts):
+    if not alerts:
+        return
+
+    lines = []
+    for item in alerts:
+        name = item.get("stk_nm", "")
+        rank = item.get("bigd_rank", "")
+        price = format_price(item.get("past_curr_prc", "0"))
+        base_chgr = item.get("base_comp_chgr", "0.00")
+        lines.append(f"🟢 {name} | {rank}위 | {price}원 | {base_chgr}%")
+
+    lines.append(
+        f"(조회 {RANK_JUMP_THRESHOLD}위 이상 급등 & 직전비 +{SURGE_CHGR_THRESHOLD}% 상승)"
+    )
+    lines.append("(08:00, 09:00 직후엔 1분간 탐지스킵)")
+    send_telegram_message("\n".join(lines))
 
 
 # 날짜(한국시간 기준)에 해당하는 스냅샷 파일 경로를 반환하는 함수
@@ -161,6 +264,7 @@ if __name__ == "__main__":
     )
 
     was_recording_hours = True
+    last_rank_by_code = {}
 
     try:
         while True:
@@ -202,6 +306,12 @@ if __name__ == "__main__":
             if current_rank_list:
                 save_snapshot(now_kst(), current_rank_list)
                 print_surge_items(current_rank_list, threshold=1.0)
+
+                alerts = find_surge_alerts(current_rank_list, last_rank_by_code)
+                if is_notify_blackout(now_kst()):
+                    print("[텔레그램] 노이즈가 많은 시간대라 알림을 보내지 않습니다.")
+                else:
+                    notify_surge_alerts(alerts)
 
             else:
                 print("[경고] 데이터를 정상적으로 가져오지 못했습니다.")
