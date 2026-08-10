@@ -665,8 +665,8 @@ function stepTimeFrom(deltaMinutes) {
   render();
 }
 
-timeFromUpBtn.addEventListener('click', () => stepTimeFrom(1));
-timeFromDownBtn.addEventListener('click', () => stepTimeFrom(-1));
+timeFromUpBtn.addEventListener('click', () => stepTimeFrom(-1));
+timeFromDownBtn.addEventListener('click', () => stepTimeFrom(1));
 
 prevPageBtn.addEventListener('click', () => { if (currentPage > 1) { currentPage--; render(); } });
 nextPageBtn.addEventListener('click', () => { currentPage++; render(); });
