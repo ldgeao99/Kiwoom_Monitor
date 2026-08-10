@@ -325,9 +325,13 @@
 </div>
 
 <div class="panel">
-  <h2 style="font-size:16px; margin: 0 0 14px;">⏱ 5분 단위 건수 (필터 적용됨)</h2>
-  <div id="bucketChart"></div>
-  <div id="bucketEmpty" class="empty" style="display:none;">표시할 데이터가 없습니다.</div>
+  <h2 id="bucketToggle" style="font-size:16px; margin: 0 0 14px; cursor:pointer; user-select:none;">
+    <span id="bucketArrow">▾</span> ⏱ 5분 단위 건수 (필터 적용됨)
+  </h2>
+  <div id="bucketBody">
+    <div id="bucketChart"></div>
+    <div id="bucketEmpty" class="empty" style="display:none;">표시할 데이터가 없습니다.</div>
+  </div>
 </div>
 
 <div class="panel">
@@ -435,6 +439,15 @@ const nextPageBtn = document.getElementById('nextPage');
 const pageInfo = document.getElementById('pageInfo');
 const bucketChart = document.getElementById('bucketChart');
 const bucketEmpty = document.getElementById('bucketEmpty');
+const bucketBody = document.getElementById('bucketBody');
+const bucketToggle = document.getElementById('bucketToggle');
+const bucketArrow = document.getElementById('bucketArrow');
+
+bucketToggle.addEventListener('click', () => {
+  const collapsed = bucketBody.style.display === 'none';
+  bucketBody.style.display = collapsed ? '' : 'none';
+  bucketArrow.textContent = collapsed ? '▾' : '▸';
+});
 
 // 필터링된 결과를 5분 단위 시간대별 건수로 집계해 막대 목록으로 그리는 함수
 function renderBucketChart(filteredRows) {
