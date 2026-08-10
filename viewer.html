@@ -486,12 +486,29 @@ function renderBucketChart(filteredRows) {
   const maxCount = Math.max(...buckets.map(([, c]) => c));
 
   bucketChart.innerHTML = buckets.map(([label, count]) => `
-    <div class="bucket-row">
+    <div class="bucket-row" data-label="${label}" style="cursor:pointer;" title="클릭하면 순위 변화 시뮬레이션이 이 시간대로 이동합니다.">
       <div class="bucket-label">${label}</div>
       <div class="bucket-bar-wrap"><div class="bucket-bar" style="width:${(count / maxCount) * 100}%"></div></div>
       <div class="bucket-count">${count.toLocaleString()}건</div>
     </div>
   `).join('');
+}
+
+bucketChart.addEventListener('click', (e) => {
+  const row = e.target.closest('.bucket-row');
+  if (!row) return;
+  jumpRaceToBucket(row.dataset.label);
+});
+
+// 버킷 라벨(HH:MM) 이후 가장 가까운 스냅샷을 찾아 시뮬레이션을 그 시간으로 이동시키는 함수
+function jumpRaceToBucket(label) {
+  const idx = snapshots.findIndex(s => (s.time || '').slice(11, 16) >= label);
+  if (idx === -1) return;
+  stopRace();
+  raceIndex = idx;
+  raceSlider.value = idx;
+  renderRace();
+  raceContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function parseChgr(str) {
