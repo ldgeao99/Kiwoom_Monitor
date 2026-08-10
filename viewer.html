@@ -228,6 +228,36 @@
     padding: 40px 0;
     font-size: 13px;
   }
+
+  .bucket-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 22px;
+  }
+  .bucket-label {
+    width: 50px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .bucket-bar-wrap {
+    flex: 1 1 auto;
+    height: 14px;
+  }
+  .bucket-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    min-width: 2px;
+  }
+  .bucket-count {
+    width: 40px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text);
+  }
 </style>
 </head>
 <body>
@@ -292,6 +322,12 @@
     <div class="stat"><div class="value" id="statSurge">-</div><div class="label">임계값 이상 이벤트 수</div></div>
     <div class="stat"><div class="value" id="statRange">-</div><div class="label">시간 범위</div></div>
   </div>
+</div>
+
+<div class="panel">
+  <h2 style="font-size:16px; margin: 0 0 14px;">⏱ 5분 단위 건수 (필터 적용됨)</h2>
+  <div id="bucketChart"></div>
+  <div id="bucketEmpty" class="empty" style="display:none;">표시할 데이터가 없습니다.</div>
 </div>
 
 <div class="panel">
@@ -397,6 +433,39 @@ const emptyMsg = document.getElementById('emptyMsg');
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
 const pageInfo = document.getElementById('pageInfo');
+const bucketChart = document.getElementById('bucketChart');
+const bucketEmpty = document.getElementById('bucketEmpty');
+
+// 필터링된 결과를 5분 단위 시간대별 건수로 집계해 막대 목록으로 그리는 함수
+function renderBucketChart(filteredRows) {
+  if (filteredRows.length === 0) {
+    bucketChart.innerHTML = '';
+    bucketEmpty.style.display = 'block';
+    return;
+  }
+  bucketEmpty.style.display = 'none';
+
+  const counts = new Map();
+  for (const r of filteredRows) {
+    const timeOfDay = (r.time || '').slice(11, 16);
+    const [h, m] = timeOfDay.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) continue;
+    const bucketStart = Math.floor(m / 5) * 5;
+    const key = `${String(h).padStart(2, '0')}:${String(bucketStart).padStart(2, '0')}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const buckets = Array.from(counts.entries()).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  const maxCount = Math.max(...buckets.map(([, c]) => c));
+
+  bucketChart.innerHTML = buckets.map(([label, count]) => `
+    <div class="bucket-row">
+      <div class="bucket-label">${label}</div>
+      <div class="bucket-bar-wrap"><div class="bucket-bar" style="width:${(count / maxCount) * 100}%"></div></div>
+      <div class="bucket-count">${count.toLocaleString()}건</div>
+    </div>
+  `).join('');
+}
 
 function parseChgr(str) {
   if (!str) return 0;
@@ -728,6 +797,8 @@ function render() {
       default: return 0;
     }
   });
+
+  renderBucketChart(filtered);
 
   const surgeCount = rows.filter(r => r.chgr >= threshold).length;
   document.getElementById('statSnapshots').textContent = snapshotCount.toLocaleString();
