@@ -18,7 +18,7 @@ RECORD_END_HOUR = 20    # 20:00 (미포함)
 SNAPSHOT_DIR = "daily_snapshot"
 
 # 텔레그램 급등 알림 조건: 조회순위가 이 값 이상 상승 & 직전대비 등락율이 이 값 이상
-RANK_JUMP_THRESHOLD = 10
+RANK_JUMP_THRESHOLD = 5
 SURGE_CHGR_THRESHOLD = 0.9
 
 # 장 시작 직후처럼 노이즈가 많아 알림을 보내지 않을 시간대 (시, 분) 구간들
