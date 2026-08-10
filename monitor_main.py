@@ -94,7 +94,8 @@ def format_price(price_str):
 
 
 # 이전 순위 기록과 비교해 조회순위 급등 + 직전대비 급등 조건을 만족하는 종목을 찾아내는 함수
-# (조회순위 변화는 API 값이 아니라 이전 스냅샷과 비교해 직접 계산한다)
+# 직전 주기에도 top20 안에서 추적 중이던 종목은 우리가 직접 기록해둔 이전 순위와 비교해서 계산하고,
+# top20 밖에서 새로 진입해 비교할 기준이 없는 종목만 API의 rank_chg 값을 그대로 사용한다.
 def find_surge_alerts(curr_data, last_rank_by_code):
     alerts = []
     for item in curr_data:
@@ -104,6 +105,13 @@ def find_surge_alerts(curr_data, last_rank_by_code):
 
         if prev_rank is not None:
             rank_chg = prev_rank - rank
+        else:
+            try:
+                rank_chg = int(item.get("rank_chg", "0") or "0")
+            except ValueError:
+                rank_chg = None
+
+        if rank_chg is not None:
             try:
                 prev_chgr = float((item.get("prev_base_chgr") or "0").replace("+", ""))
             except ValueError:
