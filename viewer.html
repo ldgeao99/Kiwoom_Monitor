@@ -284,7 +284,7 @@
     <div class="field">
       <label>시간 필터 (이 시각 이후)</label>
       <div style="display:flex; align-items:center; gap:4px;">
-        <input type="time" id="timeFrom">
+        <input type="time" id="timeFrom" value="08:00">
         <div style="display:flex; flex-direction:column;">
           <button id="timeFromUp" type="button" style="padding:0 6px; font-size:10px; line-height:1.4;">▲</button>
           <button id="timeFromDown" type="button" style="padding:0 6px; font-size:10px; line-height:1.4;">▼</button>
@@ -326,9 +326,18 @@
 
 <div class="panel">
   <h2 id="bucketToggle" style="font-size:16px; margin: 0 0 14px; cursor:pointer; user-select:none;">
-    <span id="bucketArrow">▾</span> ⏱ 5분 단위 건수 (필터 적용됨)
+    <span id="bucketArrow">▾</span> ⏱ 시간 단위 건수 (필터 적용됨)
   </h2>
   <div id="bucketBody">
+    <div class="field" style="margin-bottom:12px;">
+      <label>단위</label>
+      <select id="bucketSize">
+        <option value="1">1분</option>
+        <option value="3">3분</option>
+        <option value="5" selected>5분</option>
+        <option value="10">10분</option>
+      </select>
+    </div>
     <div id="bucketChart"></div>
     <div id="bucketEmpty" class="empty" style="display:none;">표시할 데이터가 없습니다.</div>
   </div>
@@ -442,6 +451,7 @@ const bucketEmpty = document.getElementById('bucketEmpty');
 const bucketBody = document.getElementById('bucketBody');
 const bucketToggle = document.getElementById('bucketToggle');
 const bucketArrow = document.getElementById('bucketArrow');
+const bucketSizeSelect = document.getElementById('bucketSize');
 
 bucketToggle.addEventListener('click', () => {
   const collapsed = bucketBody.style.display === 'none';
@@ -449,7 +459,10 @@ bucketToggle.addEventListener('click', () => {
   bucketArrow.textContent = collapsed ? '▾' : '▸';
 });
 
-// 필터링된 결과를 5분 단위 시간대별 건수로 집계해 막대 목록으로 그리는 함수
+bucketSizeSelect.addEventListener('click', (e) => e.stopPropagation());
+bucketSizeSelect.addEventListener('change', () => render());
+
+// 필터링된 결과를 선택한 분 단위 시간대별 건수로 집계해 막대 목록으로 그리는 함수
 function renderBucketChart(filteredRows) {
   if (filteredRows.length === 0) {
     bucketChart.innerHTML = '';
@@ -458,12 +471,13 @@ function renderBucketChart(filteredRows) {
   }
   bucketEmpty.style.display = 'none';
 
+  const bucketSize = parseInt(bucketSizeSelect.value, 10) || 5;
   const counts = new Map();
   for (const r of filteredRows) {
     const timeOfDay = (r.time || '').slice(11, 16);
     const [h, m] = timeOfDay.split(':').map(Number);
     if (isNaN(h) || isNaN(m)) continue;
-    const bucketStart = Math.floor(m / 5) * 5;
+    const bucketStart = Math.floor(m / bucketSize) * bucketSize;
     const key = `${String(h).padStart(2, '0')}:${String(bucketStart).padStart(2, '0')}`;
     counts.set(key, (counts.get(key) || 0) + 1);
   }
