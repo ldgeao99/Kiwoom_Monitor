@@ -586,6 +586,7 @@ function loadSnapshotText(text) {
   rows = [];
   snapshots = [];
   snapshotCount = 0;
+  const lastRankByCode = {};
 
   for (const line of lines) {
     let record;
@@ -601,13 +602,25 @@ function loadSnapshotText(text) {
     for (const item of items) {
       const code = item.stk_cd || '';
       const rank = parseInt(item.bigd_rank, 10) || 0;
-      // 순위변화는 API가 직접 계산해 내려주는 rank_chg(부호 포함)를 그대로 사용
-      const rankChgRaw = parseInt(item.rank_chg, 10);
-      const rankChg = isNaN(rankChgRaw) ? null : rankChgRaw;
+
+      // 직전 스냅샷에 없던(top20에 새로 진입한) 종목만 API의 rank_chg를 신뢰해서 사용.
+      // 이미 추적 중이던 종목은 실측 결과 API의 rank_chg가 우리 폴링 주기와 안 맞아
+      // 우리가 직접 기록해둔 이전 순위와 비교해서 계산한다.
+      let prevRank, rankChg;
+      if (code in lastRankByCode) {
+        prevRank = lastRankByCode[code];
+        rankChg = prevRank - rank;
+      } else {
+        const rankChgRaw = parseInt(item.rank_chg, 10);
+        rankChg = isNaN(rankChgRaw) ? null : rankChgRaw;
+        prevRank = rankChg === null ? null : rank + rankChg;
+      }
+      lastRankByCode[code] = rank;
+
       const parsed = {
         time: ts,
         rank,
-        prevRank: rankChg === null ? null : rank + rankChg,
+        prevRank,
         rankChg,
         name: item.stk_nm || '',
         code,
