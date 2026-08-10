@@ -18,6 +18,11 @@ RECORD_END_HOUR = 20    # 20:00 (미포함)
 SNAPSHOT_DIR = "daily_snapshot"
 
 
+# 토큰이 만료/무효화되어 재발급이 필요함을 나타내는 예외
+class TokenExpiredError(Exception):
+    pass
+
+
 def now_kst():
     return datetime.now(KST)
 
@@ -65,14 +70,17 @@ def fn_ka00198(token, data):
 
         body = response.json()
         return_code = body.get("return_code")
+        return_msg = body.get("return_msg") or ""
         item_count = len(body.get("item_inq_rank") or [])
         print(f"[응답 수신] return_code={return_code} item_count={item_count}")
         if return_code not in (None, 0):
-            print(
-                f"[조회 에러] return_code={return_code} return_msg={body.get('return_msg')}"
-            )
+            print(f"[조회 에러] return_code={return_code} return_msg={return_msg}")
+            if "8005" in return_msg or "Token" in return_msg:
+                raise TokenExpiredError(return_msg)
             return None
         return body
+    except TokenExpiredError:
+        raise
     except Exception as e:
         print(f"[조회 에러] 요청 중 예외 발생: {e}")
         return None
@@ -175,8 +183,21 @@ if __name__ == "__main__":
             print(f"📊 [실시간 종목 순위 조회] - {current_time}")
             print(f"==================================================")
 
-            # API 호출 (빈 응답 시 자동 재시도)
-            current_rank_list = fetch_rank_list(token=access_token, data=stk_params)
+            # API 호출 (빈 응답 시 자동 재시도, 토큰 만료 시 재발급 후 재시도)
+            try:
+                current_rank_list = fetch_rank_list(token=access_token, data=stk_params)
+            except TokenExpiredError:
+                print("[경고] 토큰이 만료되어 재발급합니다.")
+                access_token = get_access_token()
+                if not access_token:
+                    print("[경고] 토큰 재발급에 실패했습니다. 다음 주기에 다시 시도합니다.")
+                    current_rank_list = None
+                else:
+                    try:
+                        current_rank_list = fetch_rank_list(token=access_token, data=stk_params)
+                    except TokenExpiredError:
+                        print("[경고] 재발급한 토큰도 거부되었습니다. 다음 주기에 다시 시도합니다.")
+                        current_rank_list = None
 
             if current_rank_list:
                 save_snapshot(now_kst(), current_rank_list)
