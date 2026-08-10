@@ -349,6 +349,7 @@
 </div>
 
 <div class="panel">
+  <h2 style="font-size:16px; margin: 0 0 14px;">📋 시간별 데이터</h2>
   <div class="pagination">
     <button id="prevPage">이전</button>
     <span id="pageInfo">-</span>
@@ -502,7 +503,14 @@ function renderBucketChart(filteredRows) {
 bucketChart.addEventListener('click', (e) => {
   const row = e.target.closest('.bucket-row');
   if (!row) return;
-  jumpRaceToBucket(row.dataset.label);
+  const label = row.dataset.label;
+  jumpRaceToBucket(label);
+
+  // 테이블도 클릭한 시간대 이후부터 보이도록 시간 필터를 이동
+  timeFromInput.value = label;
+  currentPage = 1;
+  render();
+  document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 // 버킷 라벨(HH:MM) 이후 가장 가까운 스냅샷을 찾아 시뮬레이션을 그 시간으로 이동시키는 함수
