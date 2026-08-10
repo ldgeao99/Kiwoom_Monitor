@@ -209,6 +209,11 @@
     font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
+    border: 2px solid transparent;
+    border-radius: 3px;
+  }
+  .race-chgr.threshold-hit {
+    border-color: var(--pos);
   }
   .race-base-chgr {
     text-align: right;
@@ -743,6 +748,8 @@ function renderRace() {
     const chgrEl = rowEl.querySelector('.race-chgr');
     chgrEl.textContent = `${sign}${it.chgr.toFixed(2)}%`;
     chgrEl.style.color = it.chgr > 0 ? 'var(--pos)' : (it.chgr < 0 ? 'var(--neg)' : 'var(--muted)');
+    const threshold = parseFloat(thresholdInput.value) || 0;
+    chgrEl.classList.toggle('threshold-hit', it.chgr >= threshold);
 
     const baseSign = it.baseChgr > 0 ? '+' : '';
     const baseChgrEl = rowEl.querySelector('.race-base-chgr');
@@ -766,6 +773,8 @@ function renderRace() {
 [thresholdInput, searchInput, timeFromInput, onlyThresholdInput, dedupeNameInput, sortSelect].forEach(el => {
   el.addEventListener('input', () => { currentPage = 1; render(); });
 });
+
+thresholdInput.addEventListener('input', () => renderRace());
 
 // 시간 필터를 1분 단위로 증감시키는 함수
 function stepTimeFrom(deltaMinutes) {
