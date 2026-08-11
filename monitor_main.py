@@ -172,6 +172,7 @@ def notify_surge_alerts(alerts):
         f"(조회 {RANK_JUMP_THRESHOLD}위 이상 급등 & 직전비 +{SURGE_CHGR_THRESHOLD}% 상승)"
     )
     lines.append("(08:00, 09:00 직후엔 1분간 탐지스킵)")
+    lines.append("(1시간 간격 중복종목 알림생략)")
     send_telegram_message("\n".join(lines))
 
 
