@@ -168,6 +168,7 @@ def notify_surge_alerts(alerts):
         base_chgr = item.get("base_comp_chgr", "0.00")
         lines.append(f"🟢 {name} | {rank}위 | {price}원 | {base_chgr}%")
 
+    lines.append("")
     lines.append(
         f"(조회 {RANK_JUMP_THRESHOLD}위 이상 급등 & 직전비 +{SURGE_CHGR_THRESHOLD}% 상승)"
     )
