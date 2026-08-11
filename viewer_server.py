@@ -83,6 +83,8 @@ class ViewerHandler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.makedirs(DATA_DIR, exist_ok=True)
+    # 재시작 직후 TIME_WAIT 상태의 이전 소켓 때문에 바인딩이 실패하지 않도록 허용
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), ViewerHandler) as httpd:
         print(f">>> 뷰어 서버 실행: http://localhost:{PORT}")
         print(f">>> 노출 폴더: {DATA_DIR} (rank_snapshots_YYYY-MM-DD.jsonl 형식만 허용)")
