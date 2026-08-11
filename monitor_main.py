@@ -21,6 +21,9 @@ SNAPSHOT_DIR = "daily_snapshot"
 RANK_JUMP_THRESHOLD = 5
 SURGE_CHGR_THRESHOLD = 0.9
 
+# 같은 종목은 알림을 보낸 뒤 이 시간(초) 동안 다시 알리지 않음
+ALERT_COOLDOWN_SECONDS = 60 * 60
+
 # 장 시작 직후처럼 노이즈가 많아 알림을 보내지 않을 시간대 (시, 분) 구간들
 NOTIFY_BLACKOUT_WINDOWS = [
     ((8, 0), (8, 1)),
@@ -93,11 +96,11 @@ def format_price(price_str):
         return str(price_str)
 
 
-# 이전 순위 기록과 비교해 조회순위 급등 + 직전대비 급등 조건을 만족하는 종목을 찾아내는 함수
+# 종목코드별 조회순위 변화를 계산하고 last_rank_by_code를 갱신하는 함수
 # 직전 주기에도 top20 안에서 추적 중이던 종목은 우리가 직접 기록해둔 이전 순위와 비교해서 계산하고,
 # top20 밖에서 새로 진입해 비교할 기준이 없는 종목만 API의 rank_chg 값을 그대로 사용한다.
-def find_surge_alerts(curr_data, last_rank_by_code):
-    alerts = []
+def compute_rank_changes(curr_data, last_rank_by_code):
+    rank_changes = {}
     for item in curr_data:
         code = item.get("stk_cd", "")
         rank = int(item.get("bigd_rank", 0) or 0)
@@ -111,18 +114,45 @@ def find_surge_alerts(curr_data, last_rank_by_code):
             except ValueError:
                 rank_chg = None
 
-        if rank_chg is not None:
-            try:
-                prev_chgr = float((item.get("prev_base_chgr") or "0").replace("+", ""))
-            except ValueError:
-                prev_chgr = 0.0
-
-            if rank_chg >= RANK_JUMP_THRESHOLD and prev_chgr >= SURGE_CHGR_THRESHOLD:
-                alerts.append(item)
-
+        rank_changes[code] = rank_chg
         last_rank_by_code[code] = rank
 
+    return rank_changes
+
+
+# 조회순위 급등 + 직전대비 급등 조건을 만족하는 종목을 찾아내는 함수
+def find_surge_alerts(curr_data, rank_changes):
+    alerts = []
+    for item in curr_data:
+        code = item.get("stk_cd", "")
+        rank_chg = rank_changes.get(code)
+        if rank_chg is None:
+            continue
+
+        try:
+            prev_chgr = float((item.get("prev_base_chgr") or "0").replace("+", ""))
+        except ValueError:
+            prev_chgr = 0.0
+
+        if rank_chg >= RANK_JUMP_THRESHOLD and prev_chgr >= SURGE_CHGR_THRESHOLD:
+            alerts.append(item)
+
     return alerts
+
+
+# 이미 최근(ALERT_COOLDOWN_SECONDS 이내)에 알림을 보낸 종목은 걸러내고,
+# 실제로 알림을 보낼 종목만 남기며 그 시각으로 last_alert_time_by_code를 갱신하는 함수
+def filter_alert_cooldown(alerts, last_alert_time_by_code, now):
+    filtered = []
+    for item in alerts:
+        code = item.get("stk_cd", "")
+        last_time = last_alert_time_by_code.get(code)
+        if last_time is not None and (now - last_time).total_seconds() < ALERT_COOLDOWN_SECONDS:
+            continue
+        filtered.append(item)
+        last_alert_time_by_code[code] = now
+
+    return filtered
 
 
 # 급등 종목 리스트를 하나의 텔레그램 메시지로 묶어서 전송하는 함수
@@ -211,8 +241,8 @@ def fetch_rank_list(token, data, max_retries=2, retry_delay=0.5):
     return None
 
 
-# 직전 대비 등락율이 +1% 이상인 종목만 걸러서 출력하는 함수
-def print_surge_items(curr_data, threshold=1.0):
+# 직전 대비 등락율이 threshold 이상인 종목만 순위변화와 함께 걸러서 출력하는 함수
+def print_surge_items(curr_data, rank_changes, threshold=SURGE_CHGR_THRESHOLD):
     print(f"\n>>> 📈 [직전대비 +{threshold}% 이상 상승 종목] <<<")
     has_changes = False
 
@@ -230,12 +260,15 @@ def print_surge_items(curr_data, threshold=1.0):
         except ValueError:
             chgr_val = 0.0
 
-        # 조건: 직전대비 등락율이 threshold(기본 1%) 이상이어야 함
+        # 조건: 직전대비 등락율이 threshold 이상이어야 함
         if chgr_val < threshold:
             continue
 
+        rank_chg = rank_changes.get(code)
+        rank_chg_str = f"{rank_chg:+d}" if rank_chg is not None else "N/A"
+
         print(
-            f" 🔥 {rank}위: {name}({code}) | 현재가: {price}원 | 직전대비: +{chgr_val}%"
+            f" 🔥 {rank}위: {name}({code}) | 현재가: {price}원 | 직전대비: +{chgr_val}% | 순위변화: {rank_chg_str}"
         )
         has_changes = True
 
@@ -273,6 +306,7 @@ if __name__ == "__main__":
 
     was_recording_hours = True
     last_rank_by_code = {}
+    last_alert_time_by_code = {}
 
     try:
         while True:
@@ -313,12 +347,15 @@ if __name__ == "__main__":
 
             if current_rank_list:
                 save_snapshot(now_kst(), current_rank_list)
-                print_surge_items(current_rank_list, threshold=1.0)
 
-                alerts = find_surge_alerts(current_rank_list, last_rank_by_code)
+                rank_changes = compute_rank_changes(current_rank_list, last_rank_by_code)
+                print_surge_items(current_rank_list, rank_changes)
+
+                alerts = find_surge_alerts(current_rank_list, rank_changes)
                 if is_notify_blackout(now_kst()):
                     print("[텔레그램] 노이즈가 많은 시간대라 알림을 보내지 않습니다.")
                 else:
+                    alerts = filter_alert_cooldown(alerts, last_alert_time_by_code, now_kst())
                     notify_surge_alerts(alerts)
 
             else:
