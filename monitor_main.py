@@ -23,7 +23,7 @@ SURGE_CHGR_THRESHOLD = 0.9
 
 # 조회순위가 이 값 이내(상위)인 종목은 순위 상승폭과 무관하게
 # 직전대비 등락율(SURGE_CHGR_THRESHOLD) 조건만 만족하면 알림을 보냄
-TOP_RANK_ALERT_THRESHOLD = 4
+TOP_RANK_ALERT_THRESHOLD = 2
 
 # 같은 종목은 알림을 보낸 뒤 이 시간(초) 동안 다시 알리지 않음
 ALERT_COOLDOWN_SECONDS = 60 * 60
