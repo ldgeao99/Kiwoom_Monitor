@@ -21,6 +21,10 @@ SNAPSHOT_DIR = "daily_snapshot"
 RANK_JUMP_THRESHOLD = 5
 SURGE_CHGR_THRESHOLD = 0.9
 
+# 조회순위가 이 값 이내(상위)인 종목은 순위 상승폭과 무관하게
+# 직전대비 등락율(SURGE_CHGR_THRESHOLD) 조건만 만족하면 알림을 보냄
+TOP_RANK_ALERT_THRESHOLD = 4
+
 # 같은 종목은 알림을 보낸 뒤 이 시간(초) 동안 다시 알리지 않음
 ALERT_COOLDOWN_SECONDS = 60 * 60
 
@@ -120,20 +124,30 @@ def compute_rank_changes(curr_data, last_rank_by_code):
     return rank_changes
 
 
-# 조회순위 급등 + 직전대비 급등 조건을 만족하는 종목을 찾아내는 함수
+# 알림 대상 종목을 찾아내는 함수
+# - 조회순위 상위(TOP_RANK_ALERT_THRESHOLD 이내) 종목: 직전대비 등락율 조건만 만족하면 알림
+# - 그 외 종목: 조회순위 급등 + 직전대비 급등 조건을 동시에 만족해야 알림
 def find_surge_alerts(curr_data, rank_changes):
     alerts = []
     for item in curr_data:
         code = item.get("stk_cd", "")
+        rank = int(item.get("bigd_rank", 0) or 0)
         rank_chg = rank_changes.get(code)
-        if rank_chg is None:
-            continue
 
         try:
             prev_chgr = float((item.get("prev_base_chgr") or "0").replace("+", ""))
         except ValueError:
             prev_chgr = 0.0
 
+        # 조회순위 상위 종목은 순위 상승폭과 무관하게 직전대비 등락율만으로 알림
+        if 0 < rank <= TOP_RANK_ALERT_THRESHOLD:
+            if prev_chgr >= SURGE_CHGR_THRESHOLD:
+                alerts.append(item)
+            continue
+
+        # 그 외 종목은 순위 급등과 직전대비 급등을 동시에 만족해야 알림
+        if rank_chg is None:
+            continue
         if rank_chg >= RANK_JUMP_THRESHOLD and prev_chgr >= SURGE_CHGR_THRESHOLD:
             alerts.append(item)
 
@@ -171,6 +185,9 @@ def notify_surge_alerts(alerts):
     lines.append("")
     lines.append(
         f"(조회 {RANK_JUMP_THRESHOLD}위 이상 급등 & 직전비 +{SURGE_CHGR_THRESHOLD}% 상승)"
+    )
+    lines.append(
+        f"(조회 {TOP_RANK_ALERT_THRESHOLD}위 이내는 직전비 +{SURGE_CHGR_THRESHOLD}%만으로 알림)"
     )
     lines.append("(08:00, 09:00 직후엔 1분간 탐지스킵)")
     lines.append("(1시간 간격 중복종목 알림생략)")
