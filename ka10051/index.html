@@ -23,9 +23,9 @@
   table { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
   th,td { padding:5px 9px; text-align:right; border-bottom:1px solid #eceef1; }
   th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; }
-  th:first-child, td:first-child { text-align:center; color:var(--muted);
+  .ntable th:first-child, .ntable td:first-child { text-align:center; color:var(--muted);
     position:sticky; left:0; background:var(--panel); z-index:1; }
-  th:first-child { z-index:2; background:var(--head); }
+  .ntable th:first-child { z-index:2; background:var(--head); }
   .summary td { font-weight:600; }
   .summary td:first-child { background:#f6f7f9; }
   /* 증감 행 강조 배경 */
@@ -66,7 +66,7 @@
   .market-sel label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; color:var(--muted); }
   .market-sel label.on { color:var(--text); }
   .market-sel input { cursor:pointer; }
-  .page-title { max-width:1200px; margin:0 auto 4px; font-size:18px; font-weight:700; color:var(--text);
+  .page-title { max-width:1200px; margin:20px auto 6px; font-size:18px; font-weight:700; color:var(--text);
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
