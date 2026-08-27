@@ -35,8 +35,15 @@ import sys
 import threading
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, parse_qs
+
+# 서버 환경 시간대(UTC 등)와 무관하게 항상 한국시간(KST) 기준으로 동작
+KST = timezone(timedelta(hours=9))
+
+
+def now_kst():
+    return datetime.now(KST)
 
 PORT = 8010
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -153,7 +160,7 @@ def poll_once(token, market):
         if not token:
             raise SystemExit('접근 토큰 발급 실패. .env 설정을 확인해주세요.')
 
-    now = datetime.now()
+    now = now_kst()
     base_dt = now.strftime('%Y%m%d')       # API 요청용
     date_str = now.strftime('%Y-%m-%d')    # 파일/레코드용
     mkey = market['key']
@@ -196,7 +203,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
     token = None
     idle_notified = False
     while True:
-        if in_collect_window(datetime.now(), start_h, end_h):
+        if in_collect_window(now_kst(), start_h, end_h):
             idle_notified = False
             for market in MARKETS:
                 try:
@@ -207,7 +214,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
             time.sleep(interval)
         else:
             if not idle_notified:
-                stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                stamp = now_kst().strftime('%Y-%m-%d %H:%M:%S')
                 print(f'[{stamp}] 수집 시간대 밖 — 대기 중 '
                       f'(평일 {start_h:02d}:00~{end_h:02d}:00에 재개)')
                 idle_notified = True
@@ -525,7 +532,7 @@ def effective_date(now):
 
 def build_payload(market_key):
     """해당 시장의 기준일(06시 전이면 전일, 없으면 가장 최근 일자) 레코드를 반환."""
-    ref_date = effective_date(datetime.now())
+    ref_date = effective_date(now_kst())
     records = read_records(market_key, ref_date)
     date_str = ref_date
     if not records:
@@ -602,7 +609,7 @@ def main():
     POLL_CONF['end_h'] = int(get_opt(args, '--end', '20'))
 
     if '--reset' in args:
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = now_kst().strftime('%Y-%m-%d')
         for m in MARKETS:
             path = snapshot_path(m['key'], today)
             if os.path.exists(path):
