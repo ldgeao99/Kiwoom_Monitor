@@ -83,6 +83,16 @@
   .breadth-tbl .up { color:var(--pos); } .breadth-tbl .dn { color:var(--neg); } .breadth-tbl .flat { color:var(--muted); }
   .breadth-tbl .arw { font-size:11px; margin-left:3px; }
   .breadth-tbl .pct { color:var(--muted); font-weight:400; font-size:11px; }
+  /* 조회수 상위 종목 */
+  .rank-wrap { max-width:1200px; margin:0 auto 14px; }
+  .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  .rank-tbl th, .rank-tbl td { padding:7px 12px; border-bottom:1px solid #eceef1; text-align:right; }
+  .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; }
+  .rank-tbl td.rk { text-align:center; color:var(--muted); width:44px; }
+  .rank-tbl td.nm { text-align:left; font-weight:600; }
+  .rank-tbl .pos { color:var(--pos); } .rank-tbl .neg { color:var(--neg); }
+  .rank-toggle { width:100%; border:0; border-top:1px solid var(--line); background:#fafbfc;
+    color:var(--muted); font-size:12px; padding:8px; cursor:pointer; }
   /* 프로그램 순매수금액 */
   .prog-wrap { max-width:1200px; margin:0 auto 16px; }
   .prog-input { width:96px; font-size:13px; padding:4px 8px; border:1px solid var(--line);
@@ -151,6 +161,13 @@
   <div class="panel">
     <div class="title"><span id="label-lbl"></span> 순매수 <small id="date-lbl"></small></div>
     <div id="table-host"></div>
+  </div>
+</div>
+<div class="page-title"><span>조회수 상위 종목</span></div>
+<div class="rank-wrap">
+  <div class="panel">
+    <div id="rank-host"></div>
+    <button id="rank-toggle" class="rank-toggle" type="button">펼치기 ▾</button>
   </div>
 </div>
 <div class="page-title"><span>프로그램 순매수금액</span></div>
@@ -513,6 +530,45 @@ async function renderSummaryCards() {
   } catch (e) {}
 }
 
+// ── 조회수 상위 종목 (기본 10, 펼치기 20) ──
+let rankItems = [];
+let rankExpanded = false;
+try { rankExpanded = localStorage.getItem('netprps_rank_expanded') === '1'; } catch (e) {}
+
+function fmtChgr(v, sign) {
+  const c = (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  const cls = v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
+  return `<span class="${cls}">${c}</span>`;
+}
+function renderRankTable() {
+  const host = document.getElementById('rank-host');
+  const shown = rankItems.slice(0, rankExpanded ? 20 : 10);
+  if (!shown.length) { host.innerHTML = '<div class="empty">조회순위 데이터가 없습니다.</div>'; return; }
+  let html = '<table class="rank-tbl"><thead><tr><th class="rk">순위</th><th class="nm" style="text-align:left">종목명</th><th>등락율</th></tr></thead><tbody>';
+  shown.forEach(it => {
+    html += `<tr><td class="rk">${it.rank}</td><td class="nm">${it.name}</td><td>${fmtChgr(it.chgr, it.sign)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  host.innerHTML = html;
+  const btn = document.getElementById('rank-toggle');
+  btn.textContent = rankExpanded ? '접기 ▴' : '펼치기 ▾';
+  btn.style.display = rankItems.length > 10 ? '' : 'none';
+}
+async function renderRank() {
+  try {
+    const res = await fetch('/api/rank', { cache: 'no-store' });
+    if (!res.ok) return;
+    const d = await res.json();
+    rankItems = d.items || [];
+    renderRankTable();
+  } catch (e) {}
+}
+document.getElementById('rank-toggle').addEventListener('click', () => {
+  rankExpanded = !rankExpanded;
+  try { localStorage.setItem('netprps_rank_expanded', rankExpanded ? '1' : '0'); } catch (e) {}
+  renderRankTable();
+});
+
 // ── 하단: 특정 종목 프로그램 순매수금액 차트 ──
 let progStk = (function () {
   try { return localStorage.getItem('netprps_prog_stk') || '005930'; } catch (e) { return '005930'; }
@@ -641,6 +697,7 @@ function progReset() { progSeries = {}; progNext = ''; progCont = 'N'; progInite
 
 async function refresh() {
   renderSummaryCards();   // 상단 카드도 함께 갱신
+  renderRank();           // 조회수 상위 종목 갱신
   renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
   try {
     const res = await fetch('/api/netprps?mrkt=' + encodeURIComponent(curMarket), { cache: 'no-store' });

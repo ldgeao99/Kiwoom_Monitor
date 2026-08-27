@@ -211,6 +211,22 @@ def fetch_program(token, stk_cd, amt_qty_tp='1', cont_yn='N', next_key=''):
     return rows, resp.headers.get('cont-yn', 'N'), resp.headers.get('next-key', '')
 
 
+def fetch_rank(token, qry_tp='5'):
+    """ka00198(실시간종목조회순위) — 조회수 상위 20종목."""
+    url = 'https://api.kiwoom.com/api/dostk/stkinfo'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'api-id': 'ka00198',
+    }
+    resp = requests.post(url, headers=headers, json={'qry_tp': qry_tp})
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') not in (None, 0):
+        raise RuntimeError(f"조회순위 API 오류: {body.get('return_msg')}")
+    return body.get('item_inq_rank') or []
+
+
 _token_cache = {'token': None}
 
 
@@ -566,6 +582,21 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
             'series': pts, 'cont': c, 'next': nk}
 
 
+def build_rank():
+    """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
+    def run(tok):
+        rows = fetch_rank(tok)
+        return [{'rank': i + 1, 'name': r.get('stk_nm', ''), 'code': r.get('stk_cd', ''),
+                 'chgr': to_number(r.get('base_comp_chgr')), 'sign': str(r.get('base_comp_sign') or '')}
+                for i, r in enumerate(rows[:20])]
+    try:
+        items = run(cached_token())
+    except Exception:
+        _token_cache['token'] = None
+        items = run(cached_token())
+    return {'items': items}
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -597,6 +628,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/summary':
             body = json.dumps(build_summary(), ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/rank':
+            try:
+                payload = build_rank()
+            except Exception as e:
+                payload = {'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/program':
             qs = parse_qs(parsed.query)
