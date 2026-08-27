@@ -85,10 +85,13 @@
   .breadth-tbl .pct { color:var(--muted); font-weight:400; font-size:11px; }
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
-  .rank-scroll { max-height:300px; overflow-y:auto; }
+  /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
+  .rank-scroll { max-height:352px; overflow-y:auto; }
+  .rank-scroll.expanded { max-height:700px; }
   .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
-  .rank-tbl th, .rank-tbl td { padding:7px 10px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
-  .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1; }
+  .rank-tbl th, .rank-tbl td { padding:6px 6px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
+  .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1;
+    white-space:normal; line-height:1.25; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
   .rank-tbl tbody tr { cursor:pointer; }
@@ -552,11 +555,11 @@ function priceCell(price, psign) {
 }
 function renderRankTable() {
   const host = document.getElementById('rank-host');
-  const shown = rankItems.slice(0, rankExpanded ? 20 : 10);
+  const shown = rankItems.slice(0, 20);   // 항상 20개 렌더(스크롤), 접힘 상태는 높이로 10개만 노출
   if (!shown.length) { host.innerHTML = '<div class="empty">조회순위 데이터가 없습니다.</div>'; return; }
-  let html = '<div class="rank-scroll"><table class="rank-tbl"><thead><tr>'
+  let html = `<div class="rank-scroll${rankExpanded ? ' expanded' : ''}"><table class="rank-tbl"><thead><tr>`
     + '<th class="rk">순위</th><th style="text-align:left">종목명</th>'
-    + '<th>기준시점 주가</th><th>기준시점 등락율</th><th>30초 전 대비율</th></tr></thead><tbody>';
+    + '<th>기준시점<br>주가</th><th>기준시점<br>등락율</th><th>30초 전<br>대비율</th></tr></thead><tbody>';
   shown.forEach(it => {
     html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수금액 조회"><td class="rk">${it.rank}</td>`
       + `<td class="nm">${it.name}${rankChgHtml(it.rank_sign, it.rank_chg)}</td>`
@@ -565,7 +568,10 @@ function renderRankTable() {
       + `<td class="${pctCls(it.prev)}">${(it.prev > 0 ? '+' : '') + it.prev.toFixed(2)}%</td></tr>`;
   });
   html += '</tbody></table></div>';
+  const prev = host.querySelector('.rank-scroll');
+  const prevTop = prev ? prev.scrollTop : 0;
   host.innerHTML = html;
+  host.querySelector('.rank-scroll').scrollTop = prevTop;   // 갱신/토글 시 스크롤 위치 유지
   const btn = document.getElementById('rank-toggle');
   btn.textContent = rankExpanded ? '접기 ▴' : '펼치기 ▾';
   btn.style.display = rankItems.length > 10 ? '' : 'none';
