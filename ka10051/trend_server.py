@@ -85,6 +85,9 @@ MARKET_BY_KEY = {m['key']: m for m in MARKETS}
 # 수집 스레드에 전달할 설정 (main에서 채움)
 POLL_CONF = {'interval': 60, 'start_h': 8, 'end_h': 20}
 
+# 스냅샷(지수 종가 포함) 보존 일수: 오늘+어제 2일만 유지, 그 이전 파일은 삭제
+KEEP_DAYS = 2
+
 # 외국인 순매수 천단위 알림 대상 필드/단위
 ALERT_FIELD = 'frgnr_netprps'   # 외국인 순매수
 ALERT_STEP = 1000               # 이 값의 배수(천단위) milestone
@@ -334,7 +337,8 @@ def sleep_to_next_boundary(interval):
 def run_loop(interval=60, start_h=8, end_h=20):
     """평일 start_h~end_h 시간대에 매 경계(:00)에 맞춰 모든 시장을 poll_once (무한 루프)."""
     print(f'{interval}초 간격(정각 정렬) 자동 반복 누적 시작 '
-          f'(평일 {start_h:02d}:00~{end_h:02d}:00, 주말 휴무)')
+          f'(평일 {start_h:02d}:00~{end_h:02d}:00, 주말 휴무, 최근 {KEEP_DAYS}일 보존)')
+    prune_old_snapshots()   # 시작 시 1회 정리
     token = None
     idle_notified = False
     while True:
@@ -346,6 +350,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
                 except Exception as e:
                     print(f"  {market['name']} 조회 실패: {e}")
                     token = None  # 토큰 만료 등 대비해 재발급
+            prune_old_snapshots()              # 새 날짜 파일 생성 대비 정리
             sleep_to_next_boundary(interval)   # 다음 :00 까지 대기(드리프트 없음)
         else:
             if not idle_notified:
@@ -354,6 +359,21 @@ def run_loop(interval=60, start_h=8, end_h=20):
                       f'(평일 {start_h:02d}:00~{end_h:02d}:00에 재개)')
                 idle_notified = True
             sleep_to_next_boundary(60)  # 시간대 밖에서는 매 분 :00에 확인
+
+
+def prune_old_snapshots():
+    """시장별로 가장 최근 KEEP_DAYS일만 남기고 이전 스냅샷 파일 삭제."""
+    for m in MARKETS:
+        prefix = f"netprps_snapshots_{m['key']}_"
+        dates = sorted(name[len(prefix):-len('.jsonl')]
+                       for name in os.listdir(BASE_DIR)
+                       if name.startswith(prefix) and name.endswith('.jsonl'))
+        for d in dates[:-KEEP_DAYS]:                 # 최근 KEEP_DAYS일 제외 나머지
+            try:
+                os.remove(snapshot_path(m['key'], d))
+                print(f"  오래된 파일 삭제: {os.path.basename(snapshot_path(m['key'], d))}")
+            except OSError:
+                pass
 
 
 def get_opt(args, name, default=None):
