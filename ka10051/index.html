@@ -38,7 +38,8 @@
   }
   /* 표를 두 개로 분리: 위(head-table)=헤더+순매수+증감 고정, 아래(body-scroll)=시간 행 스크롤 */
   .head-table { border-bottom:2px solid #9aa0a8; box-shadow:0 3px 4px -2px rgba(0,0,0,.12); }
-  .body-scroll { max-height:300px; overflow:auto; }
+  .body-scroll { max-height:200px; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain; }
   .head-table, .body-table { table-layout:fixed; }
   tr.moretip td { text-align:center; color:var(--muted); font-size:11px; padding:8px;
     background:#fafbfc; position:static; }
