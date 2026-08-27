@@ -197,9 +197,17 @@ def in_collect_window(now, start_h, end_h):
     return start_h <= now.hour < end_h
 
 
+def sleep_to_next_boundary(interval):
+    """벽시계 경계(interval 배수, 예: 60초면 매 분 :00)까지 대기.
+    epoch 초 기준이라 시간대와 무관하며, KST(+9:00)에서 60초 배수는 :00에 정렬된다."""
+    now = time.time()
+    target = (int(now // interval) + 1) * interval
+    time.sleep(max(0.0, target - now))
+
+
 def run_loop(interval=60, start_h=8, end_h=20):
-    """평일 start_h~end_h 시간대에만 interval 간격으로 모든 시장을 poll_once (무한 루프)."""
-    print(f'{interval}초 간격 자동 반복 누적 시작 '
+    """평일 start_h~end_h 시간대에 매 경계(:00)에 맞춰 모든 시장을 poll_once (무한 루프)."""
+    print(f'{interval}초 간격(정각 정렬) 자동 반복 누적 시작 '
           f'(평일 {start_h:02d}:00~{end_h:02d}:00, 주말 휴무)')
     token = None
     idle_notified = False
@@ -212,14 +220,14 @@ def run_loop(interval=60, start_h=8, end_h=20):
                 except Exception as e:
                     print(f"  {market['name']} 조회 실패: {e}")
                     token = None  # 토큰 만료 등 대비해 재발급
-            time.sleep(interval)
+            sleep_to_next_boundary(interval)   # 다음 :00 까지 대기(드리프트 없음)
         else:
             if not idle_notified:
                 stamp = now_kst().strftime('%Y-%m-%d %H:%M:%S')
                 print(f'[{stamp}] 수집 시간대 밖 — 대기 중 '
                       f'(평일 {start_h:02d}:00~{end_h:02d}:00에 재개)')
                 idle_notified = True
-            time.sleep(60)  # 시간대 밖에서는 1분마다 확인
+            sleep_to_next_boundary(60)  # 시간대 밖에서는 매 분 :00에 확인
 
 
 def get_opt(args, name, default=None):
