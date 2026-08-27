@@ -193,46 +193,65 @@ function renderTable() {
   const last = pts[pts.length - 1];
   const prev = pts.length > 1 ? pts[pts.length - 2] : null;
 
-  // 표시할 행 개수(최신 visibleCount개)
-  const shown = Math.min(visibleCount, pts.length);
-  const startIdx = pts.length - shown;  // 이 인덱스까지(포함) 최신 방향으로 표시
-
-  // 위쪽 고정 테이블: 헤더(시간/컬럼) + 순매수 + 증감
-  let head = '<table class="ntable head-table"><colgroup></colgroup><tbody>';
-  head += '<tr class="hrow"><th>시간</th>';
-  cols.forEach(c => head += `<th>${c.name}</th>`);
-  head += '</tr><tr class="summary sum1"><td>순매수</td>';
-  cols.forEach(c => head += `<td class="${cls(last[c.key])}">${fmtSigned(last[c.key])}</td>`);
-  head += `</tr><tr class="summary delta sum2" id="delta-row"><td>증감</td>`;
+  // 위쪽 고정 테이블 행들(헤더/순매수/증감)
+  let headRows = '<tr class="hrow"><th>시간</th>';
+  cols.forEach(c => headRows += `<th>${c.name}</th>`);
+  headRows += '</tr><tr class="summary sum1"><td>순매수</td>';
+  cols.forEach(c => headRows += `<td class="${cls(last[c.key])}">${fmtSigned(last[c.key])}</td>`);
+  headRows += `</tr><tr class="summary delta sum2" id="delta-row"><td>증감</td>`;
   cols.forEach(c => {
     const d = prev ? last[c.key] - prev[c.key] : 0;
-    head += `<td class="${cls(d)}">${fmtSigned(d)}</td>`;
+    headRows += `<td class="${cls(d)}">${fmtSigned(d)}</td>`;
   });
-  head += '</tr></tbody></table>';
+  headRows += '</tr>';
 
-  // 아래쪽 스크롤 테이블: 시간 행
-  let body = '<table class="ntable body-table"><colgroup></colgroup><tbody>';
-  for (let i = pts.length - 1; i >= startIdx; i--) {
-    const p = pts[i];
-    body += `<tr><td>${p.t.slice(0,5)}</td>`;
-    cols.forEach(c => body += `<td class="${cls(p[c.key])}">${fmtSigned(p[c.key])}</td>`);
-    body += '</tr>';
+  // 아래쪽 시간 행들(최신 visibleCount개)
+  const shown = Math.min(visibleCount, pts.length);
+  const startIdx = pts.length - shown;
+  let bodyRows = '';
+  for (let i = pts.length - 1; i >= startIdx; i--) bodyRows += timeRowHtml(pts[i], cols);
+  if (shown < pts.length) bodyRows += moretipHtml(pts.length - shown, cols.length);
+
+  // 구조는 한 번만 생성하고, 이후에는 tbody 내용만 교체(스크롤 컨테이너 유지 → 관성 보존)
+  let bscroll = host.querySelector('.body-scroll');
+  const prevTop = bscroll ? bscroll.scrollTop : 0;
+  if (!bscroll) {
+    host.innerHTML =
+      '<table class="ntable head-table"><colgroup></colgroup><tbody class="hbody"></tbody></table>'
+      + '<div class="body-scroll"><table class="ntable body-table"><colgroup></colgroup><tbody class="bbody"></tbody></table></div>';
+    bscroll = host.querySelector('.body-scroll');
+    bscroll.addEventListener('scroll', onTableScroll);
   }
-  if (shown < pts.length) {
-    const remain = pts.length - shown;
-    body += `<tr class="moretip"><td colspan="${cols.length + 1}">아래로 스크롤하면 ${Math.min(PAGE, remain)}개 더 불러옵니다 (남은 ${remain}개)</td></tr>`;
-  }
-  body += '</tbody></table>';
-
-  const prevScroll = host.querySelector('.body-scroll');
-  const prevTop = prevScroll ? prevScroll.scrollTop : 0;
-  host.innerHTML = head + '<div class="body-scroll">' + body + '</div>';
-
-  const bscroll = host.querySelector('.body-scroll');
-  bscroll.addEventListener('scroll', onTableScroll);
-  bscroll.scrollTop = prevTop;
-
+  host.querySelector('.hbody').innerHTML = headRows;
+  host.querySelector('.bbody').innerHTML = bodyRows;
   syncColumnWidths(host, cols.length);
+  bscroll.scrollTop = prevTop;
+}
+
+function timeRowHtml(p, cols) {
+  return `<tr class="trow"><td>${p.t.slice(0,5)}</td>`
+    + cols.map(c => `<td class="${cls(p[c.key])}">${fmtSigned(p[c.key])}</td>`).join('') + '</tr>';
+}
+function moretipHtml(remain, nCols) {
+  return `<tr class="moretip"><td colspan="${nCols + 1}">아래로 스크롤하면 ${Math.min(PAGE, remain)}개 더 불러옵니다 (남은 ${remain}개)</td></tr>`;
+}
+
+// 스크롤로 더 볼 때는 전체 재렌더 없이 '새로 보이는 과거 행'만 아래에 append (버벅임 방지)
+function appendOlderRows() {
+  const host = document.getElementById('table-host');
+  const bbody = host.querySelector('.bbody');
+  if (!bbody) { renderTable(); return; }
+  const pts = DATA.points, cols = activeCols();
+  const rendered = bbody.querySelectorAll('tr.trow').length;
+  const curStart = pts.length - rendered;                 // 현재 표시된 가장 오래된 인덱스
+  const newStart = Math.max(0, pts.length - Math.min(visibleCount, pts.length));
+  if (newStart >= curStart) return;                       // 추가할 것 없음
+  let html = '';
+  for (let i = curStart - 1; i >= newStart; i--) html += timeRowHtml(pts[i], cols);
+  const mt = bbody.querySelector('.moretip');
+  if (mt) mt.remove();
+  bbody.insertAdjacentHTML('beforeend', html);
+  if (newStart > 0) bbody.insertAdjacentHTML('beforeend', moretipHtml(newStart, cols.length));
 }
 
 // 두 테이블의 컬럼 너비를 맞춘다(스크롤바 폭까지 반영해 정렬).
@@ -251,11 +270,11 @@ function syncColumnWidths(host, nCols) {
 
 function onTableScroll(e) {
   const el = e.currentTarget;
-  // 바닥 근처(80px)에 도달하면 과거 데이터 PAGE개 더 표시
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+  // 바닥 근처(120px)에 도달하면 과거 데이터 PAGE개 더 append (전체 재렌더 없이)
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
     if (visibleCount < DATA.points.length) {
       visibleCount += PAGE;
-      renderTable();
+      appendOlderRows();
     }
   }
 }
