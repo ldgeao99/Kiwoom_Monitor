@@ -456,7 +456,9 @@ def available_dates(market_key):
 
 
 def idx_series(records):
-    return [{'t': r['t'], 'idx': r['idx']} for r in records if r.get('idx') is not None]
+    """지수 1분봉 종가 시계열 — 정규장 09:00~15:30 구간만."""
+    return [{'t': r['t'], 'idx': r['idx']} for r in records
+            if r.get('idx') is not None and '09:00' <= r['t'][:5] <= '15:30']
 
 
 def build_summary():
