@@ -805,7 +805,7 @@ async function loadAllProgram() {
       const d = await res.json();
       progMerge(d.series);
       progCont = d.cont || 'N'; progNext = d.next || '';
-      btn.textContent = `불러오는 중… ${Object.keys(progSeries).length}건 (누르면 중단)`;
+      btn.textContent = '불러오는 중… (누르면 중단)';
       if (++page % 3 === 0) progRedraw();            // 진행 표시(3페이지마다 갱신)
       await new Promise(r => setTimeout(r, 120));     // 페이지 간 지연(단축)
     }
