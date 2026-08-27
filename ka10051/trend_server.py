@@ -540,59 +540,30 @@ def build_summary():
     return {'markets': out}
 
 
-# 종목별 프로그램매매 시계열 캐시: stk -> {'date','pts':{tm: point}}
-# 최초/종목변경/날짜변경 시 연속조회로 전체 수집, 이후 갱신은 최신 페이지만 받아 병합(요청 최소화)
-_prog_cache = {}
-
-
-def _prog_fetch_pages(tok, stk_cd, amt_qty_tp, full):
-    """full=True면 연속조회로 여러 페이지, False면 최신 1페이지만."""
-    allrows = []
-    cont, nkey = 'N', ''
-    pages = 60 if full else 1
-    for i in range(pages):
-        if i > 0:
-            time.sleep(0.35)                     # 429(요청 과다) 방지용 페이지 간 지연
-            try:
-                rows, cont, nkey = fetch_program(tok, stk_cd, amt_qty_tp, cont, nkey)
-            except Exception:
-                break                            # 페이징 중 오류는 지금까지 수집분으로 마무리
-        else:
-            rows, cont, nkey = fetch_program(tok, stk_cd, amt_qty_tp, cont, nkey)
-        allrows.extend(rows)
-        if not full or cont != 'Y' or not nkey or len(allrows) > 6000:
-            break
-    return allrows
-
-
-def build_program(stk_cd, amt_qty_tp='1'):
-    """특정 종목의 당일 시간별 프로그램 순매수금액(백만원) 시계열."""
-    date = now_kst().strftime('%Y%m%d')
-    cache = _prog_cache.get(stk_cd)
-    full = cache is None or cache.get('date') != date
-
+def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
+    """프로그램매매 한 페이지(최신 또는 연속조회 다음 페이지) + 다음 페이지 커서 반환.
+    클라이언트가 '연속조회' 버튼으로 페이지를 직접 이어받는다."""
     def run(tok):
-        rows = _prog_fetch_pages(tok, stk_cd, amt_qty_tp, full)
-        pts = {} if full else dict(cache['pts'])     # 전체 재수집이면 새로, 아니면 기존에 병합
+        rows, c, nk = fetch_program(tok, stk_cd, amt_qty_tp, cont_yn, next_key)
+        pts = []
         for r in rows:
             tm = r.get('tm')
             if not tm:
                 continue
-            pts[tm] = {'t': tm[:2] + ':' + tm[2:4], 'tm': tm,
-                       'net': to_number(r.get('prm_netprps_amt')),
-                       'cur': to_number(r.get('cur_prc'))}
-        return pts
+            pts.append({'t': tm[:2] + ':' + tm[2:4], 'tm': tm,
+                        'net': to_number(r.get('prm_netprps_amt')),
+                        'chg': to_number(r.get('prm_netprps_amt_irds')),
+                        'cur': to_number(r.get('cur_prc'))})
+        return pts, c, nk
 
     try:
-        pts = run(cached_token())
+        pts, c, nk = run(cached_token())
     except Exception:
         _token_cache['token'] = None                 # 토큰 만료 등 대비 1회 재시도
-        time.sleep(0.4)
-        pts = run(cached_token())
+        pts, c, nk = run(cached_token())
 
-    _prog_cache[stk_cd] = {'date': date, 'pts': pts}
-    series = sorted(pts.values(), key=lambda p: p['tm'])
-    return {'stk_cd': stk_cd, 'name': stock_name(stk_cd), 'series': series}
+    return {'stk_cd': stk_cd, 'name': stock_name(stk_cd),
+            'series': pts, 'cont': c, 'next': nk}
 
 
 # 서빙 허용 HTML 파일: 경로 -> 파일명
@@ -630,10 +601,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/program':
             qs = parse_qs(parsed.query)
             stk = (qs.get('stk', ['005930'])[0] or '005930').strip()[:20]
+            cont = qs.get('cont', ['N'])[0]
+            nkey = qs.get('next', [''])[0]
             try:
-                payload = build_program(stk)
+                payload = build_program(stk, cont, nkey)
             except Exception as e:
-                payload = {'stk_cd': stk, 'name': '', 'series': [], 'error': str(e)}
+                payload = {'stk_cd': stk, 'name': '', 'series': [], 'cont': 'N', 'next': '', 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         else:

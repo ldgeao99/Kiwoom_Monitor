@@ -89,6 +89,7 @@
     border-radius:8px; font-variant-numeric:tabular-nums; }
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
+  .prog-go:disabled { opacity:.4; cursor:default; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
   @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:9px 4px; } }
@@ -158,8 +159,9 @@
     <div class="title">
       <input id="prog-stk" class="prog-input" value="005930" maxlength="6" inputmode="numeric" placeholder="종목코드">
       <button id="prog-go" class="prog-go" type="button">조회</button>
+      <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
       <span id="prog-name" class="prog-name"></span>
-      <small class="prog-unit">단위: 백만원</small>
+      <small class="prog-unit" id="prog-count"></small>
     </div>
     <div id="prog-chart"></div>
   </div>
@@ -519,8 +521,11 @@ let progStk = (function () {
 function drawProgramChart(series) {
   const host = document.getElementById('prog-chart');
   if (!series || series.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다(장중에 조회하세요).</div>'; return; }
-  const W = 760, H = 260, mL = 8, mR = 64, mT = 12, mB = 24;
+  const W = 760, H = 280, mL = 8, mR = 70, mT = 22, mB = 24;
   const iw = W - mL - mR, ih = H - mT - mB;
+  const GREEN = '#16a34a';
+
+  // 메인: 시간별 순매수금액(누적) 라인
   const vals = series.map(s => s.net);
   let vmin = Math.min(0, ...vals), vmax = Math.max(0, ...vals);
   if (vmin === vmax) vmax = vmin + 1;
@@ -535,48 +540,102 @@ function drawProgramChart(series) {
     grid += `<line x1="${mL}" y1="${yy}" x2="${mL+iw}" y2="${yy}" stroke="#eceef1"/>`;
     grid += `<text x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
   }
-  const y0 = y(0);
-  grid += `<line x1="${mL}" y1="${y0}" x2="${mL+iw}" y2="${y0}" stroke="#c7ccd2"/>`;
+  if (vmin < 0 && vmax > 0) grid += `<line x1="${mL}" y1="${y(0).toFixed(1)}" x2="${mL+iw}" y2="${y(0).toFixed(1)}" stroke="#c7ccd2"/>`;
 
-  let xlab = ''; const step = Math.max(1, Math.floor(n / 6));
+  let xlab = ''; const step = Math.max(1, Math.floor(n / 8));
   for (let i = 0; i < n; i += step)
     xlab += `<text x="${x(i)}" y="${H-7}" font-size="10" fill="#9aa0a8" text-anchor="middle">${series[i].t}</text>`;
 
-  const color = '#16a34a';
-  let d = '';
-  series.forEach((s, i) => d += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(s.net).toFixed(1)} `);
-  const area = `M${x(0).toFixed(1)},${y0.toFixed(1)} ` + d.replace(/^M/, 'L') + `L${x(n-1).toFixed(1)},${y0.toFixed(1)} Z`;
+  let line = '';
+  series.forEach((s, i) => line += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(s.net).toFixed(1)} `);
+
+  // 오버레이: 순매수금액증감 — 상단 밴드의 0선을 기준으로 얇은 막대(빨강+/파랑-)
+  const chgs = series.map(s => s.chg || 0);
+  const cmax = Math.max(1, ...chgs.map(Math.abs));
+  const bandH = ih * 0.16, bandY0 = mT + bandH;      // 상단 밴드 0선
+  let spikes = '';
+  if (chgs.some(v => v !== 0)) {
+    series.forEach((s, i) => {
+      const c = s.chg || 0; if (!c) return;
+      const h = (Math.abs(c) / cmax) * bandH;
+      const yy = c > 0 ? bandY0 - h : bandY0 + h;
+      spikes += `<line x1="${x(i).toFixed(1)}" y1="${bandY0.toFixed(1)}" x2="${x(i).toFixed(1)}" y2="${yy.toFixed(1)}" stroke="${c>0?'var(--pos)':'var(--neg)'}" stroke-width="0.7" opacity="0.7"/>`;
+    });
+  }
+
+  const legend = `<g font-size="11">`
+    + `<rect x="${mL}" y="6" width="10" height="3" fill="${GREEN}"/><text x="${mL+14}" y="9.5" fill="#6b7280">시간별 순매수금액</text>`
+    + `<rect x="${mL+130}" y="6" width="10" height="3" fill="var(--neg)"/><text x="${mL+144}" y="9.5" fill="#6b7280">순매수금액증감</text></g>`;
 
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
-    + grid
-    + `<path d="${area}" fill="${color}" opacity="0.10"/>`
-    + `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/>`
-    + xlab + '</svg>';
+    + grid + spikes
+    + `<path d="${line}" fill="none" stroke="${GREEN}" stroke-width="1.6"/>`
+    + xlab + legend + '</svg>';
 }
 
+let progSeries = {};          // tm -> point (버튼 연속조회로 누적)
+let progNext = '', progCont = 'N', progInited = false;
+
+function progRedraw() {
+  drawProgramChart(Object.values(progSeries).sort((a, b) => a.tm < b.tm ? -1 : 1));
+  const moreBtn = document.getElementById('prog-more');
+  const canMore = progCont === 'Y' && !!progNext;
+  moreBtn.disabled = !canMore;
+  document.getElementById('prog-count').textContent =
+    `${Object.keys(progSeries).length}건` + (canMore ? ' · 더 있음' : ' · 단위: 백만원');
+}
+
+function progMerge(series) {
+  (series || []).forEach(p => { progSeries[p.tm] = p; });
+}
+
+// 최신 페이지 갱신(매분/조회): 누적은 유지, 커서는 최초 1회만 설정
 async function renderProgram() {
-  const nameEl = document.getElementById('prog-name');
   try {
     const res = await fetch('/api/program?stk=' + encodeURIComponent(progStk), { cache: 'no-store' });
     if (!res.ok) return;
     const d = await res.json();
-    nameEl.textContent = d.name ? `${d.name} (${d.stk_cd})` : d.stk_cd;
-    drawProgramChart(d.series);
+    document.getElementById('prog-name').textContent = d.name ? `${d.name} (${d.stk_cd})` : d.stk_cd;
+    progMerge(d.series);
+    if (!progInited) { progCont = d.cont || 'N'; progNext = d.next || ''; progInited = true; }
+    progRedraw();
   } catch (e) {}
 }
 
+// 연속조회 버튼: 다음(과거) 페이지를 이어받아 누적
+async function loadMoreProgram() {
+  if (progCont !== 'Y' || !progNext) return;
+  const btn = document.getElementById('prog-more');
+  btn.disabled = true; btn.textContent = '불러오는 중…';
+  try {
+    const url = '/api/program?stk=' + encodeURIComponent(progStk)
+      + '&cont=Y&next=' + encodeURIComponent(progNext);
+    const res = await fetch(url, { cache: 'no-store' });
+    if (res.ok) {
+      const d = await res.json();
+      progMerge(d.series);
+      progCont = d.cont || 'N'; progNext = d.next || '';
+    }
+  } catch (e) {}
+  btn.textContent = '연속조회';
+  progRedraw();
+}
+
+function progReset() { progSeries = {}; progNext = ''; progCont = 'N'; progInited = false; }
+
 (function () {
   const inp = document.getElementById('prog-stk');
-  const btn = document.getElementById('prog-go');
   inp.value = progStk;
   const go = () => {
     const v = (inp.value || '').replace(/\D/g, '').slice(0, 6);
     if (!v) return;
     progStk = v; inp.value = v;
     try { localStorage.setItem('netprps_prog_stk', v); } catch (e) {}
+    progReset();
     renderProgram();
   };
-  btn.addEventListener('click', go);
+  document.getElementById('prog-go').addEventListener('click', go);
+  document.getElementById('prog-more').addEventListener('click', loadMoreProgram);
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 })();
 
