@@ -681,7 +681,7 @@ function drawProgramTable(series) {
   const host = document.getElementById('prog-table');
   if (!series.length) { host.innerHTML = ''; return; }
   const prevTop = (host.querySelector('.prog-tscroll') || {}).scrollTop || 0;
-  const rows = series.slice(-300).reverse();   // 최신 300건, 최신이 위로
+  const rows = [...series].reverse();   // 누적 전체, 최신이 위로(연속조회한 과거는 아래로 추가)
   const tf = tm => `${tm.slice(0,2)}:${tm.slice(2,4)}:${tm.slice(4,6)}`;
   let html = '<div class="prog-tscroll"><table class="prog-tbl"><thead><tr>'
     + '<th>시간</th><th>순매수금액</th><th>순매수증감</th></tr></thead><tbody>';
