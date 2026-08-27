@@ -276,20 +276,21 @@ def poll_once(token, market):
     for key, _name, _color in COLUMNS:
         record[key] = to_number(row.get(key))
 
-    # 지수(ka20003): cur_prc/flu_rt/pred_pre 는 이미 소수점 포함 실제값(예: "+6884.39", "+1.12")
-    try:
-        irow = fetch_index(token, market['idx_cd'])
-        record['idx'] = to_number(irow.get('cur_prc'))
-        record['flu'] = to_number(irow.get('flu_rt'))
-        record['pred'] = to_number(irow.get('pred_pre'))
-        record['sig'] = str(irow.get('pre_sig') or '')
-        record['upl'] = to_number(irow.get('upl'))         # 상한 종목수
-        record['rising'] = to_number(irow.get('rising'))   # 상승 종목수
-        record['flat'] = to_number(irow.get('stdns'))      # 보합 종목수
-        record['fall'] = to_number(irow.get('fall'))       # 하락 종목수
-        record['lst'] = to_number(irow.get('lst'))         # 하한 종목수
-    except Exception as e:
-        print(f"  {market['name']} 지수 조회 실패: {e}")
+    # 지수(ka20003): 정규장 09:00~15:30 에만 수집(1분봉 종가). cur_prc 등은 이미 소수점 포함 실제값
+    if in_index_window(now):
+        try:
+            irow = fetch_index(token, market['idx_cd'])
+            record['idx'] = to_number(irow.get('cur_prc'))
+            record['flu'] = to_number(irow.get('flu_rt'))
+            record['pred'] = to_number(irow.get('pred_pre'))
+            record['sig'] = str(irow.get('pre_sig') or '')
+            record['upl'] = to_number(irow.get('upl'))         # 상한 종목수
+            record['rising'] = to_number(irow.get('rising'))   # 상승 종목수
+            record['flat'] = to_number(irow.get('stdns'))      # 보합 종목수
+            record['fall'] = to_number(irow.get('fall'))       # 하락 종목수
+            record['lst'] = to_number(irow.get('lst'))         # 하한 종목수
+        except Exception as e:
+            print(f"  {market['name']} 지수 조회 실패: {e}")
 
     # 수집 시간대에는 값이 직전과 같아도 매분 기록해 시간축에 빈칸이 없도록 한다.
     # (같은 분에 중복 실행되어 이미 그 분이 기록된 경우에만 스킵)
@@ -329,6 +330,12 @@ def in_collect_window(now, start_h, end_h):
     if now.weekday() >= 5:          # 5:토, 6:일
         return False
     return start_h <= now.hour < end_h
+
+
+def in_index_window(now):
+    """지수(1분봉 종가) 수집 시간대: 정규장 09:00~15:30."""
+    mins = now.hour * 60 + now.minute
+    return 9 * 60 <= mins <= 15 * 60 + 30
 
 
 def sleep_to_next_boundary(interval):
@@ -458,6 +465,8 @@ def build_summary():
     for m in MARKETS:
         records, date_str = records_for(m['key'])
         last = records[-1] if records else {}
+        # 지수/등락/종목현황은 idx가 있는 마지막 레코드(=최근 정규장 값) 기준 → 장 마감 후에도 15:30 값 유지
+        ir = next((r for r in reversed(records) if r.get('idx') is not None), {})
         # 전 거래일(현재 표시일보다 앞선 가장 최근 저장 일자) 시계열
         prev_records, prev_date = [], None
         if date_str:
@@ -467,10 +476,10 @@ def build_summary():
                 prev_records = read_records(m['key'], prev_date)
         out.append({
             'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
-            'idx': last.get('idx'), 'flu': last.get('flu'),
-            'sig': last.get('sig'), 'pred': last.get('pred'),
-            'upl': last.get('upl'), 'rising': last.get('rising'), 'flat': last.get('flat'),
-            'fall': last.get('fall'), 'lst': last.get('lst'),
+            'idx': ir.get('idx'), 'flu': ir.get('flu'),
+            'sig': ir.get('sig'), 'pred': ir.get('pred'),
+            'upl': ir.get('upl'), 'rising': ir.get('rising'), 'flat': ir.get('flat'),
+            'fall': ir.get('fall'), 'lst': ir.get('lst'),
             'ind': last.get('ind_netprps'), 'frgnr': last.get('frgnr_netprps'),
             'orgn': last.get('orgn_netprps'),
             'series': idx_series(records),
