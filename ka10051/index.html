@@ -442,7 +442,7 @@ function breadthTableOne(m) {
   const num = v => (v == null) ? '-' : v.toLocaleString('ko-KR');
   return `<table class="breadth-tbl"><thead>`
     + `<tr><th colspan="3">${m.name}</th></tr>`
-    + `<tr><th class="up">상승</th><th class="flat">보합</th><th class="dn">하락</th></tr>`
+    + `<tr><th>상승</th><th>보합</th><th>하락</th></tr>`
     + `</thead><tbody><tr>`
     + `<td class="num up">${num(m.rising)}</td>`
     + `<td class="num flat">${num(m.flat)}</td>`
