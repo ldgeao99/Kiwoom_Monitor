@@ -87,7 +87,12 @@ POLL_CONF = {'interval': 60, 'start_h': 8, 'end_h': 20}
 
 # 외국인 순매수 천단위 알림 대상 필드/단위
 ALERT_FIELD = 'frgnr_netprps'   # 외국인 순매수
-ALERT_STEP = 1000               # 이 값의 배수(천단위)를 넘을 때 알림
+ALERT_STEP = 1000               # 이 값의 배수(천단위) milestone
+
+# 시장별 알림 상태: 마지막으로 알린 1000 그리드 기준선(level). 일자 바뀌면 리셋.
+# 기준선에서 한 칸(±ALERT_STEP) 이상 움직일 때만 알리고, 움직인 만큼 기준선을 따라 이동.
+# → 상승 신고점(+1000,+2000…), 고점 후 되돌림(-1000,-2000…) 모두 잡고, 경계 진동은 무시.
+_alert_state = {}   # mkey -> {'date','level'}
 
 
 # ─────────────────────────── 텔레그램 알림 ───────────────────────────
@@ -196,6 +201,34 @@ def last_record(market_key, date_str):
     return records[-1] if records else None
 
 
+def _grid_floor(v):
+    """v를 아래쪽 1000 그리드로 내림(음수도 floor). 예: 2050->2000, -1500->-2000."""
+    return (int(v) // ALERT_STEP) * ALERT_STEP
+
+
+def _init_alert_state(market_key, date_str):
+    """기준선(level)을 그날 마지막 기록값의 그리드로 초기화(없으면 0).
+    서버 재시작 시 과거 이력을 되풀이 알림하지 않고 현재 위치에서 이어감."""
+    prev = last_record(market_key, date_str)
+    last_v = int(prev.get(ALERT_FIELD, 0)) if prev else 0
+    return {'date': date_str, 'level': _grid_floor(last_v)}
+
+
+def check_move(st, cur_v):
+    """기준선(level)에서 한 칸(ALERT_STEP) 이상 움직였으면 알림 신호 반환.
+    반환: ('up'|'down', new_level, steps) 또는 None. 상태(level)는 움직인 만큼 이동."""
+    level = st['level']
+    if cur_v >= level + ALERT_STEP:
+        steps = (cur_v - level) // ALERT_STEP
+        st['level'] = level + steps * ALERT_STEP
+        return ('up', st['level'], steps)
+    if cur_v <= level - ALERT_STEP:
+        steps = (level - cur_v) // ALERT_STEP
+        st['level'] = level - steps * ALERT_STEP
+        return ('down', st['level'], steps)
+    return None
+
+
 def poll_once(token, market):
     """market(dict)에 대해 1회 조회하여 해당 시장 JSONL에 append. 토큰을 반환."""
     if token is None:
@@ -225,23 +258,29 @@ def poll_once(token, market):
         print(f"[{record['t']}] {market['name']} 같은 분 이미 기록(스킵)")
         return token
 
+    # --- 외국인 순매수 milestone 알림 (파일 기록 전에 판정) ---
+    # 상승: 새 양수 천단위(+1000,+2000,…) 최초 도달 시만 / 하락: 새 음수 천단위(-1000,…) 최초 도달 시만
+    st = _alert_state.get(mkey)
+    if st is None or st['date'] != date_str:
+        st = _init_alert_state(mkey, date_str)   # 이 시점 파일엔 현재 레코드 미포함
+        _alert_state[mkey] = st
+
+    cur_v = int(record[ALERT_FIELD])
+    hit = check_move(st, cur_v)
+    if hit:
+        direction, level, steps = hit
+        head = '🟢' if direction == 'up' else '🔴'
+        word = '상승' if direction == 'up' else '하락'
+        step_note = f' ({steps}칸)' if steps > 1 else ''
+        send_telegram_message(f"{head} [{market['name']}] 외국인 순매수 {word}{step_note}\n"
+                              f"{record['t'][:5]}  기준선 {level:+,}억 · 현재 {cur_v:+,} (억원)")
+        print(f"  → 텔레그램: {market['name']} {word} level={level:+,} (현재 {cur_v:+,})")
+
     with open(snapshot_path(mkey, date_str), 'a', encoding='utf-8') as f:
         f.write(json.dumps(record, ensure_ascii=False) + '\n')
 
     n = len(read_records(mkey, date_str))
     print(f"[{record['t']}] {market['name']} 기록 · 누적 {n}개")
-
-    # 외국인 순매수의 천단위(1000 배수)가 직전 대비 바뀌면 텔레그램 알림
-    if prev is not None:
-        prev_v = int(prev.get(ALERT_FIELD, 0))
-        cur_v = int(record[ALERT_FIELD])
-        if prev_v // ALERT_STEP != cur_v // ALERT_STEP:
-            head = '🟢' if cur_v > prev_v else '🔴'  # 상승=🟢, 하락=🔴 (맨 앞)
-            msg = (f"{head} [{market['name']}] 외국인 순매수 천단위 변화\n"
-                   f"{record['t'][:5]}  {prev_v:+,} → {cur_v:+,} (억원)")
-            send_telegram_message(msg)
-            print(f"  → 텔레그램 전송: {market['name']} {prev_v:+,} → {cur_v:+,}")
-
     return token
 
 
