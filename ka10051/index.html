@@ -36,14 +36,12 @@
     60%  { background:#ffe9a6; }
     100% { background:var(--sel); }
   }
-  /* 상단 고정: 헤더(시간/컬럼) + 순매수 + 증감 행을 스크롤해도 위에 유지 */
-  thead .hrow th, thead .summary td { height:30px; box-sizing:border-box; }
+  /* 상단 고정: 헤더(시간/컬럼) + 순매수 + 증감 행을 스크롤해도 위에 유지
+     (sum1/sum2 의 top 은 실제 행 높이에 맞춰 JS가 설정) */
   thead .hrow th { top:0; z-index:4; }
   thead .hrow th:first-child { z-index:5; }
   thead .summary td { position:sticky; z-index:3; background:var(--panel); }
   thead .summary td:first-child { z-index:4; }
-  thead .sum1 td { top:30px; }
-  thead .sum2 td { top:60px; }
   .tbl-scroll { max-height:300px; overflow:auto; }
   tr.moretip td { text-align:center; color:var(--muted); font-size:11px; padding:8px;
     background:#fafbfc; position:static; }
@@ -236,6 +234,14 @@ function renderTable() {
     scroll.addEventListener('scroll', onTableScroll);
   }
   scroll.innerHTML = html;
+
+  // 실제 렌더된 행 높이로 고정 오프셋 설정(겹침 방지)
+  const hH = scroll.querySelector('.hrow th')?.offsetHeight || 0;
+  const s1 = scroll.querySelector('.sum1 td');
+  const s1H = s1 ? s1.offsetHeight : 0;
+  scroll.querySelectorAll('.sum1 td').forEach(td => td.style.top = hH + 'px');
+  scroll.querySelectorAll('.sum2 td').forEach(td => td.style.top = (hH + s1H) + 'px');
+
   scroll.scrollTop = prevTop;
 }
 
