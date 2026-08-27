@@ -87,6 +87,8 @@
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; min-width:0; }
   .mkt-card.up { background:#fdf1ef; } .mkt-card.down { background:#eef3fd; }
+  /* 두 시장 비교: 더 강한 상승은 더 빨갛게, 더 약한(더 낮은) 하락은 더 파랗게 */
+  .mkt-card.up.strong { background:#f8d5cd; } .mkt-card.down.strong { background:#dbe6fb; }
   .mkt-card .top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .mkt-card .nm { font-size:16px; font-weight:700; color:#6b7078; }
   .mkt-card .px { font-size:19px; font-weight:800; line-height:1.1; margin-top:2px; }
@@ -428,15 +430,16 @@ function mktSpark(prevSeries, todaySeries, base, flu) {
     + `<path d="${colr}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 }
 
-function mktCard(m) {
+function mktCard(m, strong) {
   const dc = m.flu > 0 ? 'up' : (m.flu < 0 ? 'down' : 'flat');
+  const sc = strong ? ' strong' : '';
   const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]
     .map(([l, v]) => `<div><div class="l">${l}</div><div class="v ${cls(v)}">${fmtNet(v)}</div></div>`).join('');
   const has = m.idx != null;
   // 전일종가: 어제 시계열의 마지막 값(없으면 오늘 지수-전일대비)
   const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx
                    : (m.idx != null && m.pred != null ? m.idx - m.pred : null);
-  return `<div class="mkt-card ${dc}"><div class="top"><div>`
+  return `<div class="mkt-card ${dc}${sc}"><div class="top"><div>`
     + `<div class="nm">${m.name}</div>`
     + (has ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(${fmtFlu(m.flu)})</div>`
            : `<div class="empty">데이터 수집 대기 중…</div>`)
@@ -466,8 +469,16 @@ async function renderSummaryCards() {
     const res = await fetch('/api/summary', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
-    document.getElementById('mkt-cards').innerHTML = data.markets.map(mktCard).join('');
-    document.getElementById('breadth').innerHTML = breadthTable(data.markets);
+    const ms = data.markets;
+    // 두 시장 상대 비교로 강조 대상 결정
+    let strongKey = null;
+    if (ms.length === 2 && ms.every(m => m.flu > 0)) {
+      strongKey = ms[0].flu >= ms[1].flu ? ms[0].key : ms[1].key;   // 더 강한(높은) 상승
+    } else if (ms.length === 2 && ms.every(m => m.flu < 0)) {
+      strongKey = ms[0].flu <= ms[1].flu ? ms[0].key : ms[1].key;   // 더 약한(낮은) 하락
+    }
+    document.getElementById('mkt-cards').innerHTML = ms.map(m => mktCard(m, m.key === strongKey)).join('');
+    document.getElementById('breadth').innerHTML = breadthTable(ms);
   } catch (e) {}
 }
 
