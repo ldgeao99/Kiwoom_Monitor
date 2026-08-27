@@ -652,15 +652,17 @@ function drawProgramChart(series) {
   const chgs = series.map(s => s.chg || 0);
   const cmax = Math.max(1, ...chgs.map(Math.abs));
   const bandH = ih * 0.16, bandY0 = mT + bandH;      // 상단 밴드 0선
-  let spikes = '';
-  if (chgs.some(v => v !== 0)) {
-    series.forEach((s, i) => {
-      const c = s.chg || 0; if (!c) return;
-      const h = (Math.abs(c) / cmax) * bandH;
-      const yy = c > 0 ? bandY0 - h : bandY0 + h;
-      spikes += `<line x1="${x(i).toFixed(1)}" y1="${bandY0.toFixed(1)}" x2="${x(i).toFixed(1)}" y2="${yy.toFixed(1)}" stroke="${c>0?'var(--pos)':'var(--neg)'}" stroke-width="0.7" opacity="0.7"/>`;
-    });
-  }
+  // 증감 막대: 점마다 <line> 대신 상승/하락 각각 하나의 <path>로 합쳐 요소 수를 최소화(성능)
+  let upSp = '', dnSp = '';
+  series.forEach((s, i) => {
+    const c = s.chg || 0; if (!c) return;
+    const h = (Math.abs(c) / cmax) * bandH;
+    const seg = `M${x(i).toFixed(1)},${bandY0.toFixed(1)}L${x(i).toFixed(1)},${(c > 0 ? bandY0 - h : bandY0 + h).toFixed(1)}`;
+    if (c > 0) upSp += seg; else dnSp += seg;
+  });
+  const spikes =
+    (dnSp ? `<path d="${dnSp}" stroke="var(--neg)" stroke-width="0.7" opacity="0.7"/>` : '')
+    + (upSp ? `<path d="${upSp}" stroke="var(--pos)" stroke-width="0.7" opacity="0.7"/>` : '');
 
   const legend = `<g font-size="11">`
     + `<rect x="${mL}" y="6" width="10" height="3" fill="${GREEN}"/><text x="${mL+14}" y="9.5" fill="#6b7280">시간별 순매수금액</text>`
@@ -676,23 +678,42 @@ let progSeries = {};          // tm -> point (버튼 연속조회로 누적)
 let progNext = '', progCont = 'N', progInited = false;
 let progAmt = (function () { try { return localStorage.getItem('netprps_prog_amt') || '1'; } catch (e) { return '1'; } })();  // 1:금액 2:수량
 const progUnit = () => progAmt === '2' ? '주' : '백만원';
+let progDomMin = null, progDomMax = null;   // 표에 그려진 tm 범위(증분 렌더용)
 
+const progTf = tm => `${tm.slice(0,2)}:${tm.slice(2,4)}:${tm.slice(4,6)}`;
+const progRowHtml = p => `<tr><td class="tm">${progTf(p.tm)}</td>`
+  + `<td class="${cls(p.net)}">${fmtNet(p.net)}</td>`
+  + `<td class="${cls(p.chg || 0)}">${fmtNet(p.chg || 0)}</td></tr>`;
+
+// 증분 렌더: 전체 재구성 없이 새 행만 위/아래로 추가 (연속조회가 쌓여도 빠름)
 function drawProgramTable(series) {
   const host = document.getElementById('prog-table');
-  if (!series.length) { host.innerHTML = ''; return; }
-  const prevTop = (host.querySelector('.prog-tscroll') || {}).scrollTop || 0;
-  const rows = [...series].reverse();   // 누적 전체, 최신이 위로(연속조회한 과거는 아래로 추가)
-  const tf = tm => `${tm.slice(0,2)}:${tm.slice(2,4)}:${tm.slice(4,6)}`;
-  let html = '<div class="prog-tscroll"><table class="prog-tbl"><thead><tr>'
-    + '<th>시간</th><th>순매수금액</th><th>순매수증감</th></tr></thead><tbody>';
-  rows.forEach(p => {
-    html += `<tr><td class="tm">${tf(p.tm)}</td>`
-      + `<td class="${cls(p.net)}">${fmtNet(p.net)}</td>`
-      + `<td class="${cls(p.chg || 0)}">${fmtNet(p.chg || 0)}</td></tr>`;
-  });
-  html += '</tbody></table></div>';
-  host.innerHTML = html;
-  host.querySelector('.prog-tscroll').scrollTop = prevTop;
+  if (!series.length) { host.innerHTML = ''; progDomMin = progDomMax = null; return; }
+  let tbody = host.querySelector('.prog-tbl tbody');
+  if (!tbody) {
+    host.innerHTML = '<div class="prog-tscroll"><table class="prog-tbl"><thead><tr>'
+      + '<th>시간</th><th>순매수금액</th><th>순매수증감</th></tr></thead><tbody></tbody></table></div>';
+    tbody = host.querySelector('.prog-tbl tbody');
+    progDomMin = progDomMax = null;
+  }
+  const scroll = host.querySelector('.prog-tscroll');
+  if (progDomMax === null) {                         // 최초: 전체(최신이 위)
+    tbody.innerHTML = [...series].reverse().map(progRowHtml).join('');
+    progDomMin = series[0].tm; progDomMax = series[series.length - 1].tm;
+    return;
+  }
+  const newer = series.filter(p => p.tm > progDomMax);   // 더 최신 → 위로 prepend
+  if (newer.length) {
+    tbody.insertAdjacentHTML('afterbegin', [...newer].reverse().map(progRowHtml).join(''));
+    progDomMax = newer[newer.length - 1].tm;
+  }
+  const older = series.filter(p => p.tm < progDomMin);   // 더 과거 → 아래로 append
+  if (older.length) {
+    const prevTop = scroll.scrollTop;
+    tbody.insertAdjacentHTML('beforeend', [...older].reverse().map(progRowHtml).join(''));
+    scroll.scrollTop = prevTop;                          // 스크롤 위치 유지
+    progDomMin = older[0].tm;
+  }
 }
 
 function progRedraw() {
@@ -742,7 +763,11 @@ async function loadMoreProgram() {
   progRedraw();
 }
 
-function progReset() { progSeries = {}; progNext = ''; progCont = 'N'; progInited = false; }
+function progReset() {
+  progSeries = {}; progNext = ''; progCont = 'N'; progInited = false;
+  progDomMin = null; progDomMax = null;
+  const t = document.getElementById('prog-table'); if (t) t.innerHTML = '';   // 표 초기화(전체 재구성 유도)
+}
 
 // 종목코드를 검색창에 넣고 프로그램 순매수금액을 조회
 function loadProgStock(code) {
