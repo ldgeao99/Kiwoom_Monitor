@@ -110,6 +110,12 @@
   .prog-go:disabled { opacity:.4; cursor:default; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
+  .prog-tscroll { max-height:280px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
+  .prog-tbl { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
+  .prog-tbl th, .prog-tbl td { padding:5px 10px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
+  .prog-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; }
+  .prog-tbl td.tm { text-align:center; color:var(--muted); }
+  .prog-tbl .pos { color:var(--pos); } .prog-tbl .neg { color:var(--neg); } .prog-tbl .zero { color:var(--muted); }
   @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:9px 4px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -189,6 +195,7 @@
       <small class="prog-unit" id="prog-count"></small>
     </div>
     <div id="prog-chart"></div>
+    <div id="prog-table"></div>
   </div>
 </div>
 <script>
@@ -661,8 +668,28 @@ function drawProgramChart(series) {
 let progSeries = {};          // tm -> point (버튼 연속조회로 누적)
 let progNext = '', progCont = 'N', progInited = false;
 
+function drawProgramTable(series) {
+  const host = document.getElementById('prog-table');
+  if (!series.length) { host.innerHTML = ''; return; }
+  const prevTop = (host.querySelector('.prog-tscroll') || {}).scrollTop || 0;
+  const rows = series.slice(-300).reverse();   // 최신 300건, 최신이 위로
+  const tf = tm => `${tm.slice(0,2)}:${tm.slice(2,4)}:${tm.slice(4,6)}`;
+  let html = '<div class="prog-tscroll"><table class="prog-tbl"><thead><tr>'
+    + '<th>시간</th><th>순매수금액</th><th>순매수증감</th></tr></thead><tbody>';
+  rows.forEach(p => {
+    html += `<tr><td class="tm">${tf(p.tm)}</td>`
+      + `<td class="${cls(p.net)}">${fmtNet(p.net)}</td>`
+      + `<td class="${cls(p.chg || 0)}">${fmtNet(p.chg || 0)}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  host.innerHTML = html;
+  host.querySelector('.prog-tscroll').scrollTop = prevTop;
+}
+
 function progRedraw() {
-  drawProgramChart(Object.values(progSeries).sort((a, b) => a.tm < b.tm ? -1 : 1));
+  const sorted = Object.values(progSeries).sort((a, b) => a.tm < b.tm ? -1 : 1);
+  drawProgramChart(sorted);
+  drawProgramTable(sorted);
   const moreBtn = document.getElementById('prog-more');
   const canMore = progCont === 'Y' && !!progNext;
   moreBtn.disabled = !canMore;
