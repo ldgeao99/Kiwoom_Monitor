@@ -61,8 +61,8 @@ from publish_auth_token import get_access_token
 COLUMNS = [
     ('ind_netprps', '개인', '#16a34a'),
     ('frgnr_netprps', '외국인', '#e5484d'),
-    ('orgn_netprps', '기관계', '#1e3a8a'),
-    ('sc_netprps', '금융투자', '#f5820a'),
+    ('orgn_netprps', '기관계', '#f5820a'),
+    ('sc_netprps', '금융투자', '#1e3a8a'),
     ('insrnc_netprps', '보험', '#0891b2'),
     ('invtrt_netprps', '투신', '#9333ea'),
     ('jnsinkm_netprps', '기타금융', '#eab308'),
