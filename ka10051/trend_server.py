@@ -261,8 +261,16 @@ PAGE = """<!DOCTYPE html>
   th:first-child { z-index:2; background:var(--head); }
   .summary td { font-weight:600; }
   .summary td:first-child { background:#f6f7f9; }
+  /* 증감 행 강조 배경 */
+  .summary.delta td { background:var(--sel); }
+  /* 매분 갱신 시 번쩍임 */
+  .summary.delta.flash td { animation:deltaFlash .9s ease-out; }
+  @keyframes deltaFlash {
+    0%   { background:#ffd54a; }
+    60%  { background:#ffe9a6; }
+    100% { background:var(--sel); }
+  }
   .tbl-scroll { max-height:440px; overflow:auto; }
-  tr.new td { background:var(--sel); }
   tr.moretip td { text-align:center; color:var(--muted); font-size:11px; padding:8px;
     background:#fafbfc; position:static; }
   .pos { color:var(--pos); } .neg { color:var(--neg); }
@@ -382,6 +390,15 @@ function renderControls() {
 
 const PAGE_SIZE = 30;          // 스크롤 시 한 번에 더 불러올 행 수
 let visibleCount = PAGE_SIZE;  // 현재 표시 중인 시간별 행 수(최신부터)
+let lastLatestT;               // 직전에 본 최신 시각(새 분 감지용)
+
+function flashDelta() {
+  const el = document.getElementById('delta-row');
+  if (!el) return;
+  el.classList.remove('flash');
+  void el.offsetWidth;          // reflow 강제 → 애니메이션 재시작
+  el.classList.add('flash');
+}
 
 function renderTable() {
   const host = document.getElementById('table-host');
@@ -404,7 +421,7 @@ function renderTable() {
 
   html += '<tr class="summary"><td>순매수</td>';
   cols.forEach(c => html += `<td class="${cls(last[c.key])}">${fmtSigned(last[c.key])}</td>`);
-  html += '</tr><tr class="summary"><td>증감</td>';
+  html += `</tr><tr class="summary delta" id="delta-row"><td>증감</td>`;
   cols.forEach(c => {
     const d = prev ? last[c.key] - prev[c.key] : 0;
     html += `<td class="${cls(d)}">${fmtSigned(d)}</td>`;
@@ -413,7 +430,7 @@ function renderTable() {
 
   for (let i = pts.length - 1; i >= startIdx; i--) {
     const p = pts[i];
-    html += `<tr class="${i === pts.length - 1 ? 'new' : ''}"><td>${p.t.slice(0,5)}</td>`;
+    html += `<tr><td>${p.t.slice(0,5)}</td>`;
     cols.forEach(c => html += `<td class="${cls(p[c.key])}">${fmtSigned(p[c.key])}</td>`);
     html += '</tr>';
   }
@@ -497,10 +514,17 @@ async function refresh() {
     DATA = await res.json();
     if (DATA.market) curMarket = DATA.market;           // 서버가 보정한 값 반영
     if (selected === null) selected = loadSelected();  // 최초 1회 초기화
+
+    // 최신 시각이 바뀌었으면(새 분 데이터) 증감 행 번쩍임 (최초 로드는 제외)
+    const latestT = DATA.points.length ? DATA.points[DATA.points.length - 1].t : null;
+    const isNew = latestT && lastLatestT !== undefined && latestT !== lastLatestT;
+    lastLatestT = latestT;
+
     renderMarkets();
     renderControls();
     renderTable();
     renderChart();
+    if (isNew) flashDelta();
     st.className = 'live';
     st.textContent = '갱신 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   } catch (e) {
