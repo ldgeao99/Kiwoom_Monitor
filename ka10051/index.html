@@ -69,14 +69,19 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
-  /* 상승/하락 종목수 요약 바 */
-  .breadth { max-width:1200px; margin:0 auto 8px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .breadth .b { display:flex; align-items:baseline; justify-content:center; gap:10px;
-    font-size:13px; color:var(--muted); }
-  .breadth .b .mk { font-weight:700; color:var(--text); }
-  .breadth .b .up { color:var(--pos); font-weight:700; }
-  .breadth .b .dn { color:var(--neg); font-weight:700; }
-  @media (max-width:560px){ .breadth { gap:8px; } .breadth .b { font-size:12px; gap:6px; } }
+  /* 상승/보합/하락 종목수 표 */
+  .breadth { max-width:1200px; margin:0 auto 10px; }
+  .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; overflow:hidden;
+    font-size:13px; font-variant-numeric:tabular-nums; }
+  .breadth-tbl th, .breadth-tbl td { padding:7px 10px; text-align:right; border-bottom:1px solid #eceef1; }
+  .breadth-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; }
+  .breadth-tbl tbody tr:last-child td { border-bottom:0; }
+  .breadth-tbl .mk { text-align:left; font-weight:700; color:var(--text); }
+  .breadth-tbl .up { color:var(--pos); font-weight:700; }
+  .breadth-tbl .flat { color:var(--muted); font-weight:700; }
+  .breadth-tbl .dn { color:var(--neg); font-weight:700; }
+  @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:6px 8px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; }
@@ -435,12 +440,16 @@ function mktCard(m) {
     + `<hr class="dv"><div class="inv">${inv}</div></div>`;
 }
 
-function breadthCell(m) {
-  const up = m.rising == null ? '-' : m.rising.toLocaleString('ko-KR');
-  const dn = m.fall == null ? '-' : m.fall.toLocaleString('ko-KR');
-  return `<div class="b"><span class="mk">${m.name}</span>`
-    + `<span>▲ 상승 <span class="up">${up}</span></span>`
-    + `<span>▼ 하락 <span class="dn">${dn}</span></span></div>`;
+function breadthTable(markets) {
+  const num = v => (v == null) ? '-' : v.toLocaleString('ko-KR');
+  const rows = markets.map(m =>
+    `<tr><td class="mk">${m.name}</td>`
+    + `<td class="up">${num(m.rising)}</td>`
+    + `<td class="flat">${num(m.flat)}</td>`
+    + `<td class="dn">${num(m.fall)}</td></tr>`).join('');
+  return `<table class="breadth-tbl"><thead><tr>`
+    + `<th class="mk">시장</th><th>상승</th><th>보합</th><th>하락</th></tr></thead>`
+    + `<tbody>${rows}</tbody></table>`;
 }
 
 async function renderSummaryCards() {
@@ -448,7 +457,7 @@ async function renderSummaryCards() {
     const res = await fetch('/api/summary', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
-    document.getElementById('breadth').innerHTML = data.markets.map(breadthCell).join('');
+    document.getElementById('breadth').innerHTML = breadthTable(data.markets);
     document.getElementById('mkt-cards').innerHTML = data.markets.map(mktCard).join('');
   } catch (e) {}
 }
