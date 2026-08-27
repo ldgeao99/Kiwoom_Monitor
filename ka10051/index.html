@@ -51,6 +51,9 @@
   .controls .chk input { margin:0; cursor:pointer; }
   .controls .chk .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
   .controls .chk.off { opacity:.45; }
+  .controls .chk.disabled { opacity:.3; cursor:not-allowed; }
+  .controls .chk.disabled input { cursor:not-allowed; }
+  .controls .selnote { font-size:11px; color:var(--muted); }
   .controls .sep { width:1px; align-self:stretch; background:var(--line); margin:0 4px; }
   .controls .allbtn { font-size:11px; color:var(--muted); background:none; border:1px solid var(--line);
     border-radius:12px; padding:3px 9px; cursor:pointer; }
@@ -77,6 +80,7 @@
   </div>
   <div class="panel">
     <div class="title">누적 순매수 추이</div>
+    <div class="legend" id="chart-legend"></div>
     <div id="chart-host"></div>
   </div>
 </div>
@@ -104,19 +108,21 @@ function renderMarkets() {
     r.addEventListener('change', () => {
       curMarket = r.value;
       try { localStorage.setItem(LS_MARKET, curMarket); } catch (e) {}
-      visibleCount = PAGE_SIZE;                          // 새 시장은 처음부터
-      document.getElementById('table-host').innerHTML = '';  // 스크롤 초기화
+      document.getElementById('table-host').innerHTML = '';  // 표 초기화
       refresh();
     });
   });
 }
 
 function loadSelected() {
+  let set;
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return new Set(JSON.parse(raw));
-  } catch (e) {}
-  return new Set(DATA.default_selected || []);
+    set = raw ? new Set(JSON.parse(raw)) : new Set(DATA.default_selected || []);
+  } catch (e) { set = new Set(DATA.default_selected || []); }
+  // 최대 개수 초과 저장분은 앞에서부터 잘라냄
+  if (set.size > MAX_SELECT) set = new Set([...set].slice(0, MAX_SELECT));
+  return set;
 }
 function saveSelected() {
   try { localStorage.setItem(LS_KEY, JSON.stringify([...selected])); } catch (e) {}
@@ -126,37 +132,42 @@ function activeCols() { return DATA.columns.filter(c => selected.has(c.key)); }
 
 function renderControls() {
   const host = document.getElementById('controls');
+  const full = selected.size >= MAX_SELECT;   // 최대 도달 시 미선택 항목 비활성화
   let html = '';
   DATA.columns.forEach(c => {
     const on = selected.has(c.key);
-    html += `<label class="chk ${on ? '' : 'off'}" data-key="${c.key}">`
-      + `<input type="checkbox" ${on ? 'checked' : ''}>`
+    const disabled = !on && full;
+    html += `<label class="chk ${on ? '' : 'off'}${disabled ? ' disabled' : ''}" data-key="${c.key}">`
+      + `<input type="checkbox" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>`
       + `<span class="dot" style="background:${c.color}"></span>${c.name}</label>`;
   });
   html += '<span class="sep"></span>'
-    + '<button class="allbtn" data-act="all">전체</button>'
+    + `<span class="selnote">${selected.size}/${MAX_SELECT}</span>`
     + '<button class="allbtn" data-act="none">해제</button>';
   host.innerHTML = html;
 
   host.querySelectorAll('.chk').forEach(el => {
     el.addEventListener('change', () => {
       const key = el.dataset.key;
-      if (el.querySelector('input').checked) selected.add(key); else selected.delete(key);
+      const checked = el.querySelector('input').checked;
+      if (checked) {
+        if (selected.size >= MAX_SELECT) { renderControls(); return; }  // 초과 방지
+        selected.add(key);
+      } else {
+        selected.delete(key);
+      }
       saveSelected(); renderControls(); renderTable(); renderChart();
     });
   });
-  host.querySelectorAll('.allbtn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.act === 'all') DATA.columns.forEach(c => selected.add(c.key));
-      else selected.clear();
-      saveSelected(); renderControls(); renderTable(); renderChart();
-    });
+  host.querySelector('.allbtn[data-act="none"]').addEventListener('click', () => {
+    selected.clear();
+    saveSelected(); renderControls(); renderTable(); renderChart();
   });
 }
 
-const PAGE_SIZE = 30;          // 스크롤 시 한 번에 더 불러올 행 수
-let visibleCount = PAGE_SIZE;  // 현재 표시 중인 시간별 행 수(최신부터)
-let lastLatestT;               // 직전에 본 최신 시각(새 분 감지용)
+const ROW_LIMIT = 10;   // 시간별 표에 보여줄 최신 행 수
+const MAX_SELECT = 5;   // 투자자 최대 선택 수
+let lastLatestT;        // 직전에 본 최신 시각(새 분 감지용)
 
 function flashDelta() {
   const el = document.getElementById('delta-row');
@@ -177,8 +188,8 @@ function renderTable() {
   const last = pts[pts.length - 1];
   const prev = pts.length > 1 ? pts[pts.length - 2] : null;
 
-  // 표시할 행 개수(최신 visibleCount개)
-  const shown = Math.min(visibleCount, pts.length);
+  // 표시할 행 개수(최신 ROW_LIMIT개)
+  const shown = Math.min(ROW_LIMIT, pts.length);
   const startIdx = pts.length - shown;  // 이 인덱스까지(포함) 최신 방향으로 표시
 
   let html = '<table><thead><tr><th>시간</th>';
@@ -200,38 +211,20 @@ function renderTable() {
     cols.forEach(c => html += `<td class="${cls(p[c.key])}">${fmtSigned(p[c.key])}</td>`);
     html += '</tr>';
   }
-  if (shown < pts.length) {
-    const remain = pts.length - shown;
-    html += `<tr class="moretip"><td colspan="${cols.length + 1}">아래로 스크롤하면 ${Math.min(PAGE_SIZE, remain)}개 더 불러옵니다 (남은 ${remain}개)</td></tr>`;
-  }
   html += '</tbody></table>';
-
-  // 스크롤 위치 보존을 위해 기존 컨테이너가 있으면 재사용
-  let scroll = host.querySelector('.tbl-scroll');
-  const prevTop = scroll ? scroll.scrollTop : 0;
-  if (!scroll) {
-    host.innerHTML = '<div class="tbl-scroll"></div>';
-    scroll = host.querySelector('.tbl-scroll');
-    scroll.addEventListener('scroll', onTableScroll);
-  }
-  scroll.innerHTML = html;
-  scroll.scrollTop = prevTop;
+  host.innerHTML = '<div class="tbl-scroll">' + html + '</div>';
 }
 
-function onTableScroll(e) {
-  const el = e.currentTarget;
-  // 바닥 근처(80px)에 도달하면 30개 더 표시
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
-    if (visibleCount < DATA.points.length) {
-      visibleCount += PAGE_SIZE;
-      renderTable();
-    }
-  }
+function renderChartLegend(cols) {
+  const lg = document.getElementById('chart-legend');
+  lg.innerHTML = cols.map(c =>
+    `<span><i style="background:${c.color}"></i><b>${c.name}</b></span>`).join('');
 }
 
 function renderChart() {
   const host = document.getElementById('chart-host');
   const pts = DATA.points, cols = activeCols();
+  renderChartLegend(cols);
   if (!cols.length) { host.innerHTML = '<div class="empty">위에서 투자자를 선택하세요.</div>'; return; }
   if (pts.length < 2) { host.innerHTML = '<div class="empty">차트를 그리려면 2개 이상의 스냅샷이 필요합니다.</div>'; return; }
 
