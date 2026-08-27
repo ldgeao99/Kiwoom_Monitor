@@ -563,8 +563,12 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
     net_f = 'prm_netprps_qty' if amt_qty_tp == '2' else 'prm_netprps_amt'
     chg_f = 'prm_netprps_qty_irds' if amt_qty_tp == '2' else 'prm_netprps_amt_irds'
 
+    # 통합(SOR) 거래소 데이터로 조회: 6자리 코드에 '_AL' 부착
+    base_cd = stk_cd.split('_')[0]
+    api_cd = base_cd + '_AL'
+
     def run(tok):
-        rows, c, nk = fetch_program(tok, stk_cd, amt_qty_tp, cont_yn, next_key)
+        rows, c, nk = fetch_program(tok, api_cd, amt_qty_tp, cont_yn, next_key)
         pts = []
         for r in rows:
             tm = r.get('tm')
@@ -582,7 +586,7 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
         _token_cache['token'] = None                 # 토큰 만료 등 대비 1회 재시도
         pts, c, nk = run(cached_token())
 
-    return {'stk_cd': stk_cd, 'name': stock_name(stk_cd),
+    return {'stk_cd': base_cd, 'name': stock_name(base_cd),
             'series': pts, 'cont': c, 'next': nk}
 
 
