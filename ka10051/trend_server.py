@@ -190,14 +190,15 @@ def fetch_index(token, idx_cd):
     return row
 
 
-def fetch_program(token, stk_cd, amt_qty_tp='1'):
-    """ka90008(종목시간별프로그램매매추이) — 당일 시간별 프로그램 순매수금액 시계열 조회."""
+def fetch_program(token, stk_cd, amt_qty_tp='1', cont_yn='N', next_key=''):
+    """ka90008(종목시간별프로그램매매추이) 한 페이지 조회.
+    반환: (rows, 응답 cont-yn, 응답 next-key) — 연속조회에 사용."""
     url = 'https://api.kiwoom.com/api/dostk/mrkcond'
     headers = {
         'Content-Type': 'application/json;charset=UTF-8',
         'authorization': f'Bearer {token}',
-        'cont-yn': 'N',
-        'next-key': '',
+        'cont-yn': cont_yn,
+        'next-key': next_key,
         'api-id': 'ka90008',
     }
     data = {'amt_qty_tp': amt_qty_tp, 'stk_cd': stk_cd, 'date': now_kst().strftime('%Y%m%d')}
@@ -206,7 +207,8 @@ def fetch_program(token, stk_cd, amt_qty_tp='1'):
     body = resp.json()
     if body.get('return_code') != 0:
         raise RuntimeError(f"프로그램매매 API 오류: {body.get('return_msg')}")
-    return body.get('stk_tm_prm_trde_trnsn', [])
+    rows = body.get('stk_tm_prm_trde_trnsn', [])
+    return rows, resp.headers.get('cont-yn', 'N'), resp.headers.get('next-key', '')
 
 
 _token_cache = {'token': None}
@@ -538,22 +540,59 @@ def build_summary():
     return {'markets': out}
 
 
+# 종목별 프로그램매매 시계열 캐시: stk -> {'date','pts':{tm: point}}
+# 최초/종목변경/날짜변경 시 연속조회로 전체 수집, 이후 갱신은 최신 페이지만 받아 병합(요청 최소화)
+_prog_cache = {}
+
+
+def _prog_fetch_pages(tok, stk_cd, amt_qty_tp, full):
+    """full=True면 연속조회로 여러 페이지, False면 최신 1페이지만."""
+    allrows = []
+    cont, nkey = 'N', ''
+    pages = 60 if full else 1
+    for i in range(pages):
+        if i > 0:
+            time.sleep(0.35)                     # 429(요청 과다) 방지용 페이지 간 지연
+            try:
+                rows, cont, nkey = fetch_program(tok, stk_cd, amt_qty_tp, cont, nkey)
+            except Exception:
+                break                            # 페이징 중 오류는 지금까지 수집분으로 마무리
+        else:
+            rows, cont, nkey = fetch_program(tok, stk_cd, amt_qty_tp, cont, nkey)
+        allrows.extend(rows)
+        if not full or cont != 'Y' or not nkey or len(allrows) > 6000:
+            break
+    return allrows
+
+
 def build_program(stk_cd, amt_qty_tp='1'):
     """특정 종목의 당일 시간별 프로그램 순매수금액(백만원) 시계열."""
-    def load(tok):
-        rows = fetch_program(tok, stk_cd, amt_qty_tp)
-        pts = [{'t': r['tm'][:2] + ':' + r['tm'][2:4],
-                'tm': r.get('tm', ''),
-                'net': to_number(r.get('prm_netprps_amt')),
-                'cur': to_number(r.get('cur_prc'))} for r in rows if r.get('tm')]
-        pts.sort(key=lambda p: p['tm'])   # 시간 오름차순
+    date = now_kst().strftime('%Y%m%d')
+    cache = _prog_cache.get(stk_cd)
+    full = cache is None or cache.get('date') != date
+
+    def run(tok):
+        rows = _prog_fetch_pages(tok, stk_cd, amt_qty_tp, full)
+        pts = {} if full else dict(cache['pts'])     # 전체 재수집이면 새로, 아니면 기존에 병합
+        for r in rows:
+            tm = r.get('tm')
+            if not tm:
+                continue
+            pts[tm] = {'t': tm[:2] + ':' + tm[2:4], 'tm': tm,
+                       'net': to_number(r.get('prm_netprps_amt')),
+                       'cur': to_number(r.get('cur_prc'))}
         return pts
+
     try:
-        pts = load(cached_token())
+        pts = run(cached_token())
     except Exception:
-        _token_cache['token'] = None       # 토큰 만료 등 대비 1회 재시도
-        pts = load(cached_token())
-    return {'stk_cd': stk_cd, 'name': stock_name(stk_cd), 'series': pts}
+        _token_cache['token'] = None                 # 토큰 만료 등 대비 1회 재시도
+        time.sleep(0.4)
+        pts = run(cached_token())
+
+    _prog_cache[stk_cd] = {'date': date, 'pts': pts}
+    series = sorted(pts.values(), key=lambda p: p['tm'])
+    return {'stk_cd': stk_cd, 'name': stock_name(stk_cd), 'series': series}
 
 
 # 서빙 허용 HTML 파일: 경로 -> 파일명
