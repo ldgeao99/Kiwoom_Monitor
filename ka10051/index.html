@@ -69,17 +69,19 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
-  /* 상승/보합/하락 종목수 표 (시장별 좌우 2개) */
-  .breadth { max-width:1200px; margin:0 auto 6px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  /* 종목등락현황 표 (상한/상승/보합/하락/하한) */
+  .breadth { max-width:1200px; margin:0 auto 12px; }
   .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
-    border:1px solid var(--line); border-radius:8px; overflow:hidden;
-    font-size:13px; font-variant-numeric:tabular-nums; }
-  .breadth-tbl th, .breadth-tbl td { padding:6px 12px; border-bottom:1px solid #eceef1; }
-  .breadth-tbl thead th { background:var(--head); color:var(--text); font-weight:700; text-align:center; }
+    border:1px solid var(--line); border-radius:10px; overflow:hidden;
+    font-size:14px; font-variant-numeric:tabular-nums; }
+  .breadth-tbl th, .breadth-tbl td { padding:11px 8px; border-bottom:1px solid #eceef1; text-align:center; }
+  .breadth-tbl thead th { background:var(--head); color:var(--text); font-weight:700; }
   .breadth-tbl tbody tr:last-child td { border-bottom:0; }
-  .breadth-tbl td.num { text-align:center; font-weight:700; font-size:13px; }
-  .breadth-tbl .up { color:var(--pos); } .breadth-tbl .flat { color:var(--muted); } .breadth-tbl .dn { color:var(--neg); }
-  @media (max-width:560px){ .breadth { gap:8px; } .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:5px 9px; } }
+  .breadth-tbl td.mk { font-weight:700; color:var(--text); }
+  .breadth-tbl td.num { font-weight:700; }
+  .breadth-tbl .up { color:var(--pos); } .breadth-tbl .dn { color:var(--neg); } .breadth-tbl .flat { color:var(--muted); }
+  .breadth-tbl .arw { font-size:11px; margin-left:3px; }
+  @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:9px 4px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; }
@@ -115,6 +117,7 @@
 <body>
 <div class="page-title"><span>지수현황</span></div>
 <div class="mkt-cards" id="mkt-cards"></div>
+<div class="page-title"><span>종목등락현황</span></div>
 <div class="breadth" id="breadth"></div>
 <div class="page-title"><span>투자자별 매매동향</span></div>
 <div class="wrap">
@@ -438,16 +441,21 @@ function mktCard(m) {
     + `<hr class="dv"><div class="inv">${inv}</div></div>`;
 }
 
-function breadthTableOne(m) {
+function breadthTable(markets) {
   const num = v => (v == null) ? '-' : v.toLocaleString('ko-KR');
-  return `<table class="breadth-tbl"><thead>`
-    + `<tr><th colspan="3">${m.name}</th></tr>`
-    + `<tr><th>상승</th><th>보합</th><th>하락</th></tr>`
-    + `</thead><tbody><tr>`
+  const head = `<tr><th>구분</th>`
+    + `<th>상한<span class="arw up">▲</span></th>`
+    + `<th>상승<span class="arw up">▲</span></th>`
+    + `<th>보합<span class="arw flat">–</span></th>`
+    + `<th>하락<span class="arw dn">▼</span></th>`
+    + `<th>하한<span class="arw dn">▼</span></th></tr>`;
+  const rows = markets.map(m => `<tr><td class="mk">${m.name}</td>`
+    + `<td class="num up">${num(m.upl)}</td>`
     + `<td class="num up">${num(m.rising)}</td>`
     + `<td class="num flat">${num(m.flat)}</td>`
     + `<td class="num dn">${num(m.fall)}</td>`
-    + `</tr></tbody></table>`;
+    + `<td class="num dn">${num(m.lst)}</td></tr>`).join('');
+  return `<table class="breadth-tbl"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 }
 
 async function renderSummaryCards() {
@@ -456,7 +464,7 @@ async function renderSummaryCards() {
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('mkt-cards').innerHTML = data.markets.map(mktCard).join('');
-    document.getElementById('breadth').innerHTML = data.markets.map(breadthTableOne).join('');
+    document.getElementById('breadth').innerHTML = breadthTable(data.markets);
   } catch (e) {}
 }
 
