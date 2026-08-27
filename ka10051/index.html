@@ -17,6 +17,9 @@
   .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .title small { color:var(--muted); font-weight:400; }
+  .toggle-controls { font-size:12px; font-weight:600; color:var(--muted); background:none;
+    border:1px solid var(--line); border-radius:12px; padding:3px 10px; cursor:pointer; }
+  .controls.collapsed { display:none; }
   #status { font-size:11px; color:var(--muted); font-weight:400; }
   #status.live::before { content:"● "; color:#16a34a; }
   table { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -126,6 +129,7 @@
   <div class="panel">
     <div class="title">
       <span class="market-sel" id="market-sel"></span>
+      <button class="toggle-controls" id="toggle-controls" type="button">투자자 선택 ▾</button>
       <small id="status">연결 중…</small>
     </div>
     <div class="controls" id="controls"></div>
@@ -505,6 +509,25 @@ function scheduleRefresh() {
   const nextTick = Math.floor(now / 60000) * 60000 + 60000 + REFRESH_OFFSET_MS;  // 다음 :00 + 여유
   setTimeout(() => { refresh(); scheduleRefresh(); }, nextTick - now);
 }
+
+// 투자자 선택란 접기/펼치기 (상태 유지)
+(function () {
+  const KEY = 'netprps_controls_collapsed';
+  const ctl = document.getElementById('controls');
+  const btn = document.getElementById('toggle-controls');
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) {}
+  const apply = () => {
+    ctl.classList.toggle('collapsed', collapsed);
+    btn.textContent = '투자자 선택 ' + (collapsed ? '▸' : '▾');
+  };
+  apply();
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) {}
+    apply();
+  });
+})();
 
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
