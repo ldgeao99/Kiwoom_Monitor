@@ -75,10 +75,10 @@ COLUMNS = [
 # 최초 로드시 기본으로 켜둘 투자자 (HTS 화면과 유사)
 DEFAULT_SELECTED = ['frgnr_netprps', 'orgn_netprps', 'sc_netprps']
 
-# 수집 대상 시장: key(파일/쿼리용), name(표시), mrkt_tp(API), inds_cd(종합 업종코드)
+# 수집 대상 시장: key(파일/쿼리용), name/disp(표시), mrkt_tp+inds_cd(ka10051), idx_cd(ka20003 지수)
 MARKETS = [
-    {'key': 'kospi', 'name': 'KOSPI', 'mrkt_tp': '0', 'inds_cd': '001_AL'},
-    {'key': 'kosdaq', 'name': 'KOSDAQ', 'mrkt_tp': '1', 'inds_cd': '101_AL'},
+    {'key': 'kospi', 'name': 'KOSPI', 'disp': '코스피', 'mrkt_tp': '0', 'inds_cd': '001_AL', 'idx_cd': '001'},
+    {'key': 'kosdaq', 'name': 'KOSDAQ', 'disp': '코스닥', 'mrkt_tp': '1', 'inds_cd': '101_AL', 'idx_cd': '101'},
 ]
 MARKET_BY_KEY = {m['key']: m for m in MARKETS}
 
@@ -163,6 +163,28 @@ def fetch_row(token, base_dt, mrkt_tp='0', inds_cd='001_AL'):
     if target is None:
         raise RuntimeError('업종별 순매수 데이터가 비어 있습니다.')
     return target
+
+
+def fetch_index(token, idx_cd):
+    """ka20003(전업종지수)로 해당 종합지수 행을 조회."""
+    url = 'https://api.kiwoom.com/api/dostk/sect'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'cont-yn': 'N',
+        'next-key': '',
+        'api-id': 'ka20003',
+    }
+    resp = requests.post(url, headers=headers, json={'inds_cd': idx_cd})
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') != 0:
+        raise RuntimeError(f"지수 API 오류: {body.get('return_msg')}")
+    rows = body.get('all_inds_idex', [])
+    row = next((r for r in rows if r.get('stk_cd') == idx_cd), rows[0] if rows else None)
+    if row is None:
+        raise RuntimeError('전업종지수 데이터가 비어 있습니다.')
+    return row
 
 
 def to_number(value):
@@ -250,6 +272,16 @@ def poll_once(token, market):
     }
     for key, _name, _color in COLUMNS:
         record[key] = to_number(row.get(key))
+
+    # 지수(ka20003): cur_prc/flu_rt/pred_pre 는 이미 소수점 포함 실제값(예: "+6884.39", "+1.12")
+    try:
+        irow = fetch_index(token, market['idx_cd'])
+        record['idx'] = to_number(irow.get('cur_prc'))
+        record['flu'] = to_number(irow.get('flu_rt'))
+        record['pred'] = to_number(irow.get('pred_pre'))
+        record['sig'] = str(irow.get('pre_sig') or '')
+    except Exception as e:
+        print(f"  {market['name']} 지수 조회 실패: {e}")
 
     # 수집 시간대에는 값이 직전과 같아도 매분 기록해 시간축에 빈칸이 없도록 한다.
     # (같은 분에 중복 실행되어 이미 그 분이 기록된 경우에만 스킵)
@@ -348,28 +380,32 @@ def effective_date(now):
     return base.strftime('%Y-%m-%d')
 
 
-def build_payload(market_key):
-    """해당 시장의 기준일(06시 전이면 전일, 없으면 가장 최근 일자) 레코드를 반환."""
+def records_for(market_key):
+    """해당 시장의 기준일(06시 전이면 전일, 없으면 그 이하 가장 최근 일자) 레코드/일자를 반환."""
     ref_date = effective_date(now_kst())
     records = read_records(market_key, ref_date)
     date_str = ref_date
     if not records:
-        # 기준일 데이터가 없으면 기준일 이하의 가장 최근 일자 파일을 찾아 보여줌
         prefix = f'netprps_snapshots_{market_key}_'
         dates = []
         for name in os.listdir(BASE_DIR):
             if name.startswith(prefix) and name.endswith('.jsonl'):
                 d = name[len(prefix):-len('.jsonl')]
-                if d <= ref_date:            # 기준일보다 미래 파일은 제외
+                if d <= ref_date:
                     dates.append(d)
         if dates:
             date_str = max(dates)
             records = read_records(market_key, date_str)
+    return records, (date_str if records else None)
+
+
+def build_payload(market_key):
+    records, date_str = records_for(market_key)
     label = records[-1]['label'] if records else ''
     return {
         'market': market_key,
         'markets': [{'key': m['key'], 'name': m['name']} for m in MARKETS],
-        'date': date_str if records else None,
+        'date': date_str,
         'label': label,
         'columns': columns_meta(),
         'default_selected': DEFAULT_SELECTED,
@@ -377,12 +413,31 @@ def build_payload(market_key):
     }
 
 
-PAGE_PATH = os.path.join(BASE_DIR, 'index.html')
+def build_summary():
+    """코스피/코스닥 요약: 지수/등락률 + 개인·외국인·기관 순매수 + 지수 인트라데이 시계열."""
+    out = []
+    for m in MARKETS:
+        records, date_str = records_for(m['key'])
+        last = records[-1] if records else {}
+        series = [{'t': r['t'], 'idx': r['idx']} for r in records if r.get('idx') is not None]
+        out.append({
+            'key': m['key'], 'name': m['disp'], 'date': date_str,
+            'idx': last.get('idx'), 'flu': last.get('flu'),
+            'sig': last.get('sig'), 'pred': last.get('pred'),
+            'ind': last.get('ind_netprps'), 'frgnr': last.get('frgnr_netprps'),
+            'orgn': last.get('orgn_netprps'),
+            'series': series,
+        })
+    return {'markets': out}
 
 
-def load_page():
-    """화면 HTML(index.html)을 매 요청 시 읽어 반환 — 서버 재시작 없이 화면 수정 반영."""
-    with open(PAGE_PATH, 'r', encoding='utf-8') as f:
+# 서빙 허용 HTML 파일: 경로 -> 파일명
+PAGES = {'/': 'index.html', '/index.html': 'index.html',
+         '/summary': 'summary.html', '/summary.html': 'summary.html'}
+
+
+def load_file(name):
+    with open(os.path.join(BASE_DIR, name), 'r', encoding='utf-8') as f:
         return f.read()
 
 
@@ -392,11 +447,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        if path in ('/', '/index.html'):
+        if path in PAGES:
             try:
-                body = load_page().encode('utf-8')
+                body = load_file(PAGES[path]).encode('utf-8')
             except FileNotFoundError:
-                self.send_error(500, 'index.html not found')
+                self.send_error(500, f'{PAGES[path]} not found')
                 return
             self._send(body, 'text/html; charset=utf-8')
         elif path == '/api/netprps':
@@ -405,6 +460,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if mkey not in MARKET_BY_KEY:
                 mkey = MARKETS[0]['key']
             body = json.dumps(build_payload(mkey), ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/summary':
+            body = json.dumps(build_summary(), ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         else:
             self.send_error(404, 'Not Found')

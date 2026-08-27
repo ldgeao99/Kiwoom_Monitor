@@ -65,11 +65,14 @@
   .market-sel label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; color:var(--muted); }
   .market-sel label.on { color:var(--text); }
   .market-sel input { cursor:pointer; }
-  .page-title { max-width:1200px; margin:0 auto 4px; font-size:18px; font-weight:700; color:var(--text); }
+  .page-title { max-width:1200px; margin:0 auto 4px; font-size:18px; font-weight:700; color:var(--text);
+    display:flex; align-items:center; gap:10px; }
+  .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
+    text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
 </style>
 </head>
 <body>
-<h1 class="page-title">투자자별 매매동향</h1>
+<div class="page-title"><span>투자자별 매매동향</span><a href="/summary">지수 요약 →</a></div>
 <div class="wrap">
   <div class="panel">
     <div class="title">
