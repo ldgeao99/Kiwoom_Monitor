@@ -108,9 +108,6 @@
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
   .prog-go:disabled { opacity:.4; cursor:default; }
-  .prog-amt { display:inline-flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
-  .amt-btn { font-size:12px; padding:5px 12px; border:0; background:var(--panel); color:var(--muted); cursor:pointer; }
-  .amt-btn.on { background:var(--head); color:var(--text); font-weight:700; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
   .prog-tscroll { max-height:280px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
@@ -193,9 +190,9 @@
     <div class="title">
       <input id="prog-stk" class="prog-input" value="005930" maxlength="6" inputmode="numeric" placeholder="종목코드">
       <button id="prog-go" class="prog-go" type="button">조회</button>
-      <span class="prog-amt" id="prog-amt">
-        <button class="amt-btn on" data-amt="1" type="button">금액</button>
-        <button class="amt-btn" data-amt="2" type="button">수량</button>
+      <span class="market-sel" id="prog-amt">
+        <label class="on"><input type="radio" name="progamt" value="1" checked>금액</label>
+        <label><input type="radio" name="progamt" value="2">수량</label>
       </span>
       <span id="prog-name" class="prog-name"></span>
       <small class="prog-unit" id="prog-count"></small>
@@ -792,17 +789,24 @@ function loadProgStock(code) {
   document.getElementById('prog-more').addEventListener('click', loadMoreProgram);
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') loadProgStock(inp.value); });
 
-  // 금액/수량 토글
-  const amtBtns = document.querySelectorAll('#prog-amt .amt-btn');
-  amtBtns.forEach(b => b.classList.toggle('on', b.dataset.amt === progAmt));
-  amtBtns.forEach(b => b.addEventListener('click', () => {
-    if (b.dataset.amt === progAmt) return;
-    progAmt = b.dataset.amt;
-    try { localStorage.setItem('netprps_prog_amt', progAmt); } catch (e) {}
-    amtBtns.forEach(x => x.classList.toggle('on', x.dataset.amt === progAmt));
-    progReset();
-    renderProgram();
-  }));
+  // 금액/수량 선택 (KOSPI/KOSDAQ와 동일한 라디오 방식)
+  const amtLabels = document.querySelectorAll('#prog-amt label');
+  const syncAmt = () => amtLabels.forEach(l => {
+    const inp = l.querySelector('input');
+    inp.checked = inp.value === progAmt;
+    l.classList.toggle('on', inp.checked);
+  });
+  syncAmt();
+  document.querySelectorAll('#prog-amt input[name="progamt"]').forEach(r => {
+    r.addEventListener('change', () => {
+      if (!r.checked || r.value === progAmt) return;
+      progAmt = r.value;
+      try { localStorage.setItem('netprps_prog_amt', progAmt); } catch (e) {}
+      syncAmt();
+      progReset();
+      renderProgram();
+    });
+  });
 })();
 
 async function refresh() {
