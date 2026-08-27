@@ -283,6 +283,8 @@ def poll_once(token, market):
         record['flu'] = to_number(irow.get('flu_rt'))
         record['pred'] = to_number(irow.get('pred_pre'))
         record['sig'] = str(irow.get('pre_sig') or '')
+        record['rising'] = to_number(irow.get('rising'))   # 상승 종목수
+        record['fall'] = to_number(irow.get('fall'))       # 하락 종목수
     except Exception as e:
         print(f"  {market['name']} 지수 조회 실패: {e}")
 
@@ -464,6 +466,7 @@ def build_summary():
             'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
             'idx': last.get('idx'), 'flu': last.get('flu'),
             'sig': last.get('sig'), 'pred': last.get('pred'),
+            'rising': last.get('rising'), 'fall': last.get('fall'),
             'ind': last.get('ind_netprps'), 'frgnr': last.get('frgnr_netprps'),
             'orgn': last.get('orgn_netprps'),
             'series': idx_series(records),
