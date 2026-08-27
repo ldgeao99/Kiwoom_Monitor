@@ -547,9 +547,8 @@ function rankChgHtml(sign, chg) {
   return '';
 }
 function priceCell(price, psign) {
-  const mark = (psign === '1' || psign === '2') ? '▲' : (psign === '4' || psign === '5') ? '▼' : '';
   const cls = (psign === '1' || psign === '2') ? 'pos' : (psign === '4' || psign === '5') ? 'neg' : 'zero';
-  return `<td class="${cls}">${mark} ${price.toLocaleString('ko-KR')}</td>`;
+  return `<td class="${cls}">${price.toLocaleString('ko-KR')}</td>`;
 }
 function renderRankTable() {
   const host = document.getElementById('rank-host');
