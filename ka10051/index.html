@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>투자자별 매매동향</title>
+<style>
+  :root {
+    --bg:#f2f3f5; --panel:#fff; --line:#d5d8dd; --text:#1c1f24;
+    --muted:#6b7280; --head:#eef0f3; --pos:#e5484d; --neg:#2563eb; --sel:#dbeafe;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif; }
+  .wrap { display:grid; grid-template-columns:1fr; gap:14px; max-width:1200px; margin:0 auto; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .title small { color:var(--muted); font-weight:400; }
+  #status { font-size:11px; color:var(--muted); font-weight:400; }
+  #status.live::before { content:"● "; color:#16a34a; }
+  table { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  th,td { padding:5px 9px; text-align:right; border-bottom:1px solid #eceef1; }
+  th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; }
+  th:first-child, td:first-child { text-align:center; color:var(--muted);
+    position:sticky; left:0; background:var(--panel); z-index:1; }
+  th:first-child { z-index:2; background:var(--head); }
+  .summary td { font-weight:600; }
+  .summary td:first-child { background:#f6f7f9; }
+  /* 증감 행 강조 배경 */
+  .summary.delta td { background:var(--sel); }
+  /* 매분 갱신 시 번쩍임 */
+  .summary.delta.flash td { animation:deltaFlash .9s ease-out; }
+  @keyframes deltaFlash {
+    0%   { background:#ffd54a; }
+    60%  { background:#ffe9a6; }
+    100% { background:var(--sel); }
+  }
+  .tbl-scroll { max-height:440px; overflow:auto; }
+  tr.moretip td { text-align:center; color:var(--muted); font-size:11px; padding:8px;
+    background:#fafbfc; position:static; }
+  .pos { color:var(--pos); } .neg { color:var(--neg); }
+  .legend { display:flex; gap:16px; padding:8px 14px; font-size:12px; color:var(--muted); flex-wrap:wrap; }
+  .legend b { font-weight:600; }
+  .legend i { display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+  svg { display:block; width:100%; height:auto; }
+  .empty { padding:40px; text-align:center; color:var(--muted); font-size:13px; }
+  .controls { display:flex; flex-wrap:wrap; align-items:center; gap:6px 4px; padding:10px 12px; }
+  .controls .chk { display:inline-flex; align-items:center; gap:5px; font-size:12px; cursor:pointer;
+    padding:3px 8px; border:1px solid var(--line); border-radius:14px; user-select:none; background:#fafbfc; }
+  .controls .chk input { margin:0; cursor:pointer; }
+  .controls .chk .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .controls .chk.off { opacity:.45; }
+  .controls .sep { width:1px; align-self:stretch; background:var(--line); margin:0 4px; }
+  .controls .allbtn { font-size:11px; color:var(--muted); background:none; border:1px solid var(--line);
+    border-radius:12px; padding:3px 9px; cursor:pointer; }
+  .market-sel { display:inline-flex; gap:14px; font-size:14px; font-weight:600; }
+  .market-sel label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; color:var(--muted); }
+  .market-sel label.on { color:var(--text); }
+  .market-sel input { cursor:pointer; }
+  .page-title { max-width:1200px; margin:0 auto 4px; font-size:18px; font-weight:700; color:var(--text); }
+</style>
+</head>
+<body>
+<h1 class="page-title">투자자별 매매동향</h1>
+<div class="wrap">
+  <div class="panel">
+    <div class="title">
+      <span class="market-sel" id="market-sel"></span>
+      <small id="status">연결 중…</small>
+    </div>
+    <div class="controls" id="controls"></div>
+  </div>
+  <div class="panel">
+    <div class="title"><span id="label-lbl"></span> 순매수 <small id="date-lbl"></small></div>
+    <div id="table-host"></div>
+  </div>
+  <div class="panel">
+    <div class="title">누적 순매수 추이</div>
+    <div id="chart-host"></div>
+  </div>
+</div>
+<script>
+let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
+let selected = null;           // Set<key> — 표시할 투자자
+
+const fmtSigned = v => (v > 0 ? '+' : '') + v.toLocaleString();
+const cls = v => v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
+const LS_KEY = 'netprps_selected';
+const LS_MARKET = 'netprps_market';
+
+// 현재 선택 시장 (기본 kospi) — 최초 fetch 전에도 사용
+let curMarket = (function () {
+  try { return localStorage.getItem(LS_MARKET) || 'kospi'; } catch (e) { return 'kospi'; }
+})();
+
+function renderMarkets() {
+  const host = document.getElementById('market-sel');
+  host.innerHTML = (DATA.markets || []).map(m =>
+    `<label class="${m.key === curMarket ? 'on' : ''}">`
+    + `<input type="radio" name="mkt" value="${m.key}" ${m.key === curMarket ? 'checked' : ''}>${m.name}</label>`
+  ).join('');
+  host.querySelectorAll('input[name="mkt"]').forEach(r => {
+    r.addEventListener('change', () => {
+      curMarket = r.value;
+      try { localStorage.setItem(LS_MARKET, curMarket); } catch (e) {}
+      visibleCount = PAGE_SIZE;                          // 새 시장은 처음부터
+      document.getElementById('table-host').innerHTML = '';  // 스크롤 초기화
+      refresh();
+    });
+  });
+}
+
+function loadSelected() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch (e) {}
+  return new Set(DATA.default_selected || []);
+}
+function saveSelected() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify([...selected])); } catch (e) {}
+}
+// 선택된 컬럼(원래 순서 유지)
+function activeCols() { return DATA.columns.filter(c => selected.has(c.key)); }
+
+function renderControls() {
+  const host = document.getElementById('controls');
+  let html = '';
+  DATA.columns.forEach(c => {
+    const on = selected.has(c.key);
+    html += `<label class="chk ${on ? '' : 'off'}" data-key="${c.key}">`
+      + `<input type="checkbox" ${on ? 'checked' : ''}>`
+      + `<span class="dot" style="background:${c.color}"></span>${c.name}</label>`;
+  });
+  html += '<span class="sep"></span>'
+    + '<button class="allbtn" data-act="all">전체</button>'
+    + '<button class="allbtn" data-act="none">해제</button>';
+  host.innerHTML = html;
+
+  host.querySelectorAll('.chk').forEach(el => {
+    el.addEventListener('change', () => {
+      const key = el.dataset.key;
+      if (el.querySelector('input').checked) selected.add(key); else selected.delete(key);
+      saveSelected(); renderControls(); renderTable(); renderChart();
+    });
+  });
+  host.querySelectorAll('.allbtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.act === 'all') DATA.columns.forEach(c => selected.add(c.key));
+      else selected.clear();
+      saveSelected(); renderControls(); renderTable(); renderChart();
+    });
+  });
+}
+
+const PAGE_SIZE = 30;          // 스크롤 시 한 번에 더 불러올 행 수
+let visibleCount = PAGE_SIZE;  // 현재 표시 중인 시간별 행 수(최신부터)
+let lastLatestT;               // 직전에 본 최신 시각(새 분 감지용)
+
+function flashDelta() {
+  const el = document.getElementById('delta-row');
+  if (!el) return;
+  el.classList.remove('flash');
+  void el.offsetWidth;          // reflow 강제 → 애니메이션 재시작
+  el.classList.add('flash');
+}
+
+function renderTable() {
+  const host = document.getElementById('table-host');
+  document.getElementById('label-lbl').textContent = DATA.label || '';
+  document.getElementById('date-lbl').textContent = DATA.date ? `기준일 ${DATA.date}` : '';
+  const pts = DATA.points, cols = activeCols();
+  if (!pts.length) { host.innerHTML = '<div class="empty">아직 기록된 데이터가 없습니다.</div>'; return; }
+  if (!cols.length) { host.innerHTML = '<div class="empty">위에서 투자자를 선택하세요.</div>'; return; }
+
+  const last = pts[pts.length - 1];
+  const prev = pts.length > 1 ? pts[pts.length - 2] : null;
+
+  // 표시할 행 개수(최신 visibleCount개)
+  const shown = Math.min(visibleCount, pts.length);
+  const startIdx = pts.length - shown;  // 이 인덱스까지(포함) 최신 방향으로 표시
+
+  let html = '<table><thead><tr><th>시간</th>';
+  cols.forEach(c => html += `<th>${c.name}</th>`);
+  html += '</tr></thead><tbody>';
+
+  html += '<tr class="summary"><td>순매수</td>';
+  cols.forEach(c => html += `<td class="${cls(last[c.key])}">${fmtSigned(last[c.key])}</td>`);
+  html += `</tr><tr class="summary delta" id="delta-row"><td>증감</td>`;
+  cols.forEach(c => {
+    const d = prev ? last[c.key] - prev[c.key] : 0;
+    html += `<td class="${cls(d)}">${fmtSigned(d)}</td>`;
+  });
+  html += '</tr>';
+
+  for (let i = pts.length - 1; i >= startIdx; i--) {
+    const p = pts[i];
+    html += `<tr><td>${p.t.slice(0,5)}</td>`;
+    cols.forEach(c => html += `<td class="${cls(p[c.key])}">${fmtSigned(p[c.key])}</td>`);
+    html += '</tr>';
+  }
+  if (shown < pts.length) {
+    const remain = pts.length - shown;
+    html += `<tr class="moretip"><td colspan="${cols.length + 1}">아래로 스크롤하면 ${Math.min(PAGE_SIZE, remain)}개 더 불러옵니다 (남은 ${remain}개)</td></tr>`;
+  }
+  html += '</tbody></table>';
+
+  // 스크롤 위치 보존을 위해 기존 컨테이너가 있으면 재사용
+  let scroll = host.querySelector('.tbl-scroll');
+  const prevTop = scroll ? scroll.scrollTop : 0;
+  if (!scroll) {
+    host.innerHTML = '<div class="tbl-scroll"></div>';
+    scroll = host.querySelector('.tbl-scroll');
+    scroll.addEventListener('scroll', onTableScroll);
+  }
+  scroll.innerHTML = html;
+  scroll.scrollTop = prevTop;
+}
+
+function onTableScroll(e) {
+  const el = e.currentTarget;
+  // 바닥 근처(80px)에 도달하면 30개 더 표시
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    if (visibleCount < DATA.points.length) {
+      visibleCount += PAGE_SIZE;
+      renderTable();
+    }
+  }
+}
+
+function renderChart() {
+  const host = document.getElementById('chart-host');
+  const pts = DATA.points, cols = activeCols();
+  if (!cols.length) { host.innerHTML = '<div class="empty">위에서 투자자를 선택하세요.</div>'; return; }
+  if (pts.length < 2) { host.innerHTML = '<div class="empty">차트를 그리려면 2개 이상의 스냅샷이 필요합니다.</div>'; return; }
+
+  const W = 760, H = 420, mL = 8, mR = 56, mT = 16, mB = 28;
+  const iw = W - mL - mR, ih = H - mT - mB;
+
+  let vmin = 0, vmax = 0;
+  pts.forEach(p => cols.forEach(c => { vmin = Math.min(vmin, p[c.key]); vmax = Math.max(vmax, p[c.key]); }));
+  if (vmin === vmax) vmax = vmin + 1;
+  const pad = (vmax - vmin) * 0.08; vmin -= pad; vmax += pad;
+
+  const n = pts.length;
+  const x = i => mL + (n === 1 ? iw/2 : iw * i / (n - 1));
+  const y = v => mT + ih * (1 - (v - vmin) / (vmax - vmin));
+
+  const ticks = 6; let grid = '';
+  for (let k = 0; k <= ticks; k++) {
+    const v = vmin + (vmax - vmin) * k / ticks, yy = y(v);
+    grid += `<line x1="${mL}" y1="${yy}" x2="${mL+iw}" y2="${yy}" stroke="#eceef1"/>`;
+    grid += `<text x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
+  }
+  if (vmin < 0 && vmax > 0) {
+    const y0 = y(0);
+    grid += `<line x1="${mL}" y1="${y0}" x2="${mL+iw}" y2="${y0}" stroke="#c7ccd2"/>`;
+  }
+
+  let xlab = ''; const step = Math.max(1, Math.floor(n / 6));
+  for (let i = 0; i < n; i += step)
+    xlab += `<text x="${x(i)}" y="${H-8}" font-size="10" fill="#9aa0a8" text-anchor="middle">${pts[i].t.slice(0,5)}</text>`;
+
+  let lines = '';
+  cols.forEach(c => {
+    const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p[c.key]).toFixed(1)}`).join(' ');
+    lines += `<path d="${d}" fill="none" stroke="${c.color}" stroke-width="1.8"/>`;
+    lines += `<circle cx="${x(n-1)}" cy="${y(pts[n-1][c.key])}" r="2.6" fill="${c.color}"/>`;
+  });
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">` + grid + lines + xlab + '</svg>';
+}
+
+async function refresh() {
+  const st = document.getElementById('status');
+  try {
+    const res = await fetch('/api/netprps?mrkt=' + encodeURIComponent(curMarket), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    DATA = await res.json();
+    if (DATA.market) curMarket = DATA.market;           // 서버가 보정한 값 반영
+    if (selected === null) selected = loadSelected();  // 최초 1회 초기화
+
+    // 최신 시각이 바뀌었으면(새 분 데이터) 증감 행 번쩍임 (최초 로드는 제외)
+    const latestT = DATA.points.length ? DATA.points[DATA.points.length - 1].t : null;
+    const isNew = latestT && lastLatestT !== undefined && latestT !== lastLatestT;
+    lastLatestT = latestT;
+
+    renderMarkets();
+    renderControls();
+    renderTable();
+    renderChart();
+    if (isNew) flashDelta();
+    st.className = 'live';
+    st.textContent = '갱신 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    st.className = '';
+    st.textContent = '연결 실패: ' + e.message;
+  }
+}
+
+// 서버는 매 분 :00에 조회·기록한다. 브라우저 갱신을 :00 직후로 맞춰 지연을 최소화.
+const REFRESH_OFFSET_MS = 3000;   // :00 이후 서버가 기록을 마칠 여유(초)
+function scheduleRefresh() {
+  const now = Date.now();
+  const nextTick = Math.floor(now / 60000) * 60000 + 60000 + REFRESH_OFFSET_MS;  // 다음 :00 + 여유
+  setTimeout(() => { refresh(); scheduleRefresh(); }, nextTick - now);
+}
+
+refresh();          // 최초 즉시 1회
+scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
+</script>
+</body>
+</html>
