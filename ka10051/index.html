@@ -786,7 +786,33 @@ async function loadMoreProgram() {
   progRedraw();
 }
 
-// 표 바닥 근처에 닿으면 자동으로 연속조회
+// 연속조회 버튼: 끝(cont='N')까지 모든 페이지를 자동으로 이어 받음
+async function loadAllProgram() {
+  if (progLoading || progCont !== 'Y' || !progNext) return;
+  progLoading = true;
+  const btn = document.getElementById('prog-more');
+  btn.disabled = true;
+  let page = 0;
+  try {
+    while (progCont === 'Y' && progNext) {
+      const url = '/api/program?stk=' + encodeURIComponent(progStk)
+        + '&amt=' + progAmt + '&cont=Y&next=' + encodeURIComponent(progNext);
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) break;
+      const d = await res.json();
+      progMerge(d.series);
+      progCont = d.cont || 'N'; progNext = d.next || '';
+      btn.textContent = `불러오는 중… ${Object.keys(progSeries).length}건`;
+      if (++page % 3 === 0) progRedraw();          // 진행 표시(3페이지마다 갱신)
+      await new Promise(r => setTimeout(r, 250));   // 429(요청 과다) 방지
+    }
+  } catch (e) {}
+  progLoading = false;
+  btn.textContent = '연속조회';
+  progRedraw();
+}
+
+// 표 바닥 근처에 닿으면 자동으로 연속조회(한 페이지)
 function onProgScroll(e) {
   const el = e.currentTarget;
   if (progCont === 'Y' && progNext && !progLoading
@@ -817,7 +843,7 @@ function loadProgStock(code) {
   const inp = document.getElementById('prog-stk');
   inp.value = progStk;
   document.getElementById('prog-go').addEventListener('click', () => loadProgStock(inp.value));
-  document.getElementById('prog-more').addEventListener('click', loadMoreProgram);
+  document.getElementById('prog-more').addEventListener('click', loadAllProgram);
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') loadProgStock(inp.value); });
 
   // 금액/수량 선택 (KOSPI/KOSDAQ와 동일한 라디오 방식)
