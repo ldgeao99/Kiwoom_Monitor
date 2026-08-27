@@ -239,8 +239,8 @@ def cached_token():
 _name_map = None
 
 
-def stock_name(code):
-    """krx_listed_companies.json(프로젝트 루트)에서 종목코드→회사명."""
+def _local_name(code):
+    """폴백: 로컬 krx_listed_companies.json(있을 때만) 코드→회사명."""
     global _name_map
     if _name_map is None:
         m = {}
@@ -252,11 +252,18 @@ def stock_name(code):
                 c = str(r.get('종목코드', '')).strip()
                 if c and c != '000000':
                     m[c.zfill(6)] = r.get('회사명', '')
-            print(f'[종목명맵] 로드 완료: {len(m)}개 (from {path})')
+            print(f'[종목명맵(로컬)] 로드: {len(m)}개')
         except Exception as e:
-            print(f'[종목명맵] 로드 실패: {e} (path={path})')
+            print(f'[종목명맵(로컬)] 없음/실패: {e}')
         _name_map = m
     return _name_map.get(code, '')
+
+
+def stock_name(code):
+    """종목코드→회사명. ka10099 API 맵 우선, 없으면 로컬 JSON 폴백."""
+    stock_items()   # API 맵 로드 보장(하루 1회)
+    n = (_stock_items.get('c2n') or {}).get(code)
+    return n if n else _local_name(code)
 
 
 def to_number(value):
@@ -600,24 +607,75 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
             'series': pts, 'cont': c, 'next': nk}
 
 
-def search_stock(q):
-    """종목명(부분)으로 종목코드 검색 — krx_listed_companies.json 사용(정확→시작→포함)."""
-    q = (q or '').strip()
-    if not q:
-        return None
-    stock_name('')                      # _name_map(코드→회사명) 로드 보장
-    for c, n in _name_map.items():
+def fetch_stock_list(token, mrkt_tp):
+    """ka10099(종목정보 리스트) — 시장의 전체 종목 [{code,name,...}] 반환."""
+    url = 'https://api.kiwoom.com/api/dostk/stkinfo'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'cont-yn': 'N', 'next-key': '',
+        'api-id': 'ka10099',
+    }
+    resp = requests.post(url, headers=headers, json={'mrkt_tp': mrkt_tp})
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') not in (None, 0):
+        raise RuntimeError(f"종목목록 API 오류: {body.get('return_msg')}")
+    return body.get('list') or []
+
+
+# 종목명↔코드 맵 캐시(하루 단위) — ka10099로 코스피/코스닥 전체 수집
+_stock_items = {'date': None, 'items': None}   # items: [(code, name), ...]
+
+
+def stock_items():
+    today = now_kst().strftime('%Y-%m-%d')
+    if _stock_items['items'] is None or _stock_items['date'] != today:
+        items, c2n = [], {}
+        try:
+            tok = cached_token()
+            for mrkt in ('0', '10'):          # 0:코스피, 10:코스닥 (ka10099 시장구분)
+                for r in fetch_stock_list(tok, mrkt):
+                    c = (r.get('code') or '').strip()[:6]
+                    n = (r.get('name') or '').strip()
+                    if c and n:
+                        items.append((c, n)); c2n[c] = n
+            print(f'[종목목록] ka10099 로드: {len(items)}개')
+        except Exception as e:
+            print(f'[종목목록] ka10099 로드 실패: {e}')
+        if items:
+            _stock_items['items'] = items
+            _stock_items['c2n'] = c2n
+            _stock_items['date'] = today
+    return _stock_items['items'] or []
+
+
+def _pick(items, q):
+    for c, n in items:
         if n == q:
             return {'code': c, 'name': n}
-    starts = [(c, n) for c, n in _name_map.items() if n.startswith(q)]
+    starts = [(c, n) for c, n in items if n.startswith(q)]
     if starts:
         starts.sort(key=lambda x: len(x[1]))
         return {'code': starts[0][0], 'name': starts[0][1]}
-    contains = [(c, n) for c, n in _name_map.items() if q in n]
+    contains = [(c, n) for c, n in items if q in n]
     if contains:
         contains.sort(key=lambda x: len(x[1]))
         return {'code': contains[0][0], 'name': contains[0][1]}
     return None
+
+
+def search_stock(q):
+    """종목명(부분)으로 종목코드 검색 — ka10099 종목목록 사용(정확→시작→포함).
+    API 실패 시 로컬 krx_listed_companies.json 으로 폴백."""
+    q = (q or '').strip()
+    if not q:
+        return None
+    hit = _pick(stock_items(), q)
+    if hit:
+        return hit
+    stock_name('')                       # 폴백: _name_map(코드→회사명)
+    return _pick([(c, n) for c, n in _name_map.items()], q)
 
 
 def build_rank():
@@ -756,7 +814,7 @@ def main():
     if collecting:
         threading.Thread(target=poller_thread, daemon=True).start()
 
-    stock_name('')   # 종목명 맵 로드(콘솔에 개수/에러 출력)
+    stock_items()    # 종목명 맵(ka10099) 예열 — 콘솔에 개수/에러 출력
 
     with ThreadingHTTPServer(('', port), Handler) as httpd:
         print(f'>>> 추이 서버 실행: http://localhost:{port}  (JSONL 수집 {"ON" if collecting else "OFF"})')

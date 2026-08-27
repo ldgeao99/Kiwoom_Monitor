@@ -1,6 +1,7 @@
 .env
 
 daily_snapshot/*
+krx_listed_companies.json
 ka10051/netprps_snapshots_*.jsonl
 
 __pycache__/
