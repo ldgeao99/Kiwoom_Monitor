@@ -583,7 +583,8 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
             pts.append({'t': tm[:2] + ':' + tm[2:4], 'tm': tm,
                         'net': to_number(r.get(net_f)),
                         'chg': to_number(r.get(chg_f)),
-                        'cur': to_number(r.get('cur_prc'))})
+                        'cur': to_number(r.get('cur_prc')),
+                        'flu': to_number(r.get('flu_rt'))})
         return pts, c, nk
 
     try:

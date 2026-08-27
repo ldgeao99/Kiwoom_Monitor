@@ -638,9 +638,22 @@ function drawProgramChart(series) {
   }
   if (vmin < 0 && vmax > 0) grid += `<line x1="${mL}" y1="${y(0).toFixed(1)}" x2="${mL+iw}" y2="${y(0).toFixed(1)}" stroke="#c7ccd2"/>`;
 
-  let xlab = ''; const step = Math.max(1, Math.floor(n / 8));
-  for (let i = 0; i < n; i += step)
-    xlab += `<text x="${x(i)}" y="${H-7}" font-size="10" fill="#9aa0a8" text-anchor="middle">${series[i].t}</text>`;
+  // X축: 10분 간격 세로선 + 라벨(라벨은 겹치지 않게 최소 간격 유지)
+  let xlab = '', vlines = '', prevBucket = null, lastLabelX = -999;
+  series.forEach((s, i) => {
+    const mins = (+s.tm.slice(0,2)) * 60 + (+s.tm.slice(2,4));
+    const bucket = Math.floor(mins / 10);
+    if (bucket === prevBucket) return;
+    prevBucket = bucket;
+    const xi = x(i);
+    vlines += `<line x1="${xi.toFixed(1)}" y1="${mT}" x2="${xi.toFixed(1)}" y2="${mT+ih}" stroke="#eceef1"/>`;
+    if (xi - lastLabelX >= 44) {
+      lastLabelX = xi;
+      const bm = bucket * 10;
+      const lbl = `${String((bm/60|0)).padStart(2,'0')}:${String(bm%60).padStart(2,'0')}`;
+      xlab += `<text x="${xi.toFixed(1)}" y="${H-7}" font-size="10" fill="#9aa0a8" text-anchor="middle">${lbl}</text>`;
+    }
+  });
 
   let line = '';
   series.forEach((s, i) => line += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(s.net).toFixed(1)} `);
@@ -668,7 +681,7 @@ function drawProgramChart(series) {
     + `<rect x="${mL+130}" y="6" width="10" height="3" fill="var(--neg)"/><text x="${mL+144}" y="9.5" fill="#6b7280">${chgLbl}</text></g>`;
 
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
-    + grid + spikes
+    + grid + vlines + spikes
     + `<path d="${line}" fill="none" stroke="${GREEN}" stroke-width="1.6"/>`
     + xlab + legend + '</svg>';
 }
@@ -678,11 +691,17 @@ let progNext = '', progCont = 'N', progInited = false;
 let progAmt = (function () { try { return localStorage.getItem('netprps_prog_amt') || '1'; } catch (e) { return '1'; } })();  // 1:금액 2:수량
 const progUnit = () => progAmt === '2' ? '주' : '백만원';
 let progDomMin = null, progDomMax = null;   // 표에 그려진 tm 범위(증분 렌더용)
+let progLoading = false;                     // 연속조회 진행 중(중복 방지)
 
 const progTf = tm => `${tm.slice(0,2)}:${tm.slice(2,4)}:${tm.slice(4,6)}`;
-const progRowHtml = p => `<tr><td class="tm">${progTf(p.tm)}</td>`
-  + `<td class="${cls(p.net)}">${fmtNet(p.net)}</td>`
-  + `<td class="${cls(p.chg || 0)}">${fmtNet(p.chg || 0)}</td></tr>`;
+const progRowHtml = p => {
+  const f = p.flu || 0;
+  return `<tr><td class="tm">${progTf(p.tm)}</td>`
+    + `<td class="${cls(f)}">${(p.cur || 0).toLocaleString('ko-KR')}</td>`
+    + `<td class="${cls(f)}">${(f > 0 ? '+' : '') + f.toFixed(2)}%</td>`
+    + `<td class="${cls(p.net)}">${fmtNet(p.net)}</td>`
+    + `<td class="${cls(p.chg || 0)}">${fmtNet(p.chg || 0)}</td></tr>`;
+};
 
 // 증분 렌더: 전체 재구성 없이 새 행만 위/아래로 추가 (연속조회가 쌓여도 빠름)
 function drawProgramTable(series) {
@@ -693,8 +712,9 @@ function drawProgramTable(series) {
     const netLbl = progAmt === '2' ? '순매수수량' : '순매수금액';
     const chgLbl = progAmt === '2' ? '순매수수량증감' : '순매수증감';
     host.innerHTML = '<div class="prog-tscroll"><table class="prog-tbl"><thead><tr>'
-      + `<th>시간</th><th>${netLbl}</th><th>${chgLbl}</th></tr></thead><tbody></tbody></table></div>`;
+      + `<th>시간</th><th>현재가</th><th>등락률</th><th>${netLbl}</th><th>${chgLbl}</th></tr></thead><tbody></tbody></table></div>`;
     tbody = host.querySelector('.prog-tbl tbody');
+    host.querySelector('.prog-tscroll').addEventListener('scroll', onProgScroll);  // 바닥 도달 시 자동 연속조회
     progDomMin = progDomMax = null;
   }
   const scroll = host.querySelector('.prog-tscroll');
@@ -712,7 +732,7 @@ function drawProgramTable(series) {
   if (older.length) {
     const prevTop = scroll.scrollTop;
     tbody.insertAdjacentHTML('beforeend', [...older].reverse().map(progRowHtml).join(''));
-    scroll.scrollTop = prevTop;                          // 스크롤 위치 유지
+    scroll.scrollTop = prevTop + 200;                   // 연속조회 시 새로 불러온 아래쪽으로 조금 이동
     progDomMin = older[0].tm;
   }
 }
@@ -747,7 +767,8 @@ async function renderProgram() {
 
 // 연속조회 버튼: 다음(과거) 페이지를 이어받아 누적
 async function loadMoreProgram() {
-  if (progCont !== 'Y' || !progNext) return;
+  if (progLoading || progCont !== 'Y' || !progNext) return;
+  progLoading = true;
   const btn = document.getElementById('prog-more');
   btn.disabled = true; btn.textContent = '불러오는 중…';
   try {
@@ -761,7 +782,17 @@ async function loadMoreProgram() {
     }
   } catch (e) {}
   btn.textContent = '연속조회';
+  progLoading = false;
   progRedraw();
+}
+
+// 표 바닥 근처에 닿으면 자동으로 연속조회
+function onProgScroll(e) {
+  const el = e.currentTarget;
+  if (progCont === 'Y' && progNext && !progLoading
+      && el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    loadMoreProgram();
+  }
 }
 
 function progReset() {
