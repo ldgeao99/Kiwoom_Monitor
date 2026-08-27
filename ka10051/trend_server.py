@@ -432,8 +432,7 @@ def build_summary():
 
 
 # 서빙 허용 HTML 파일: 경로 -> 파일명
-PAGES = {'/': 'index.html', '/index.html': 'index.html',
-         '/summary': 'summary.html', '/summary.html': 'summary.html'}
+PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
 
 def load_file(name):
