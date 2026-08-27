@@ -108,6 +108,8 @@
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
   .prog-go:disabled { opacity:.4; cursor:default; }
+  .prog-title { flex-direction:column; align-items:stretch; gap:8px; }
+  .prog-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
   .prog-tscroll { max-height:280px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
@@ -187,16 +189,20 @@
 <div class="page-title"><span>종목별 프로그램 순매수</span></div>
 <div class="prog-wrap">
   <div class="panel">
-    <div class="title">
-      <input id="prog-stk" class="prog-input" value="005930" placeholder="종목코드/종목명">
-      <button id="prog-go" class="prog-go" type="button">조회</button>
-      <span class="market-sel" id="prog-amt">
-        <label class="on"><input type="radio" name="progamt" value="1" checked>금액</label>
-        <label><input type="radio" name="progamt" value="2">수량</label>
-      </span>
-      <span id="prog-name" class="prog-name"></span>
-      <small class="prog-unit" id="prog-count"></small>
-      <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
+    <div class="title prog-title">
+      <div class="prog-row">
+        <input id="prog-stk" class="prog-input" value="005930" placeholder="종목코드/종목명">
+        <button id="prog-go" class="prog-go" type="button">조회</button>
+      </div>
+      <div class="prog-row">
+        <span class="market-sel" id="prog-amt">
+          <label class="on"><input type="radio" name="progamt" value="1" checked>금액</label>
+          <label><input type="radio" name="progamt" value="2">수량</label>
+        </span>
+        <span id="prog-name" class="prog-name"></span>
+        <small class="prog-unit" id="prog-count"></small>
+        <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
+      </div>
     </div>
     <div id="prog-table"></div>
     <div id="prog-chart"></div>
