@@ -855,11 +855,16 @@ async function resolveAndLoad(raw) {
   if (/^\d{6}$/.test(v)) { loadProgStock(v); return; }
   const digits = v.replace(/\D/g, '');
   if (digits.length === 6) { loadProgStock(digits); return; }
+  const nameEl = document.getElementById('prog-name');
   try {
-    const d = await (await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' })).json();
+    const res = await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
+    if (!res.ok) { nameEl.textContent = `검색 실패(HTTP ${res.status}) — 서버 재시작이 필요할 수 있습니다`; return; }
+    const d = await res.json();
     if (d && d.code) loadProgStock(d.code);
-    else document.getElementById('prog-name').textContent = `"${v}" 종목을 찾지 못했습니다`;
-  } catch (e) {}
+    else nameEl.textContent = `"${v}" 종목을 찾지 못했습니다`;
+  } catch (e) {
+    nameEl.textContent = '검색 오류: ' + e.message;
+  }
 }
 
 (function () {
