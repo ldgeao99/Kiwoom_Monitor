@@ -20,8 +20,6 @@
   .toggle-controls { font-size:12px; font-weight:600; color:var(--muted); background:none;
     border:1px solid var(--line); border-radius:12px; padding:3px 10px; cursor:pointer; }
   .controls.collapsed { display:none; }
-  #status { font-size:11px; color:var(--muted); font-weight:400; }
-  #status.live::before { content:"● "; color:#16a34a; }
   table { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
   th,td { padding:5px 9px; text-align:right; border-bottom:1px solid #eceef1; }
   th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; }
@@ -130,7 +128,6 @@
     <div class="title">
       <span class="market-sel" id="market-sel"></span>
       <button class="toggle-controls" id="toggle-controls" type="button">투자자 선택 ▾</button>
-      <small id="status">연결 중…</small>
     </div>
     <div class="controls" id="controls"></div>
   </div>
@@ -475,7 +472,6 @@ async function renderSummaryCards() {
 }
 
 async function refresh() {
-  const st = document.getElementById('status');
   renderSummaryCards();   // 상단 카드도 함께 갱신
   try {
     const res = await fetch('/api/netprps?mrkt=' + encodeURIComponent(curMarket), { cache: 'no-store' });
@@ -494,12 +490,7 @@ async function refresh() {
     renderTable();
     renderChart();
     if (isNew) flashDelta();
-    st.className = 'live';
-    st.textContent = '갱신 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    st.className = '';
-    st.textContent = '연결 실패: ' + e.message;
-  }
+  } catch (e) {}
 }
 
 // 서버는 매 분 :00에 조회·기록한다. 브라우저 갱신을 :00 직후로 맞춰 지연을 최소화.
