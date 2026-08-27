@@ -188,7 +188,7 @@
 <div class="prog-wrap">
   <div class="panel">
     <div class="title">
-      <input id="prog-stk" class="prog-input" value="005930" maxlength="6" inputmode="numeric" placeholder="종목코드">
+      <input id="prog-stk" class="prog-input" value="005930" placeholder="종목코드/종목명">
       <button id="prog-go" class="prog-go" type="button">조회</button>
       <span class="market-sel" id="prog-amt">
         <label class="on"><input type="radio" name="progamt" value="1" checked>금액</label>
@@ -745,8 +745,7 @@ function progRedraw() {
   const moreBtn = document.getElementById('prog-more');
   const canMore = progCont === 'Y' && !!progNext;
   moreBtn.disabled = !canMore;
-  document.getElementById('prog-count').textContent =
-    `${Object.keys(progSeries).length}건 · 단위: ${progUnit()}`;
+  document.getElementById('prog-count').textContent = `단위: ${progUnit()}`;
 }
 
 function progMerge(series) {
@@ -831,7 +830,7 @@ function progReset() {
   const t = document.getElementById('prog-table'); if (t) t.innerHTML = '';   // 표 초기화(전체 재구성 유도)
 }
 
-// 종목코드를 검색창에 넣고 프로그램 순매수금액을 조회
+// 종목코드로 조회 (검색창/localStorage/랭킹 클릭 공통)
 function loadProgStock(code) {
   const v = (code || '').replace(/\D/g, '').slice(0, 6);
   if (!v) return;
@@ -843,15 +842,29 @@ function loadProgStock(code) {
   renderProgram();
 }
 
+// 입력값(종목코드 6자리 또는 종목명)으로 조회
+async function resolveAndLoad(raw) {
+  const v = (raw || '').trim();
+  if (!v) return;
+  if (/^\d{6}$/.test(v)) { loadProgStock(v); return; }
+  const digits = v.replace(/\D/g, '');
+  if (digits.length === 6) { loadProgStock(digits); return; }
+  try {
+    const d = await (await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' })).json();
+    if (d && d.code) loadProgStock(d.code);
+    else document.getElementById('prog-name').textContent = `"${v}" 종목을 찾지 못했습니다`;
+  } catch (e) {}
+}
+
 (function () {
   const inp = document.getElementById('prog-stk');
   inp.value = progStk;
-  document.getElementById('prog-go').addEventListener('click', () => loadProgStock(inp.value));
+  document.getElementById('prog-go').addEventListener('click', () => resolveAndLoad(inp.value));
   document.getElementById('prog-more').addEventListener('click', () => {
     if (progLoading) progStop = true;   // 로딩 중 다시 누르면 중단
     else loadAllProgram();
   });
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') loadProgStock(inp.value); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') resolveAndLoad(inp.value); });
 
   // 금액/수량 선택 (KOSPI/KOSDAQ와 동일한 라디오 방식)
   const amtLabels = document.querySelectorAll('#prog-amt label');

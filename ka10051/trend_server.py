@@ -597,6 +597,26 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
             'series': pts, 'cont': c, 'next': nk}
 
 
+def search_stock(q):
+    """종목명(부분)으로 종목코드 검색 — krx_listed_companies.json 사용(정확→시작→포함)."""
+    q = (q or '').strip()
+    if not q:
+        return None
+    stock_name('')                      # _name_map(코드→회사명) 로드 보장
+    for c, n in _name_map.items():
+        if n == q:
+            return {'code': c, 'name': n}
+    starts = [(c, n) for c, n in _name_map.items() if n.startswith(q)]
+    if starts:
+        starts.sort(key=lambda x: len(x[1]))
+        return {'code': starts[0][0], 'name': starts[0][1]}
+    contains = [(c, n) for c, n in _name_map.items() if q in n]
+    if contains:
+        contains.sort(key=lambda x: len(x[1]))
+        return {'code': contains[0][0], 'name': contains[0][1]}
+    return None
+
+
 def build_rank():
     """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
     def run(tok):
@@ -661,6 +681,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 payload = {'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/stock':
+            qs = parse_qs(parsed.query)
+            q = qs.get('q', [''])[0]
+            hit = None
+            try:
+                hit = search_stock(q)
+            except Exception:
+                hit = None
+            body = json.dumps(hit or {'code': '', 'name': ''}, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/program':
             qs = parse_qs(parsed.query)
