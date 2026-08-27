@@ -257,16 +257,22 @@ def stock_name(code):
 
 
 def to_number(value):
+    """부호 포함 문자열을 숫자로. 키움이 음수를 '--1'처럼 이중 부호로 주는 경우도 처리."""
     if value is None:
         return 0
-    value = str(value).strip().replace('+', '')
+    s = str(value).strip().replace(',', '').replace('+', '')
+    neg = s.startswith('-')
+    s = s.lstrip('-')          # 선행 '-' 모두 제거(이중 마이너스 대응)
+    if not s:
+        return 0
     try:
-        return int(value)
+        n = int(s)
     except ValueError:
         try:
-            return float(value)
+            n = float(s)
         except ValueError:
             return 0
+    return -n if neg else n
 
 
 def read_records(market_key, date_str):
