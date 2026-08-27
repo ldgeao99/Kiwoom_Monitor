@@ -85,12 +85,15 @@
   .breadth-tbl .pct { color:var(--muted); font-weight:400; font-size:11px; }
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
+  .rank-scroll { max-height:300px; overflow-y:auto; }
   .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
-  .rank-tbl th, .rank-tbl td { padding:7px 12px; border-bottom:1px solid #eceef1; text-align:right; }
-  .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; }
-  .rank-tbl td.rk { text-align:center; color:var(--muted); width:44px; }
+  .rank-tbl th, .rank-tbl td { padding:7px 10px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
+  .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1; }
+  .rank-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
-  .rank-tbl .pos { color:var(--pos); } .rank-tbl .neg { color:var(--neg); }
+  .rank-tbl .pos { color:var(--pos); } .rank-tbl .neg { color:var(--neg); } .rank-tbl .zero { color:var(--muted); }
+  .rank-tbl .rup { color:#16a34a; font-size:11px; margin-left:5px; }
+  .rank-tbl .rdn { color:#e5484d; font-size:11px; margin-left:5px; }
   .rank-toggle { width:100%; border:0; border-top:1px solid var(--line); background:#fafbfc;
     color:var(--muted); font-size:12px; padding:8px; cursor:pointer; }
   /* 프로그램 순매수금액 */
@@ -535,20 +538,32 @@ let rankItems = [];
 let rankExpanded = false;
 try { rankExpanded = localStorage.getItem('netprps_rank_expanded') === '1'; } catch (e) {}
 
-function fmtChgr(v, sign) {
-  const c = (v > 0 ? '+' : '') + v.toFixed(2) + '%';
-  const cls = v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
-  return `<span class="${cls}">${c}</span>`;
+const pctCls = v => v > 0 ? 'pos' : (v < 0 ? 'neg' : 'zero');
+function rankChgHtml(sign, chg) {
+  if (sign === '+') return `<span class="rup">▲${chg || ''}</span>`;
+  if (sign === '-') return `<span class="rdn">▼${chg || ''}</span>`;
+  return '';
+}
+function priceCell(price, psign) {
+  const mark = (psign === '1' || psign === '2') ? '▲' : (psign === '4' || psign === '5') ? '▼' : '';
+  const cls = (psign === '1' || psign === '2') ? 'pos' : (psign === '4' || psign === '5') ? 'neg' : 'zero';
+  return `<td class="${cls}">${mark} ${price.toLocaleString('ko-KR')}</td>`;
 }
 function renderRankTable() {
   const host = document.getElementById('rank-host');
   const shown = rankItems.slice(0, rankExpanded ? 20 : 10);
   if (!shown.length) { host.innerHTML = '<div class="empty">조회순위 데이터가 없습니다.</div>'; return; }
-  let html = '<table class="rank-tbl"><thead><tr><th class="rk">순위</th><th class="nm" style="text-align:left">종목명</th><th>등락율</th></tr></thead><tbody>';
+  let html = '<div class="rank-scroll"><table class="rank-tbl"><thead><tr>'
+    + '<th class="rk">순위</th><th style="text-align:left">종목명</th>'
+    + '<th>기준시점 주가</th><th>기준시점 등락율</th><th>30초 전 대비율</th></tr></thead><tbody>';
   shown.forEach(it => {
-    html += `<tr><td class="rk">${it.rank}</td><td class="nm">${it.name}</td><td>${fmtChgr(it.chgr, it.sign)}</td></tr>`;
+    html += `<tr><td class="rk">${it.rank}</td>`
+      + `<td class="nm">${it.name}${rankChgHtml(it.rank_sign, it.rank_chg)}</td>`
+      + priceCell(it.price, it.psign)
+      + `<td class="${pctCls(it.chgr)}">${(it.chgr > 0 ? '+' : '') + it.chgr.toFixed(2)}%</td>`
+      + `<td class="${pctCls(it.prev)}">${(it.prev > 0 ? '+' : '') + it.prev.toFixed(2)}%</td></tr>`;
   });
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   host.innerHTML = html;
   const btn = document.getElementById('rank-toggle');
   btn.textContent = rankExpanded ? '접기 ▴' : '펼치기 ▾';

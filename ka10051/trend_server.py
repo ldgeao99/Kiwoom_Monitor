@@ -586,9 +586,20 @@ def build_rank():
     """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
     def run(tok):
         rows = fetch_rank(tok)
-        return [{'rank': i + 1, 'name': r.get('stk_nm', ''), 'code': r.get('stk_cd', ''),
-                 'chgr': to_number(r.get('base_comp_chgr')), 'sign': str(r.get('base_comp_sign') or '')}
-                for i, r in enumerate(rows[:20])]
+        out = []
+        for i, r in enumerate(rows[:20]):
+            out.append({
+                'rank': i + 1,
+                'name': r.get('stk_nm', ''),
+                'code': r.get('stk_cd', ''),
+                'rank_sign': str(r.get('rank_chg_sign') or '').strip(),   # +:상승 -:하락
+                'rank_chg': str(r.get('rank_chg') or '').strip(),
+                'price': to_number(r.get('past_curr_prc')),               # 기준시점 주가
+                'psign': str(r.get('base_comp_sign') or ''),              # 1상한2상승3보합4하한5하락
+                'chgr': to_number(r.get('base_comp_chgr')),               # 기준시점 등락율(%)
+                'prev': to_number(r.get('prev_base_chgr')),               # 직전(30초 전) 대비율(%)
+            })
+        return out
     try:
         items = run(cached_token())
     except Exception:
