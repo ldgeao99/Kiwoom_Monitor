@@ -82,6 +82,7 @@
   .breadth-tbl td.num { font-weight:700; }
   .breadth-tbl .up { color:var(--pos); } .breadth-tbl .dn { color:var(--neg); } .breadth-tbl .flat { color:var(--muted); }
   .breadth-tbl .arw { font-size:11px; margin-left:3px; }
+  .breadth-tbl .pct { color:var(--muted); font-weight:400; font-size:11px; }
   @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:9px 4px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -449,18 +450,26 @@ function mktCard(m, strong) {
 
 function breadthTable(markets) {
   const num = v => (v == null) ? '-' : v.toLocaleString('ko-KR');
+  const risePct = m => {
+    const total = (m.upl||0) + (m.rising||0) + (m.flat||0) + (m.fall||0) + (m.lst||0);
+    return (total > 0 && m.rising != null) ? Math.round(m.rising / total * 100) : null;
+  };
   const head = `<tr><th>구분</th>`
     + `<th>상한<span class="arw up">▲</span></th>`
     + `<th>상승<span class="arw up">▲</span></th>`
     + `<th>보합<span class="arw flat">–</span></th>`
     + `<th>하락<span class="arw dn">▼</span></th>`
     + `<th>하한<span class="arw dn">▼</span></th></tr>`;
-  const rows = markets.map(m => `<tr><td class="mk">${m.name}</td>`
-    + `<td class="num up">${num(m.upl)}</td>`
-    + `<td class="num up">${num(m.rising)}</td>`
-    + `<td class="num flat">${num(m.flat)}</td>`
-    + `<td class="num dn">${num(m.fall)}</td>`
-    + `<td class="num dn">${num(m.lst)}</td></tr>`).join('');
+  const rows = markets.map(m => {
+    const pct = risePct(m);
+    const pctHtml = pct == null ? '' : ` <span class="pct">(${pct}%)</span>`;
+    return `<tr><td class="mk">${m.name}</td>`
+      + `<td class="num up">${num(m.upl)}</td>`
+      + `<td class="num up">${num(m.rising)}${pctHtml}</td>`
+      + `<td class="num flat">${num(m.flat)}</td>`
+      + `<td class="num dn">${num(m.fall)}</td>`
+      + `<td class="num dn">${num(m.lst)}</td></tr>`;
+  }).join('');
   return `<table class="breadth-tbl"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 }
 
