@@ -559,6 +559,10 @@ def build_summary():
 def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
     """프로그램매매 한 페이지(최신 또는 연속조회 다음 페이지) + 다음 페이지 커서 반환.
     클라이언트가 '연속조회' 버튼으로 페이지를 직접 이어받는다."""
+    # 금액(1): 백만원, 수량(2): 주 — 필드 선택
+    net_f = 'prm_netprps_qty' if amt_qty_tp == '2' else 'prm_netprps_amt'
+    chg_f = 'prm_netprps_qty_irds' if amt_qty_tp == '2' else 'prm_netprps_amt_irds'
+
     def run(tok):
         rows, c, nk = fetch_program(tok, stk_cd, amt_qty_tp, cont_yn, next_key)
         pts = []
@@ -567,8 +571,8 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
             if not tm:
                 continue
             pts.append({'t': tm[:2] + ':' + tm[2:4], 'tm': tm,
-                        'net': to_number(r.get('prm_netprps_amt')),
-                        'chg': to_number(r.get('prm_netprps_amt_irds')),
+                        'net': to_number(r.get(net_f)),
+                        'chg': to_number(r.get(chg_f)),
                         'cur': to_number(r.get('cur_prc'))})
         return pts, c, nk
 
@@ -652,8 +656,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             stk = (qs.get('stk', ['005930'])[0] or '005930').strip()[:20]
             cont = qs.get('cont', ['N'])[0]
             nkey = qs.get('next', [''])[0]
+            amt = qs.get('amt', ['1'])[0]
+            if amt not in ('1', '2'):
+                amt = '1'
             try:
-                payload = build_program(stk, cont, nkey)
+                payload = build_program(stk, cont, nkey, amt)
             except Exception as e:
                 payload = {'stk_cd': stk, 'name': '', 'series': [], 'cont': 'N', 'next': '', 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')

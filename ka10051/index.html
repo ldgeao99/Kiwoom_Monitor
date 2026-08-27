@@ -108,6 +108,9 @@
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
   .prog-go:disabled { opacity:.4; cursor:default; }
+  .prog-amt { display:inline-flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .amt-btn { font-size:12px; padding:5px 12px; border:0; background:var(--panel); color:var(--muted); cursor:pointer; }
+  .amt-btn.on { background:var(--head); color:var(--text); font-weight:700; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
   .prog-tscroll { max-height:280px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
@@ -191,11 +194,15 @@
       <input id="prog-stk" class="prog-input" value="005930" maxlength="6" inputmode="numeric" placeholder="종목코드">
       <button id="prog-go" class="prog-go" type="button">조회</button>
       <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
+      <span class="prog-amt" id="prog-amt">
+        <button class="amt-btn on" data-amt="1" type="button">금액</button>
+        <button class="amt-btn" data-amt="2" type="button">수량</button>
+      </span>
       <span id="prog-name" class="prog-name"></span>
       <small class="prog-unit" id="prog-count"></small>
     </div>
-    <div id="prog-chart"></div>
     <div id="prog-table"></div>
+    <div id="prog-chart"></div>
   </div>
 </div>
 <script>
@@ -667,6 +674,8 @@ function drawProgramChart(series) {
 
 let progSeries = {};          // tm -> point (버튼 연속조회로 누적)
 let progNext = '', progCont = 'N', progInited = false;
+let progAmt = (function () { try { return localStorage.getItem('netprps_prog_amt') || '1'; } catch (e) { return '1'; } })();  // 1:금액 2:수량
+const progUnit = () => progAmt === '2' ? '주' : '백만원';
 
 function drawProgramTable(series) {
   const host = document.getElementById('prog-table');
@@ -694,7 +703,7 @@ function progRedraw() {
   const canMore = progCont === 'Y' && !!progNext;
   moreBtn.disabled = !canMore;
   document.getElementById('prog-count').textContent =
-    `${Object.keys(progSeries).length}건` + (canMore ? ' · 더 있음' : ' · 단위: 백만원');
+    `${Object.keys(progSeries).length}건 · 단위: ${progUnit()}` + (canMore ? ' · 더 있음' : '');
 }
 
 function progMerge(series) {
@@ -704,7 +713,7 @@ function progMerge(series) {
 // 최신 페이지 갱신(매분/조회): 누적은 유지, 커서는 최초 1회만 설정
 async function renderProgram() {
   try {
-    const res = await fetch('/api/program?stk=' + encodeURIComponent(progStk), { cache: 'no-store' });
+    const res = await fetch('/api/program?stk=' + encodeURIComponent(progStk) + '&amt=' + progAmt, { cache: 'no-store' });
     if (!res.ok) return;
     const d = await res.json();
     document.getElementById('prog-name').textContent = d.name ? `${d.name} (${d.stk_cd})` : d.stk_cd;
@@ -721,7 +730,7 @@ async function loadMoreProgram() {
   btn.disabled = true; btn.textContent = '불러오는 중…';
   try {
     const url = '/api/program?stk=' + encodeURIComponent(progStk)
-      + '&cont=Y&next=' + encodeURIComponent(progNext);
+      + '&amt=' + progAmt + '&cont=Y&next=' + encodeURIComponent(progNext);
     const res = await fetch(url, { cache: 'no-store' });
     if (res.ok) {
       const d = await res.json();
@@ -753,6 +762,18 @@ function loadProgStock(code) {
   document.getElementById('prog-go').addEventListener('click', () => loadProgStock(inp.value));
   document.getElementById('prog-more').addEventListener('click', loadMoreProgram);
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') loadProgStock(inp.value); });
+
+  // 금액/수량 토글
+  const amtBtns = document.querySelectorAll('#prog-amt .amt-btn');
+  amtBtns.forEach(b => b.classList.toggle('on', b.dataset.amt === progAmt));
+  amtBtns.forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.amt === progAmt) return;
+    progAmt = b.dataset.amt;
+    try { localStorage.setItem('netprps_prog_amt', progAmt); } catch (e) {}
+    amtBtns.forEach(x => x.classList.toggle('on', x.dataset.amt === progAmt));
+    progReset();
+    renderProgram();
+  }));
 })();
 
 async function refresh() {
