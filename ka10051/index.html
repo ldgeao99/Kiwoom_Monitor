@@ -69,19 +69,18 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
-  /* 상승/보합/하락 종목수 표 */
-  .breadth { max-width:1200px; margin:0 auto 10px; }
+  /* 상승/보합/하락 종목수 표 (시장별 좌우 2개) */
+  .breadth { max-width:1200px; margin:0 auto 6px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
     border:1px solid var(--line); border-radius:8px; overflow:hidden;
     font-size:13px; font-variant-numeric:tabular-nums; }
-  .breadth-tbl th, .breadth-tbl td { padding:7px 10px; text-align:right; border-bottom:1px solid #eceef1; }
-  .breadth-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; }
+  .breadth-tbl th, .breadth-tbl td { padding:6px 12px; border-bottom:1px solid #eceef1; }
+  .breadth-tbl thead th { background:var(--head); color:var(--text); font-weight:700; text-align:center; }
   .breadth-tbl tbody tr:last-child td { border-bottom:0; }
-  .breadth-tbl .mk { text-align:left; font-weight:700; color:var(--text); }
-  .breadth-tbl .up { color:var(--pos); font-weight:700; }
-  .breadth-tbl .flat { color:var(--muted); font-weight:700; }
-  .breadth-tbl .dn { color:var(--neg); font-weight:700; }
-  @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:6px 8px; } }
+  .breadth-tbl td.lbl { text-align:left; color:var(--muted); font-weight:600; }
+  .breadth-tbl td.num { text-align:right; font-weight:700; }
+  .breadth-tbl .up { color:var(--pos); } .breadth-tbl .flat { color:var(--muted); } .breadth-tbl .dn { color:var(--neg); }
+  @media (max-width:560px){ .breadth { gap:8px; } .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:5px 9px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; }
@@ -116,8 +115,8 @@
 </head>
 <body>
 <div class="page-title"><span>지수현황</span></div>
-<div class="breadth" id="breadth"></div>
 <div class="mkt-cards" id="mkt-cards"></div>
+<div class="breadth" id="breadth"></div>
 <div class="page-title"><span>투자자별 매매동향</span></div>
 <div class="wrap">
   <div class="panel">
@@ -440,16 +439,13 @@ function mktCard(m) {
     + `<hr class="dv"><div class="inv">${inv}</div></div>`;
 }
 
-function breadthTable(markets) {
+function breadthTableOne(m) {
   const num = v => (v == null) ? '-' : v.toLocaleString('ko-KR');
-  const rows = markets.map(m =>
-    `<tr><td class="mk">${m.name}</td>`
-    + `<td class="up">${num(m.rising)}</td>`
-    + `<td class="flat">${num(m.flat)}</td>`
-    + `<td class="dn">${num(m.fall)}</td></tr>`).join('');
-  return `<table class="breadth-tbl"><thead><tr>`
-    + `<th class="mk">시장</th><th>상승</th><th>보합</th><th>하락</th></tr></thead>`
-    + `<tbody>${rows}</tbody></table>`;
+  return `<table class="breadth-tbl"><thead><tr><th colspan="2">${m.name}</th></tr></thead><tbody>`
+    + `<tr><td class="lbl up">상승</td><td class="num up">${num(m.rising)}</td></tr>`
+    + `<tr><td class="lbl flat">보합</td><td class="num flat">${num(m.flat)}</td></tr>`
+    + `<tr><td class="lbl dn">하락</td><td class="num dn">${num(m.fall)}</td></tr>`
+    + `</tbody></table>`;
 }
 
 async function renderSummaryCards() {
@@ -457,8 +453,8 @@ async function renderSummaryCards() {
     const res = await fetch('/api/summary', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
-    document.getElementById('breadth').innerHTML = breadthTable(data.markets);
     document.getElementById('mkt-cards').innerHTML = data.markets.map(mktCard).join('');
+    document.getElementById('breadth').innerHTML = data.markets.map(breadthTableOne).join('');
   } catch (e) {}
 }
 
