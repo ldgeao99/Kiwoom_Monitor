@@ -69,9 +69,8 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
-  /* 상단 지수 요약 카드 */
+  /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  @media (max-width:680px){ .mkt-cards { grid-template-columns:1fr; } }
   .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; }
   .mkt-card.up { background:#fdf1ef; } .mkt-card.down { background:#eef3fd; }
   .mkt-card .top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
@@ -82,7 +81,18 @@
   .mkt-card.down .px, .mkt-card.down .fl { color:var(--neg); }
   .mkt-card.flat .px, .mkt-card.flat .fl { color:var(--muted); }
   .mkt-card .spark { width:150px; height:56px; flex:none; }
-  @media (max-width:420px){ .mkt-card .spark { width:110px; height:48px; } }
+  /* 좁은 화면: 2단을 유지하며 카드 내부를 압축 */
+  @media (max-width:560px){
+    .mkt-cards { gap:8px; }
+    .mkt-card { padding:12px 12px; border-radius:14px; }
+    .mkt-card .nm { font-size:14px; }
+    .mkt-card .px { font-size:21px; }
+    .mkt-card .fl { font-size:13px; }
+    .mkt-card .spark { width:76px; height:42px; }
+    .mkt-card .inv .l { font-size:11px; }
+    .mkt-card .inv .v { font-size:13px; }
+  }
+  @media (max-width:360px){ .mkt-card .spark { width:56px; height:38px; } }
   .mkt-card .dv { border:0; border-top:1px dashed #d6cfce; margin:12px 0 10px; }
   .mkt-card.down .dv { border-top-color:#cdd6e8; }
   .mkt-card .inv { display:grid; grid-template-columns:1fr 1fr 1fr; text-align:center; gap:6px; }
@@ -92,8 +102,9 @@
 </style>
 </head>
 <body>
-<div class="page-title"><span>투자자별 매매동향</span></div>
+<div class="page-title"><span>지수현황</span></div>
 <div class="mkt-cards" id="mkt-cards"></div>
+<div class="page-title"><span>투자자별 매매동향</span></div>
 <div class="wrap">
   <div class="panel">
     <div class="title">
