@@ -175,10 +175,11 @@ def poll_once(token, market):
     for key, _name, _color in COLUMNS:
         record[key] = to_number(row.get(key))
 
-    # 직전 레코드와 투자자 값이 완전히 동일하면(미갱신/휴장 등) 중복 저장 방지
+    # 수집 시간대에는 값이 직전과 같아도 매분 기록해 시간축에 빈칸이 없도록 한다.
+    # (같은 분에 중복 실행되어 이미 그 분이 기록된 경우에만 스킵)
     prev = last_record(mkey, date_str)
-    if prev and all(prev.get(k) == record[k] for k, _n, _c in COLUMNS):
-        print(f"[{record['t']}] {market['name']} 동일값(스킵)")
+    if prev and prev.get('t', '')[:5] == record['t'][:5]:
+        print(f"[{record['t']}] {market['name']} 같은 분 이미 기록(스킵)")
         return token
 
     with open(snapshot_path(mkey, date_str), 'a', encoding='utf-8') as f:
