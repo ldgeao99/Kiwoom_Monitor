@@ -91,6 +91,8 @@
   .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
+  .rank-tbl tbody tr { cursor:pointer; }
+  .rank-tbl tbody tr:hover td { background:#f2f6ff; }
   .rank-tbl .pos { color:var(--pos); } .rank-tbl .neg { color:var(--neg); } .rank-tbl .zero { color:var(--muted); }
   .rank-tbl .rup { color:#16a34a; font-size:11px; margin-left:5px; }
   .rank-tbl .rdn { color:#e5484d; font-size:11px; margin-left:5px; }
@@ -557,7 +559,7 @@ function renderRankTable() {
     + '<th class="rk">순위</th><th style="text-align:left">종목명</th>'
     + '<th>기준시점 주가</th><th>기준시점 등락율</th><th>30초 전 대비율</th></tr></thead><tbody>';
   shown.forEach(it => {
-    html += `<tr><td class="rk">${it.rank}</td>`
+    html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수금액 조회"><td class="rk">${it.rank}</td>`
       + `<td class="nm">${it.name}${rankChgHtml(it.rank_sign, it.rank_chg)}</td>`
       + priceCell(it.price, it.psign)
       + `<td class="${pctCls(it.chgr)}">${(it.chgr > 0 ? '+' : '') + it.chgr.toFixed(2)}%</td>`
@@ -582,6 +584,13 @@ document.getElementById('rank-toggle').addEventListener('click', () => {
   rankExpanded = !rankExpanded;
   try { localStorage.setItem('netprps_rank_expanded', rankExpanded ? '1' : '0'); } catch (e) {}
   renderRankTable();
+});
+// 조회순위 종목 클릭 → 프로그램 순매수금액 조회 + 해당 섹션으로 스크롤
+document.getElementById('rank-host').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-code]');
+  if (!tr) return;
+  loadProgStock(tr.dataset.code);
+  document.querySelector('.prog-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 // ── 하단: 특정 종목 프로그램 순매수금액 차트 ──
@@ -694,20 +703,24 @@ async function loadMoreProgram() {
 
 function progReset() { progSeries = {}; progNext = ''; progCont = 'N'; progInited = false; }
 
+// 종목코드를 검색창에 넣고 프로그램 순매수금액을 조회
+function loadProgStock(code) {
+  const v = (code || '').replace(/\D/g, '').slice(0, 6);
+  if (!v) return;
+  progStk = v;
+  const inp = document.getElementById('prog-stk');
+  if (inp) inp.value = v;
+  try { localStorage.setItem('netprps_prog_stk', v); } catch (e) {}
+  progReset();
+  renderProgram();
+}
+
 (function () {
   const inp = document.getElementById('prog-stk');
   inp.value = progStk;
-  const go = () => {
-    const v = (inp.value || '').replace(/\D/g, '').slice(0, 6);
-    if (!v) return;
-    progStk = v; inp.value = v;
-    try { localStorage.setItem('netprps_prog_stk', v); } catch (e) {}
-    progReset();
-    renderProgram();
-  };
-  document.getElementById('prog-go').addEventListener('click', go);
+  document.getElementById('prog-go').addEventListener('click', () => loadProgStock(inp.value));
   document.getElementById('prog-more').addEventListener('click', loadMoreProgram);
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') loadProgStock(inp.value); });
 })();
 
 async function refresh() {
