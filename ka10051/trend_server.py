@@ -190,6 +190,54 @@ def fetch_index(token, idx_cd):
     return row
 
 
+def fetch_program(token, stk_cd, amt_qty_tp='1'):
+    """ka90008(종목시간별프로그램매매추이) — 당일 시간별 프로그램 순매수금액 시계열 조회."""
+    url = 'https://api.kiwoom.com/api/dostk/mrkcond'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'cont-yn': 'N',
+        'next-key': '',
+        'api-id': 'ka90008',
+    }
+    data = {'amt_qty_tp': amt_qty_tp, 'stk_cd': stk_cd, 'date': now_kst().strftime('%Y%m%d')}
+    resp = requests.post(url, headers=headers, json=data)
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') != 0:
+        raise RuntimeError(f"프로그램매매 API 오류: {body.get('return_msg')}")
+    return body.get('stk_tm_prm_trde_trnsn', [])
+
+
+_token_cache = {'token': None}
+
+
+def cached_token():
+    if not _token_cache['token']:
+        _token_cache['token'] = get_access_token()
+    return _token_cache['token']
+
+
+_name_map = None
+
+
+def stock_name(code):
+    """krx_listed_companies.json(프로젝트 루트)에서 종목코드→회사명."""
+    global _name_map
+    if _name_map is None:
+        _name_map = {}
+        try:
+            path = os.path.join(os.path.dirname(BASE_DIR), 'krx_listed_companies.json')
+            with open(path, encoding='utf-8') as f:
+                for r in json.load(f):
+                    c = str(r.get('종목코드', '')).zfill(6)
+                    if c:
+                        _name_map[c] = r.get('회사명', '')
+        except Exception:
+            _name_map = {}
+    return _name_map.get(code, '')
+
+
 def to_number(value):
     if value is None:
         return 0
@@ -490,6 +538,24 @@ def build_summary():
     return {'markets': out}
 
 
+def build_program(stk_cd, amt_qty_tp='1'):
+    """특정 종목의 당일 시간별 프로그램 순매수금액(백만원) 시계열."""
+    def load(tok):
+        rows = fetch_program(tok, stk_cd, amt_qty_tp)
+        pts = [{'t': r['tm'][:2] + ':' + r['tm'][2:4],
+                'tm': r.get('tm', ''),
+                'net': to_number(r.get('prm_netprps_amt')),
+                'cur': to_number(r.get('cur_prc'))} for r in rows if r.get('tm')]
+        pts.sort(key=lambda p: p['tm'])   # 시간 오름차순
+        return pts
+    try:
+        pts = load(cached_token())
+    except Exception:
+        _token_cache['token'] = None       # 토큰 만료 등 대비 1회 재시도
+        pts = load(cached_token())
+    return {'stk_cd': stk_cd, 'name': stock_name(stk_cd), 'series': pts}
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -521,6 +587,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/summary':
             body = json.dumps(build_summary(), ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/program':
+            qs = parse_qs(parsed.query)
+            stk = (qs.get('stk', ['005930'])[0] or '005930').strip()[:20]
+            try:
+                payload = build_program(stk)
+            except Exception as e:
+                payload = {'stk_cd': stk, 'name': '', 'series': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         else:
             self.send_error(404, 'Not Found')
