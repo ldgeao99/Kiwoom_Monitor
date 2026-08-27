@@ -413,20 +413,41 @@ def build_payload(market_key):
     }
 
 
+def available_dates(market_key):
+    """해당 시장의 저장된 일자 목록(오름차순)."""
+    prefix = f'netprps_snapshots_{market_key}_'
+    dates = []
+    for name in os.listdir(BASE_DIR):
+        if name.startswith(prefix) and name.endswith('.jsonl'):
+            dates.append(name[len(prefix):-len('.jsonl')])
+    return sorted(dates)
+
+
+def idx_series(records):
+    return [{'t': r['t'], 'idx': r['idx']} for r in records if r.get('idx') is not None]
+
+
 def build_summary():
-    """코스피/코스닥 요약: 지수/등락률 + 개인·외국인·기관 순매수 + 지수 인트라데이 시계열."""
+    """코스피/코스닥 요약: 지수/등락률 + 개인·외국인·기관 순매수 + 지수 1분봉 종가 시계열(오늘+전거래일)."""
     out = []
     for m in MARKETS:
         records, date_str = records_for(m['key'])
         last = records[-1] if records else {}
-        series = [{'t': r['t'], 'idx': r['idx']} for r in records if r.get('idx') is not None]
+        # 전 거래일(현재 표시일보다 앞선 가장 최근 저장 일자) 시계열
+        prev_records, prev_date = [], None
+        if date_str:
+            prevs = [d for d in available_dates(m['key']) if d < date_str]
+            if prevs:
+                prev_date = max(prevs)
+                prev_records = read_records(m['key'], prev_date)
         out.append({
-            'key': m['key'], 'name': m['disp'], 'date': date_str,
+            'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
             'idx': last.get('idx'), 'flu': last.get('flu'),
             'sig': last.get('sig'), 'pred': last.get('pred'),
             'ind': last.get('ind_netprps'), 'frgnr': last.get('frgnr_netprps'),
             'orgn': last.get('orgn_netprps'),
-            'series': series,
+            'series': idx_series(records),
+            'series_prev': idx_series(prev_records),
         })
     return {'markets': out}
 

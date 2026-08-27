@@ -359,25 +359,44 @@ const fmtIdx = v => (v == null) ? '-' : v.toLocaleString('ko-KR', {minimumFracti
 const fmtFlu = v => (v == null) ? '' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
 const fmtNet = v => (v == null) ? '-' : (v > 0 ? '+' : '') + v.toLocaleString('ko-KR');
 
-function mktSpark(series, prev, flu) {
+// 어제(회색) + 오늘(방향색) 지수 1분봉 종가 라인. 경계에 세로선, 전일종가에 점선.
+function mktSpark(prevSeries, todaySeries, base, flu) {
   const W = 150, H = 56, pad = 5;
-  if (!series || series.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
-  const vals = series.map(s => s.idx);
+  const prev = prevSeries || [], today = todaySeries || [];
+  const all = prev.concat(today);
+  if (all.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
+  const vals = all.map(s => s.idx);
   let lo = Math.min(...vals), hi = Math.max(...vals);
-  if (prev != null) { lo = Math.min(lo, prev); hi = Math.max(hi, prev); }
+  if (base != null) { lo = Math.min(lo, base); hi = Math.max(hi, base); }
   if (lo === hi) hi = lo + 1;
-  const n = series.length;
+  const n = all.length, P = prev.length;
   const x = i => pad + (W - pad*2) * i / (n - 1);
   const y = v => pad + (H - pad*2) * (1 - (v - lo) / (hi - lo));
   const color = flu > 0 ? 'var(--pos)' : (flu < 0 ? 'var(--neg)' : 'var(--muted)');
-  let d = '';
-  series.forEach((s, i) => d += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(s.idx).toFixed(1)} `);
-  const area = d + `L${x(n-1).toFixed(1)},${H-pad} L${x(0).toFixed(1)},${H-pad} Z`;
-  const base = prev != null
-    ? `<line x1="${pad}" y1="${y(prev).toFixed(1)}" x2="${W-pad}" y2="${y(prev).toFixed(1)}" stroke="#c7ccd2" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+
+  let gray = '';
+  if (P > 0) for (let i = 0; i < P; i++) gray += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(prev[i].idx).toFixed(1)} `;
+  const cStart = P > 0 ? P - 1 : 0;   // 어제 마지막 점에서 이어 그림
+  let colr = '';
+  for (let i = cStart; i < n; i++) colr += `${i === cStart ? 'M' : 'L'}${x(i).toFixed(1)},${y(all[i].idx).toFixed(1)} `;
+
+  // 오늘 구간 아래 영역 채움
+  let area = '';
+  if (today.length) {
+    let a = `M${x(P).toFixed(1)},${(H-pad).toFixed(1)} `;
+    for (let i = P; i < n; i++) a += `L${x(i).toFixed(1)},${y(all[i].idx).toFixed(1)} `;
+    a += `L${x(n-1).toFixed(1)},${(H-pad).toFixed(1)} Z`;
+    area = `<path d="${a}" fill="${color}" opacity="0.10"/>`;
+  }
+  const baseLine = base != null
+    ? `<line x1="${pad}" y1="${y(base).toFixed(1)}" x2="${W-pad}" y2="${y(base).toFixed(1)}" stroke="#c7ccd2" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+  const divider = P > 0
+    ? `<line x1="${x(P-1).toFixed(1)}" y1="${pad}" x2="${x(P-1).toFixed(1)}" y2="${H-pad}" stroke="#b8bec7" stroke-width="1"/>` : '';
+
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
-    + `<path d="${area}" fill="${color}" opacity="0.10"/>${base}`
-    + `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+    + area + baseLine + divider
+    + (gray ? `<path d="${gray}" fill="none" stroke="#b6bac1" stroke-width="1.4" stroke-linejoin="round"/>` : '')
+    + `<path d="${colr}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 }
 
 function mktCard(m) {
@@ -385,11 +404,14 @@ function mktCard(m) {
   const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]
     .map(([l, v]) => `<div><div class="l">${l}</div><div class="v ${cls(v)}">${fmtNet(v)}</div></div>`).join('');
   const has = m.idx != null;
+  // 전일종가: 어제 시계열의 마지막 값(없으면 오늘 지수-전일대비)
+  const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx
+                   : (m.idx != null && m.pred != null ? m.idx - m.pred : null);
   return `<div class="mkt-card ${dc}"><div class="top"><div>`
     + `<div class="nm">${m.name}</div>`
     + (has ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(${fmtFlu(m.flu)})</div>`
            : `<div class="empty">데이터 수집 대기 중…</div>`)
-    + `</div>${mktSpark(m.series, m.pred, m.flu)}</div>`
+    + `</div>${mktSpark(m.series_prev, m.series, prevClose, m.flu)}</div>`
     + `<hr class="dv"><div class="inv">${inv}</div></div>`;
 }
 
