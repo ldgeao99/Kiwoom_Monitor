@@ -69,10 +69,31 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
+  /* 상단 지수 요약 카드 */
+  .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:680px){ .mkt-cards { grid-template-columns:1fr; } }
+  .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; }
+  .mkt-card.up { background:#fdf1ef; } .mkt-card.down { background:#eef3fd; }
+  .mkt-card .top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .mkt-card .nm { font-size:16px; font-weight:700; color:#6b7078; }
+  .mkt-card .px { font-size:28px; font-weight:800; line-height:1.1; margin-top:2px; }
+  .mkt-card .fl { font-size:15px; font-weight:700; }
+  .mkt-card.up .px, .mkt-card.up .fl { color:var(--pos); }
+  .mkt-card.down .px, .mkt-card.down .fl { color:var(--neg); }
+  .mkt-card.flat .px, .mkt-card.flat .fl { color:var(--muted); }
+  .mkt-card .spark { width:150px; height:56px; flex:none; }
+  @media (max-width:420px){ .mkt-card .spark { width:110px; height:48px; } }
+  .mkt-card .dv { border:0; border-top:1px dashed #d6cfce; margin:12px 0 10px; }
+  .mkt-card.down .dv { border-top-color:#cdd6e8; }
+  .mkt-card .inv { display:grid; grid-template-columns:1fr 1fr 1fr; text-align:center; gap:6px; }
+  .mkt-card .inv .l { font-size:12px; color:var(--muted); margin-bottom:2px; }
+  .mkt-card .inv .v { font-size:15px; font-weight:700; }
+  .zero { color:var(--muted); }
 </style>
 </head>
 <body>
-<div class="page-title"><span>투자자별 매매동향</span><a href="/summary">지수 요약 →</a></div>
+<div class="page-title"><span>투자자별 매매동향</span></div>
+<div class="mkt-cards" id="mkt-cards"></div>
 <div class="wrap">
   <div class="panel">
     <div class="title">
@@ -333,8 +354,57 @@ function renderChart() {
   host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">` + grid + lines + xlab + '</svg>';
 }
 
+// ── 상단 지수 요약 카드 ──
+const fmtIdx = v => (v == null) ? '-' : v.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtFlu = v => (v == null) ? '' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+const fmtNet = v => (v == null) ? '-' : (v > 0 ? '+' : '') + v.toLocaleString('ko-KR');
+
+function mktSpark(series, prev, flu) {
+  const W = 150, H = 56, pad = 5;
+  if (!series || series.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
+  const vals = series.map(s => s.idx);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (prev != null) { lo = Math.min(lo, prev); hi = Math.max(hi, prev); }
+  if (lo === hi) hi = lo + 1;
+  const n = series.length;
+  const x = i => pad + (W - pad*2) * i / (n - 1);
+  const y = v => pad + (H - pad*2) * (1 - (v - lo) / (hi - lo));
+  const color = flu > 0 ? 'var(--pos)' : (flu < 0 ? 'var(--neg)' : 'var(--muted)');
+  let d = '';
+  series.forEach((s, i) => d += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(s.idx).toFixed(1)} `);
+  const area = d + `L${x(n-1).toFixed(1)},${H-pad} L${x(0).toFixed(1)},${H-pad} Z`;
+  const base = prev != null
+    ? `<line x1="${pad}" y1="${y(prev).toFixed(1)}" x2="${W-pad}" y2="${y(prev).toFixed(1)}" stroke="#c7ccd2" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
+    + `<path d="${area}" fill="${color}" opacity="0.10"/>${base}`
+    + `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+function mktCard(m) {
+  const dc = m.flu > 0 ? 'up' : (m.flu < 0 ? 'down' : 'flat');
+  const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]
+    .map(([l, v]) => `<div><div class="l">${l}</div><div class="v ${cls(v)}">${fmtNet(v)}</div></div>`).join('');
+  const has = m.idx != null;
+  return `<div class="mkt-card ${dc}"><div class="top"><div>`
+    + `<div class="nm">${m.name}</div>`
+    + (has ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(${fmtFlu(m.flu)})</div>`
+           : `<div class="empty">데이터 수집 대기 중…</div>`)
+    + `</div>${mktSpark(m.series, m.pred, m.flu)}</div>`
+    + `<hr class="dv"><div class="inv">${inv}</div></div>`;
+}
+
+async function renderSummaryCards() {
+  try {
+    const res = await fetch('/api/summary', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('mkt-cards').innerHTML = data.markets.map(mktCard).join('');
+  } catch (e) {}
+}
+
 async function refresh() {
   const st = document.getElementById('status');
+  renderSummaryCards();   // 상단 카드도 함께 갱신
   try {
     const res = await fetch('/api/netprps?mrkt=' + encodeURIComponent(curMarket), { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
