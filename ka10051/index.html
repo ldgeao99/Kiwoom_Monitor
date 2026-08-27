@@ -813,7 +813,7 @@ async function loadAllProgram() {
       progCont = d.cont || 'N'; progNext = d.next || '';
       btn.textContent = '불러오는 중… (누르면 중단)';
       if (++page % 3 === 0) progRedraw();            // 진행 표시(3페이지마다 갱신)
-      await new Promise(r => setTimeout(r, 120));     // 페이지 간 지연(단축)
+      await new Promise(r => setTimeout(r, 60));      // 페이지 간 지연(절반으로 단축)
     }
   } catch (e) {}
   progLoading = false; progStop = false;
