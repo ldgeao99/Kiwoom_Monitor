@@ -193,13 +193,13 @@
     <div class="title">
       <input id="prog-stk" class="prog-input" value="005930" maxlength="6" inputmode="numeric" placeholder="종목코드">
       <button id="prog-go" class="prog-go" type="button">조회</button>
-      <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
       <span class="prog-amt" id="prog-amt">
         <button class="amt-btn on" data-amt="1" type="button">금액</button>
         <button class="amt-btn" data-amt="2" type="button">수량</button>
       </span>
       <span id="prog-name" class="prog-name"></span>
       <small class="prog-unit" id="prog-count"></small>
+      <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
     </div>
     <div id="prog-table"></div>
     <div id="prog-chart"></div>
@@ -728,7 +728,7 @@ function progRedraw() {
   const canMore = progCont === 'Y' && !!progNext;
   moreBtn.disabled = !canMore;
   document.getElementById('prog-count').textContent =
-    `${Object.keys(progSeries).length}건 · 단위: ${progUnit()}` + (canMore ? ' · 더 있음' : '');
+    `${Object.keys(progSeries).length}건 · 단위: ${progUnit()}`;
 }
 
 function progMerge(series) {
