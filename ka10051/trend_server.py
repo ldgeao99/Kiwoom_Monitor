@@ -541,8 +541,16 @@ async function refresh() {
   }
 }
 
-refresh();
-setInterval(refresh, 60000);  // 1분마다 서버에 요청
+// 서버는 매 분 :00에 조회·기록한다. 브라우저 갱신을 :00 직후로 맞춰 지연을 최소화.
+const REFRESH_OFFSET_MS = 3000;   // :00 이후 서버가 기록을 마칠 여유(초)
+function scheduleRefresh() {
+  const now = Date.now();
+  const nextTick = Math.floor(now / 60000) * 60000 + 60000 + REFRESH_OFFSET_MS;  // 다음 :00 + 여유
+  setTimeout(() => { refresh(); scheduleRefresh(); }, nextTick - now);
+}
+
+refresh();          // 최초 즉시 1회
+scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
 </script>
 </body>
 </html>
