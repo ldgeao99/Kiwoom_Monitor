@@ -243,16 +243,19 @@ def stock_name(code):
     """krx_listed_companies.json(프로젝트 루트)에서 종목코드→회사명."""
     global _name_map
     if _name_map is None:
-        _name_map = {}
+        m = {}
+        path = os.path.join(os.path.dirname(BASE_DIR), 'krx_listed_companies.json')
         try:
-            path = os.path.join(os.path.dirname(BASE_DIR), 'krx_listed_companies.json')
             with open(path, encoding='utf-8') as f:
-                for r in json.load(f):
-                    c = str(r.get('종목코드', '')).zfill(6)
-                    if c:
-                        _name_map[c] = r.get('회사명', '')
-        except Exception:
-            _name_map = {}
+                data = json.load(f)
+            for r in data:
+                c = str(r.get('종목코드', '')).strip()
+                if c and c != '000000':
+                    m[c.zfill(6)] = r.get('회사명', '')
+            print(f'[종목명맵] 로드 완료: {len(m)}개 (from {path})')
+        except Exception as e:
+            print(f'[종목명맵] 로드 실패: {e} (path={path})')
+        _name_map = m
     return _name_map.get(code, '')
 
 
@@ -752,6 +755,8 @@ def main():
     collecting = '--no-collect' not in args
     if collecting:
         threading.Thread(target=poller_thread, daemon=True).start()
+
+    stock_name('')   # 종목명 맵 로드(콘솔에 개수/에러 출력)
 
     with ThreadingHTTPServer(('', port), Handler) as httpd:
         print(f'>>> 추이 서버 실행: http://localhost:{port}  (JSONL 수집 {"ON" if collecting else "OFF"})')
