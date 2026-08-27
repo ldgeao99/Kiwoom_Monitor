@@ -85,6 +85,45 @@ MARKET_BY_KEY = {m['key']: m for m in MARKETS}
 # 수집 스레드에 전달할 설정 (main에서 채움)
 POLL_CONF = {'interval': 60, 'start_h': 8, 'end_h': 20}
 
+# 외국인 순매수 천단위 알림 대상 필드/단위
+ALERT_FIELD = 'frgnr_netprps'   # 외국인 순매수
+ALERT_STEP = 1000               # 이 값의 배수(천단위)를 넘을 때 알림
+
+
+# ─────────────────────────── 텔레그램 알림 ───────────────────────────
+
+def _load_env_value(key):
+    """프로젝트 루트(.env)에서 key 값을 읽는다(실행 위치 무관)."""
+    env_file = os.path.join(os.path.dirname(BASE_DIR), '.env')
+    if not os.path.exists(env_file):
+        return None
+    with open(env_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            k, v = line.split('=', 1)
+            if k.strip() == key:
+                return v.strip()
+    return None
+
+
+TELEGRAM_BOT_TOKEN = _load_env_value('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = _load_env_value('TELEGRAM_CHAT_ID')
+
+
+def send_telegram_message(text):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print('[텔레그램] 토큰/챗ID 미설정 — 전송 생략')
+        return
+    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+    try:
+        r = requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': text})
+        if r.status_code != 200:
+            print(f'[텔레그램 에러] HTTP {r.status_code} - {r.text}')
+    except Exception as e:
+        print(f'[텔레그램 에러] {e}')
+
 
 # ─────────────────────────── 데이터 수집 ───────────────────────────
 
@@ -191,6 +230,18 @@ def poll_once(token, market):
 
     n = len(read_records(mkey, date_str))
     print(f"[{record['t']}] {market['name']} 기록 · 누적 {n}개")
+
+    # 외국인 순매수의 천단위(1000 배수)가 직전 대비 바뀌면 텔레그램 알림
+    if prev is not None:
+        prev_v = int(prev.get(ALERT_FIELD, 0))
+        cur_v = int(record[ALERT_FIELD])
+        if prev_v // ALERT_STEP != cur_v // ALERT_STEP:
+            head = '🟢' if cur_v > prev_v else '🔴'  # 상승=🟢, 하락=🔴 (맨 앞)
+            msg = (f"{head} [{market['name']}] 외국인 순매수 천단위 변화\n"
+                   f"{record['t'][:5]}  {prev_v:+,} → {cur_v:+,} (억원)")
+            send_telegram_message(msg)
+            print(f"  → 텔레그램 전송: {market['name']} {prev_v:+,} → {cur_v:+,}")
+
     return token
 
 
