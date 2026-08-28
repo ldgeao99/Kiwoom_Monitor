@@ -362,7 +362,7 @@ def poll_once(token, market):
     if in_index_window(now):
         try:
             irow = fetch_index(token, market['idx_cd'])
-            record['idx'] = to_number(irow.get('cur_prc'))
+            record['idx'] = abs(to_number(irow.get('cur_prc')))   # 하락 시 부호(-)로 오므로 절댓값(가격)
             record['flu'] = to_number(irow.get('flu_rt'))
             record['pred'] = to_number(irow.get('pred_pre'))
             record['sig'] = str(irow.get('pre_sig') or '')
@@ -538,8 +538,8 @@ def available_dates(market_key):
 
 
 def idx_series(records):
-    """지수 1분봉 종가 시계열 — 정규장 09:00~15:30 구간만."""
-    return [{'t': r['t'], 'idx': r['idx']} for r in records
+    """지수 1분봉 종가 시계열 — 정규장 09:00~15:30 구간만. idx는 절댓값(가격)."""
+    return [{'t': r['t'], 'idx': abs(r['idx'])} for r in records
             if r.get('idx') is not None and '09:00' <= r['t'][:5] <= '15:30']
 
 
@@ -560,7 +560,7 @@ def build_summary():
                 prev_records = read_records(m['key'], prev_date)
         out.append({
             'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
-            'idx': ir.get('idx'), 'flu': ir.get('flu'),
+            'idx': (abs(ir['idx']) if ir.get('idx') is not None else None), 'flu': ir.get('flu'),
             'sig': ir.get('sig'), 'pred': ir.get('pred'),
             'upl': ir.get('upl'), 'rising': ir.get('rising'), 'flat': ir.get('flat'),
             'fall': ir.get('fall'), 'lst': ir.get('lst'),
@@ -593,7 +593,7 @@ def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
             pts.append({'t': tm[:2] + ':' + tm[2:4], 'tm': tm,
                         'net': to_number(r.get(net_f)),
                         'chg': to_number(r.get(chg_f)),
-                        'cur': to_number(r.get('cur_prc')),
+                        'cur': abs(to_number(r.get('cur_prc'))),   # 현재가는 절댓값(하락 시 부호 -)
                         'flu': to_number(r.get('flu_rt'))})
         return pts, c, nk
 
@@ -690,7 +690,7 @@ def build_rank():
                 'code': r.get('stk_cd', ''),
                 'rank_sign': str(r.get('rank_chg_sign') or '').strip(),   # +:상승 -:하락
                 'rank_chg': str(r.get('rank_chg') or '').strip(),
-                'price': to_number(r.get('past_curr_prc')),               # 기준시점 주가
+                'price': abs(to_number(r.get('past_curr_prc'))),           # 기준시점 주가(절댓값)
                 'psign': str(r.get('base_comp_sign') or ''),              # 1상한2상승3보합4하한5하락
                 'chgr': to_number(r.get('base_comp_chgr')),               # 기준시점 등락율(%)
                 'prev': to_number(r.get('prev_base_chgr')),               # 직전(30초 전) 대비율(%)
