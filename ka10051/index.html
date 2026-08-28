@@ -443,7 +443,7 @@ function renderChart() {
   let lines = '';
   cols.forEach(c => {
     const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p[c.key]).toFixed(1)}`).join(' ');
-    lines += `<path d="${d}" fill="none" stroke="${c.color}" stroke-width="1.8"/>`;
+    lines += `<path d="${d}" fill="none" stroke="${c.color}" stroke-width="3.6"/>`;
     lines += `<circle cx="${x(n-1)}" cy="${y(pts[n-1][c.key])}" r="2.6" fill="${c.color}"/>`;
   });
 
