@@ -462,9 +462,9 @@ function mktSpark(prevSeries, todaySeries, base, flu) {
   const all = prev.concat(today);
   if (all.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
   const vals = all.map(s => s.idx);
-  let lo = Math.min(...vals), hi = Math.max(...vals);
-  if (base != null) { lo = Math.min(lo, base); hi = Math.max(hi, base); }
+  let lo = Math.min(...vals), hi = Math.max(...vals);   // 실제 지수 변동 범위로 스케일(전일종가에 눌리지 않도록)
   if (lo === hi) hi = lo + 1;
+  const yp = (hi - lo) * 0.12; lo -= yp; hi += yp;      // 위아래 여백
   const n = all.length, P = prev.length;
   const x = i => pad + (W - pad*2) * i / (n - 1);
   const y = v => pad + (H - pad*2) * (1 - (v - lo) / (hi - lo));
@@ -484,15 +484,18 @@ function mktSpark(prevSeries, todaySeries, base, flu) {
     a += `L${x(n-1).toFixed(1)},${(H-pad).toFixed(1)} Z`;
     area = `<path d="${a}" fill="${color}" opacity="0.10"/>`;
   }
-  const baseLine = base != null
-    ? `<line x1="${pad}" y1="${y(base).toFixed(1)}" x2="${W-pad}" y2="${y(base).toFixed(1)}" stroke="#c7ccd2" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+  let baseLine = '';
+  if (base != null) {
+    const yb = Math.max(pad, Math.min(H - pad, y(base)));   // 범위 밖이면 가장자리에 고정
+    baseLine = `<line x1="${pad}" y1="${yb.toFixed(1)}" x2="${W-pad}" y2="${yb.toFixed(1)}" stroke="#c7ccd2" stroke-width="1" stroke-dasharray="3 3"/>`;
+  }
   const divider = P > 0
     ? `<line x1="${x(P-1).toFixed(1)}" y1="${pad}" x2="${x(P-1).toFixed(1)}" y2="${H-pad}" stroke="#b8bec7" stroke-width="1"/>` : '';
 
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
     + area + baseLine + divider
-    + (gray ? `<path d="${gray}" fill="none" stroke="#b6bac1" stroke-width="1.4" stroke-linejoin="round"/>` : '')
-    + `<path d="${colr}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+    + (gray ? `<path d="${gray}" fill="none" stroke="#b6bac1" stroke-width="1.6" stroke-linejoin="round"/>` : '')
+    + `<path d="${colr}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/></svg>`;
 }
 
 function mktCard(m, strong) {
