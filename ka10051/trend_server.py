@@ -85,8 +85,8 @@ MARKET_BY_KEY = {m['key']: m for m in MARKETS}
 # 수집 스레드에 전달할 설정 (main에서 채움)
 POLL_CONF = {'interval': 60, 'start_h': 8, 'end_h': 20}
 
-# 스냅샷(지수 종가 포함) 보존 일수: 오늘+어제 2일만 유지, 그 이전 파일은 삭제
-KEEP_DAYS = 2
+# 스냅샷 보존 일수: 오늘/어제/그제 다이제스트를 위해 최근 3일 유지
+KEEP_DAYS = 3
 
 # 외국인 순매수 천단위 알림 대상 필드/단위
 ALERT_FIELD = 'frgnr_netprps'   # 외국인 순매수
@@ -428,6 +428,42 @@ def sleep_to_next_boundary(interval):
     time.sleep(max(0.0, target - now))
 
 
+# 매 거래일 이 시각에 KOSPI 외국인/기관 순매수 다이제스트를 텔레그램 전송
+DIGEST_SLOTS = ('08:10', '09:10')
+_digest_sent = set()   # 'YYYY-MM-DD HH:MM' — 중복 발송 방지
+
+
+def send_investor_digest(now, slot):
+    """KOSPI 외국인/기관 순매수 오늘·어제·그제(억원)를 텔레그램으로."""
+    lines = [f"{now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
+    for i, lab in enumerate(('오늘', '어제', '그제')):
+        d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
+        recs = read_records('kospi', d)
+        last = recs[-1] if recs else None
+        if not last or last.get('frgnr_netprps') is None:
+            lines.append(f"{lab} : 데이터 없음")
+        else:
+            f = int(last.get('frgnr_netprps', 0))
+            o = int(last.get('orgn_netprps', 0))
+            lines.append(f"{lab} : {f:+,}억 / {o:+,}억")
+    send_telegram_message("\n".join(lines))
+    print(f"  → 다이제스트 전송({slot})")
+
+
+def maybe_send_digest(now):
+    slot = now.strftime('%H:%M')
+    if slot not in DIGEST_SLOTS:
+        return
+    key = now.strftime('%Y-%m-%d ') + slot
+    if key in _digest_sent:
+        return
+    _digest_sent.add(key)
+    try:
+        send_investor_digest(now, slot)
+    except Exception as e:
+        print(f"  다이제스트 전송 실패: {e}")
+
+
 def run_loop(interval=60, start_h=8, end_h=20):
     """평일 start_h~end_h 시간대에 매 경계(:00)에 맞춰 모든 시장을 poll_once (무한 루프)."""
     print(f'{interval}초 간격(정각 정렬) 자동 반복 누적 시작 '
@@ -444,6 +480,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
                 except Exception as e:
                     print(f"  {market['name']} 조회 실패: {e}")
                     token = None  # 토큰 만료 등 대비해 재발급
+            maybe_send_digest(now_kst())       # 08:10 / 09:10 다이제스트
             prune_old_snapshots()              # 새 날짜 파일 생성 대비 정리
             sleep_to_next_boundary(interval)   # 다음 :00 까지 대기(드리프트 없음)
         else:
