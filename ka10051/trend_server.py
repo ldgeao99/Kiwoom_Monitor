@@ -433,18 +433,23 @@ DIGEST_SLOTS = ('08:10', '09:10')
 _digest_sent = set()   # 'YYYY-MM-DD HH:MM' — 중복 발송 방지
 
 
+def _netprps_upto(date_str, hhmm):
+    """해당 일자에서 hhmm(HH:MM) 시각까지의 마지막 기록(그 시점까지의 누적)."""
+    recs = [r for r in read_records('kospi', date_str) if r.get('t', '')[:5] <= hhmm]
+    return recs[-1] if recs else None
+
+
 def send_investor_digest(now, slot):
-    """KOSPI 외국인/기관 순매수 오늘·어제·그제(억원)를 텔레그램으로."""
+    """KOSPI 외국인/기관 순매수를 오늘·어제·그제 '같은 시각(slot)까지 누적' 기준으로 전송."""
     lines = [f"📊 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
     for i, lab in enumerate(('오늘', '어제', '그제')):
         d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
-        recs = read_records('kospi', d)
-        last = recs[-1] if recs else None
-        if not last or last.get('frgnr_netprps') is None:
+        rec = _netprps_upto(d, slot)      # 각 날의 slot 시각까지 누적
+        if not rec or rec.get('frgnr_netprps') is None:
             lines.append(f"{lab} : 데이터 없음")
         else:
-            f = int(last.get('frgnr_netprps', 0))
-            o = int(last.get('orgn_netprps', 0))
+            f = int(rec.get('frgnr_netprps', 0))
+            o = int(rec.get('orgn_netprps', 0))
             lines.append(f"{lab} : {f:+,}억 / {o:+,}억")
     send_telegram_message("\n".join(lines))
     print(f"  → 다이제스트 전송({slot})")
