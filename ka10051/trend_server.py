@@ -435,7 +435,7 @@ _digest_sent = set()   # 'YYYY-MM-DD HH:MM' — 중복 발송 방지
 
 def send_investor_digest(now, slot):
     """KOSPI 외국인/기관 순매수 오늘·어제·그제(억원)를 텔레그램으로."""
-    lines = [f"{now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
+    lines = [f"📊 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
     for i, lab in enumerate(('오늘', '어제', '그제')):
         d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
         recs = read_records('kospi', d)
