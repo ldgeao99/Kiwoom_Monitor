@@ -443,7 +443,7 @@ def _netprps_upto(date_str, hhmm):
 
 def send_investor_digest(now, slot):
     """KOSPI 외국인/기관 순매수를 오늘·어제·그제 '같은 시각(slot)까지 누적' 기준으로 전송."""
-    lines = [f"📊 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
+    lines = [f"🔔 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
     for i, lab in enumerate(('오늘', '어제', '그제')):
         d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
         rec = _netprps_upto(d, slot)      # 각 날의 slot 시각까지 누적
