@@ -318,7 +318,7 @@ def _init_alert_state(market_key, date_str):
     서버 재시작 시 과거 이력을 되풀이 알림하지 않고 현재 위치에서 이어감."""
     prev = last_record(market_key, date_str)
     last_v = int(prev.get(ALERT_FIELD, 0)) if prev else 0
-    return {'date': date_str, 'level': _grid_floor(last_v)}
+    return {'date': date_str, 'level': _grid_floor(last_v), 'last_v': last_v}
 
 
 def check_move(st, cur_v):
@@ -392,12 +392,14 @@ def poll_once(token, market):
     hit = check_move(st, cur_v)
     if hit:
         direction, level, steps = hit
+        prev_v = int(st.get('last_v', cur_v))    # 직전 알림 때의 외국인 순매수 값
+        st['last_v'] = cur_v
         head = '🟢' if direction == 'up' else '🔴'
         word = '상승' if direction == 'up' else '하락'
-        step_note = f' ({steps}칸)' if steps > 1 else ''
-        send_telegram_message(f"{head} [{market['name']}] 외국인 순매수 {word}{step_note}\n"
-                              f"{record['t'][:5]}  기준선 {level:+,}억 · 현재 {cur_v:+,} (억원)")
-        print(f"  → 텔레그램: {market['name']} {word} level={level:+,} (현재 {cur_v:+,})")
+        send_telegram_message(f"{head} [{market['name']}] 외국인 순매수 {word}\n"
+                              f"{record['t'][:5]}  이전 {prev_v:+,}억 · 현재 {cur_v:+,}억\n"
+                              f"\n({ALERT_STEP:,}억 단위 변동 알림)")
+        print(f"  → 텔레그램: {market['name']} {word} 이전 {prev_v:+,} 현재 {cur_v:+,}")
 
     with open(snapshot_path(mkey, date_str), 'a', encoding='utf-8') as f:
         f.write(json.dumps(record, ensure_ascii=False) + '\n')
