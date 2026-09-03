@@ -10,7 +10,7 @@ PORT = 8000
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "daily_snapshot")
 
-# daily_snapshot 폴더 안에서 노출을 허용할 파일명 패턴 (monitor_main.py가 저장하는 형식과 일치)
+# daily_snapshot 폴더 안에서 노출을 허용할 파일명 패턴 (rank_monitor_main.py가 저장하는 형식과 일치)
 FILENAME_PATTERN = re.compile(r"^rank_snapshots_\d{4}-\d{2}-\d{2}\.jsonl$")
 
 
