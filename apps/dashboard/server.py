@@ -52,7 +52,7 @@ def now_kst():
 PORT = 8010
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))          # apps/dashboard
 REPO_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))         # 레포 루트
-DATA_DIR = os.path.join(BASE_DIR, 'data')                      # 스냅샷 데이터 폴더
+DATA_DIR = os.path.join(BASE_DIR, 'daily_snapshot')            # 스냅샷 데이터 폴더
 os.makedirs(DATA_DIR, exist_ok=True)
 # 공용 모듈(common/publish_auth_token.py) import 경로 추가
 sys.path.insert(0, os.path.join(REPO_ROOT, 'common'))

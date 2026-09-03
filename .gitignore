@@ -1,7 +1,7 @@
 .env
 
 apps/rank_monitor/daily_snapshot/*
-apps/dashboard/data/*
+apps/dashboard/daily_snapshot/*
 common/krx_listed_companies.json
 
 __pycache__/
