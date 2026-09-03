@@ -21,8 +21,8 @@ class ViewerHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         path = unquote(urlparse(self.path).path)
 
-        if path in ("/", "/viewer.html"):
-            self._serve_file(os.path.join(BASE_DIR, "viewer.html"), "text/html; charset=utf-8")
+        if path in ("/", "/index.html", "/viewer.html"):
+            self._serve_file(os.path.join(BASE_DIR, "index.html"), "text/html; charset=utf-8")
         elif path == "/api/files":
             self._serve_file_list()
         elif path.startswith("/daily_snapshot/"):
