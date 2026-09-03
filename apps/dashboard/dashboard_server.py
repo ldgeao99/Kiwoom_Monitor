@@ -11,17 +11,17 @@
      화면 상단 라디오로 KOSPI/KOSDAQ 전환
 
 구성 파일:
-  - server.py        : 수집 + API + 정적 서빙 (이 파일)
+  - dashboard_server.py : 수집 + API + 정적 서빙 (이 파일)
   - index.html      : 화면(표/차트/컨트롤)
 
 분당 JSONL 컨벤션은 프로젝트의 rank_snapshots_*.jsonl 과 동일하다.
 
 사용법:
-    python apps/dashboard/server.py                # 포트 8010, 수집+화면 (KOSPI/KOSDAQ 모두)
-    python apps/dashboard/server.py --port 8020
-    python apps/dashboard/server.py --loop 30      # 수집 간격(초) 지정
-    python apps/dashboard/server.py --reset        # 오늘자 누적 파일 삭제 후 시작
-    python apps/dashboard/server.py --no-collect   # 수집 없이 화면만 (이미 수집 중일 때)
+    python apps/dashboard/dashboard_server.py                # 포트 8010, 수집+화면 (KOSPI/KOSDAQ 모두)
+    python apps/dashboard/dashboard_server.py --port 8020
+    python apps/dashboard/dashboard_server.py --loop 30      # 수집 간격(초) 지정
+    python apps/dashboard/dashboard_server.py --reset        # 오늘자 누적 파일 삭제 후 시작
+    python apps/dashboard/dashboard_server.py --no-collect   # 수집 없이 화면만 (이미 수집 중일 때)
 
 옵션:
     --port PORT    서버 포트 (기본 8010)
