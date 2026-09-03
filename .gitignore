@@ -1,8 +1,8 @@
 .env
 
-daily_snapshot/*
-krx_listed_companies.json
-ka10051/netprps_snapshots_*.jsonl
+apps/rank_monitor/daily_snapshot/*
+apps/dashboard/data/*
+common/krx_listed_companies.json
 
 __pycache__/
 *.pyc

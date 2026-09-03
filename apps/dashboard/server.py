@@ -11,17 +11,17 @@
      화면 상단 라디오로 KOSPI/KOSDAQ 전환
 
 구성 파일:
-  - trend_server.py : 수집 + API + 정적 서빙 (이 파일)
+  - server.py        : 수집 + API + 정적 서빙 (이 파일)
   - index.html      : 화면(표/차트/컨트롤)
 
 분당 JSONL 컨벤션은 프로젝트의 rank_snapshots_*.jsonl 과 동일하다.
 
 사용법:
-    python trend_server.py                # 포트 8010, 수집+화면 (KOSPI/KOSDAQ 모두)
-    python trend_server.py --port 8020
-    python trend_server.py --loop 30      # 수집 간격(초) 지정
-    python trend_server.py --reset        # 오늘자 누적 파일 삭제 후 시작
-    python trend_server.py --no-collect   # 수집 없이 화면만 (이미 수집 중일 때)
+    python apps/dashboard/server.py                # 포트 8010, 수집+화면 (KOSPI/KOSDAQ 모두)
+    python apps/dashboard/server.py --port 8020
+    python apps/dashboard/server.py --loop 30      # 수집 간격(초) 지정
+    python apps/dashboard/server.py --reset        # 오늘자 누적 파일 삭제 후 시작
+    python apps/dashboard/server.py --no-collect   # 수집 없이 화면만 (이미 수집 중일 때)
 
 옵션:
     --port PORT    서버 포트 (기본 8010)
@@ -50,9 +50,12 @@ def now_kst():
     return datetime.now(KST)
 
 PORT = 8010
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# publish_auth_token.py 는 프로젝트 루트(상위 폴더)에 있으므로 import 경로에 추가
-sys.path.insert(0, os.path.dirname(BASE_DIR))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))          # apps/dashboard
+REPO_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))         # 레포 루트
+DATA_DIR = os.path.join(BASE_DIR, 'data')                      # 스냅샷 데이터 폴더
+os.makedirs(DATA_DIR, exist_ok=True)
+# 공용 모듈(common/publish_auth_token.py) import 경로 추가
+sys.path.insert(0, os.path.join(REPO_ROOT, 'common'))
 
 from publish_auth_token import get_access_token
 
@@ -102,7 +105,7 @@ _alert_state = {}   # mkey -> {'date','level'}
 
 def _load_env_value(key):
     """프로젝트 루트(.env)에서 key 값을 읽는다(실행 위치 무관)."""
-    env_file = os.path.join(os.path.dirname(BASE_DIR), '.env')
+    env_file = os.path.join(REPO_ROOT, '.env')
     if not os.path.exists(env_file):
         return None
     with open(env_file, 'r', encoding='utf-8') as f:
@@ -137,7 +140,7 @@ def send_telegram_message(text):
 
 def snapshot_path(market_key, date_str):
     """market_key: 'kospi'|'kosdaq', date_str: 'YYYY-MM-DD' -> JSONL 경로."""
-    return os.path.join(BASE_DIR, f'netprps_snapshots_{market_key}_{date_str}.jsonl')
+    return os.path.join(DATA_DIR, f'netprps_snapshots_{market_key}_{date_str}.jsonl')
 
 
 def columns_meta():
@@ -244,7 +247,7 @@ def _local_name(code):
     global _name_map
     if _name_map is None:
         m = {}
-        path = os.path.join(os.path.dirname(BASE_DIR), 'krx_listed_companies.json')
+        path = os.path.join(REPO_ROOT, 'common', 'krx_listed_companies.json')
         try:
             with open(path, encoding='utf-8') as f:
                 data = json.load(f)
@@ -504,7 +507,7 @@ def prune_old_snapshots():
     for m in MARKETS:
         prefix = f"netprps_snapshots_{m['key']}_"
         dates = sorted(name[len(prefix):-len('.jsonl')]
-                       for name in os.listdir(BASE_DIR)
+                       for name in os.listdir(DATA_DIR)
                        if name.startswith(prefix) and name.endswith('.jsonl'))
         for d in dates[:-KEEP_DAYS]:                 # 최근 KEEP_DAYS일 제외 나머지
             try:
@@ -546,7 +549,7 @@ def records_for(market_key):
     if not records:
         prefix = f'netprps_snapshots_{market_key}_'
         dates = []
-        for name in os.listdir(BASE_DIR):
+        for name in os.listdir(DATA_DIR):
             if name.startswith(prefix) and name.endswith('.jsonl'):
                 d = name[len(prefix):-len('.jsonl')]
                 if d <= ref_date:
@@ -575,7 +578,7 @@ def available_dates(market_key):
     """해당 시장의 저장된 일자 목록(오름차순)."""
     prefix = f'netprps_snapshots_{market_key}_'
     dates = []
-    for name in os.listdir(BASE_DIR):
+    for name in os.listdir(DATA_DIR):
         if name.startswith(prefix) and name.endswith('.jsonl'):
             dates.append(name[len(prefix):-len('.jsonl')])
     return sorted(dates)

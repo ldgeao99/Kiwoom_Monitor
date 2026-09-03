@@ -5,8 +5,9 @@ import requests
 
 def get_credentials():
     """.env 파일에서 APP_KEY와 SECRET_KEY를 로드합니다."""
-    # 실행 위치(cwd)와 무관하게 이 파일이 있는 폴더(프로젝트 루트)의 .env를 찾는다
-    env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    # 실행 위치(cwd)와 무관하게 레포 루트(common/의 상위)의 .env를 찾는다
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_file = os.path.join(repo_root, ".env")
 
     if not os.path.exists(env_file):
         raise FileNotFoundError(

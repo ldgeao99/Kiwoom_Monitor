@@ -7,7 +7,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import requests
 
-# 토큰 발급 모듈 불러오기
+# 경로 기준: 이 파일(apps/rank_monitor) → 레포 루트/common
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))     # apps/rank_monitor
+REPO_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))    # 레포 루트
+sys.path.insert(0, os.path.join(REPO_ROOT, "common"))
+
+# 토큰 발급 모듈 불러오기 (common/publish_auth_token.py)
 from publish_auth_token import get_access_token
 
 
@@ -15,7 +20,7 @@ KST = ZoneInfo("Asia/Seoul")
 RECORD_START_HOUR = 8   # 08:00
 RECORD_END_HOUR = 20    # 20:00 (미포함)
 
-SNAPSHOT_DIR = "daily_snapshot"
+SNAPSHOT_DIR = os.path.join(BASE_DIR, "daily_snapshot")
 
 # 텔레그램 급등 알림 조건: 조회순위가 이 값 이상 상승 & 직전대비 등락율이 이 값 이상
 RANK_JUMP_THRESHOLD = 5
@@ -59,7 +64,7 @@ def is_notify_blackout(now):
 
 # .env 파일에서 지정한 key의 값을 읽어오는 함수
 def load_env_value(key):
-    env_file = ".env"
+    env_file = os.path.join(REPO_ROOT, ".env")
     if not os.path.exists(env_file):
         return None
     with open(env_file, "r", encoding="utf-8") as f:
