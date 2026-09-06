@@ -466,10 +466,9 @@ def send_investor_digest(now, slot):
     today = now.strftime('%Y-%m-%d')
     dates = [today] + _prev_data_dates(today, 3)   # 오늘 + 직전 거래일 3개(총 4일)
     lines = [f"🔔 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
-    for idx, d in enumerate(dates):
+    for d in dates:
         dt = datetime.strptime(d, '%Y-%m-%d')
-        mmdd = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
-        lab = f"오늘 {mmdd}" if idx == 0 else mmdd
+        lab = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
         rec = _netprps_upto(d, slot)      # 각 날의 slot 시각까지 누적
         if not rec or rec.get('frgnr_netprps') is None:
             lines.append(f"{lab} : 데이터 없음")
