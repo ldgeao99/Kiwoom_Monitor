@@ -88,8 +88,9 @@ MARKET_BY_KEY = {m['key']: m for m in MARKETS}
 # 수집 스레드에 전달할 설정 (main에서 채움)
 POLL_CONF = {'interval': 60, 'start_h': 8, 'end_h': 20}
 
-# 스냅샷 보존 일수: 오늘/어제/그제 다이제스트를 위해 최근 3일 유지
-KEEP_DAYS = 3
+# 스냅샷 보존 일수(=보존 파일 수): 다이제스트가 '직전 거래일 2개'를 참조하므로
+# 여유를 둬 최근 5개 파일(=거래일 5일)을 유지 (주말/공휴일/수집 누락 대비)
+KEEP_DAYS = 5
 
 # 외국인 순매수 천단위 알림 대상 필드/단위
 ALERT_FIELD = 'frgnr_netprps'   # 외국인 순매수
@@ -438,17 +439,37 @@ DIGEST_SLOTS = ('08:10', '08:20', '09:10', '09:20')
 _digest_sent = set()   # 'YYYY-MM-DD HH:MM' — 중복 발송 방지
 
 
+_WEEKDAYS = ('월', '화', '수', '목', '금', '토', '일')
+
+
 def _netprps_upto(date_str, hhmm):
     """해당 일자에서 hhmm(HH:MM) 시각까지의 마지막 기록(그 시점까지의 누적)."""
     recs = [r for r in read_records('kospi', date_str) if r.get('t', '')[:5] <= hhmm]
     return recs[-1] if recs else None
 
 
+def _prev_data_dates(before_str, count):
+    """before_str(YYYY-MM-DD) '미만'이면서 KOSPI 스냅샷 파일이 있는 날짜를
+    최근 순으로 count개 반환. 주말·공휴일(파일 없음)은 자동으로 건너뛴다."""
+    prefix = 'netprps_snapshots_kospi_'
+    dates = sorted(name[len(prefix):-len('.jsonl')]
+                   for name in os.listdir(DATA_DIR)
+                   if name.startswith(prefix) and name.endswith('.jsonl'))
+    dates = [d for d in dates if d < before_str]
+    return list(reversed(dates))[:count]
+
+
 def send_investor_digest(now, slot):
-    """KOSPI 외국인/기관 순매수를 오늘·어제·그제 '같은 시각(slot)까지 누적' 기준으로 전송."""
+    """KOSPI 외국인/기관 순매수를 오늘·직전 거래일 2개의 '같은 시각(slot)까지 누적' 기준으로 전송.
+    달력상 어제/그제가 아니라 '데이터가 있는 직전 거래일'을 쓰므로, 월요일이어도
+    금·목요일 데이터가 나온다(주말/공휴일 자동 건너뜀)."""
+    today = now.strftime('%Y-%m-%d')
+    dates = [today] + _prev_data_dates(today, 2)   # 오늘 + 직전 거래일 2개
     lines = [f"🔔 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
-    for i, lab in enumerate(('오늘', '어제', '그제')):
-        d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
+    for idx, d in enumerate(dates):
+        dt = datetime.strptime(d, '%Y-%m-%d')
+        mmdd = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
+        lab = f"오늘 {mmdd}" if idx == 0 else mmdd
         rec = _netprps_upto(d, slot)      # 각 날의 slot 시각까지 누적
         if not rec or rec.get('frgnr_netprps') is None:
             lines.append(f"{lab} : 데이터 없음")
