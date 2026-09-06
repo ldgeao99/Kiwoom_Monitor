@@ -88,9 +88,9 @@ MARKET_BY_KEY = {m['key']: m for m in MARKETS}
 # 수집 스레드에 전달할 설정 (main에서 채움)
 POLL_CONF = {'interval': 60, 'start_h': 8, 'end_h': 20}
 
-# 스냅샷 보존 일수(=보존 파일 수): 다이제스트가 '직전 거래일 3개'를 참조하므로
-# 여유를 둬 최근 6개 파일(=거래일 6일)을 유지 (주말/공휴일/수집 누락 대비)
-KEEP_DAYS = 6
+# 스냅샷 보존 일수(=보존 파일 수): 다이제스트가 '직전 거래일 4개'를 참조하므로
+# 여유를 둬 최근 8개 파일(=거래일 8일)을 유지 (주말/공휴일/수집 누락 대비)
+KEEP_DAYS = 8
 
 # 외국인 순매수 천단위 알림 대상 필드/단위
 ALERT_FIELD = 'frgnr_netprps'   # 외국인 순매수
@@ -464,7 +464,7 @@ def send_investor_digest(now, slot):
     달력상 어제/그제가 아니라 '데이터가 있는 직전 거래일'을 쓰므로, 월요일이어도
     금·목요일 데이터가 나온다(주말/공휴일 자동 건너뜀)."""
     today = now.strftime('%Y-%m-%d')
-    dates = [today] + _prev_data_dates(today, 3)   # 오늘 + 직전 거래일 3개(총 4일)
+    dates = [today] + _prev_data_dates(today, 4)   # 오늘 + 직전 거래일 4개(총 5일)
     lines = [f"🔔 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
     for d in dates:
         dt = datetime.strptime(d, '%Y-%m-%d')
