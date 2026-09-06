@@ -465,7 +465,7 @@ def send_investor_digest(now, slot):
     금·목요일 데이터가 나온다(주말/공휴일 자동 건너뜀)."""
     today = now.strftime('%Y-%m-%d')
     dates = [today] + _prev_data_dates(today, 4)   # 오늘 + 직전 거래일 4개(총 5일)
-    lines = [f"🔵 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
+    lines = [f"🟩 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
     for d in dates:
         dt = datetime.strptime(d, '%Y-%m-%d')
         lab = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
