@@ -635,7 +635,8 @@ def idx_series(records):
 def build_summary():
     """코스피/코스닥 요약: 지수/등락률 + 개인·외국인·기관 순매수 + 지수 1분봉 종가 시계열(오늘+전거래일)."""
     out = []
-    preopen = in_preopen_window(now_kst())   # 07~08시 장 시작 전 대기 상태
+    now = now_kst()
+    preopen = in_preopen_window(now)          # 07~08시 장 시작 전 대기 상태
     for m in MARKETS:
         records, date_str = records_for(m['key'])
         last = records[-1] if records else {}
@@ -648,29 +649,35 @@ def build_summary():
             if prevs:
                 prev_date = max(prevs)
                 prev_records = read_records(m['key'], prev_date)
-        if preopen:
-            # 장 시작 전: 전일 종가만 그대로, 등락률/순매수/종목현황은 0, 회색(대기)
-            yclose = abs(ir['idx']) if ir.get('idx') is not None else None
+
+        today_series = idx_series(records)
+        prev_series = idx_series(prev_records)
+        # 오늘(표시일) 지수가 아직 없으면(07~08 대기 or 정규장 지수 시작 전) 대기 상태로 표시.
+        # '데이터 수집 대기 중…' 대신 전일 종가 + (+0.00%) + 순매수 0 + 회색으로.
+        if preopen or ir.get('idx') is None:
+            prev_close = (today_series[-1]['idx'] if today_series
+                          else (prev_series[-1]['idx'] if prev_series else None))
+            gray_series = today_series if today_series else prev_series   # 직전 완료 세션 시계열
             out.append({
                 'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
-                'idx': yclose, 'flu': 0.0, 'sig': None, 'pred': None,
+                'idx': prev_close, 'flu': 0.0, 'sig': None, 'pred': None,
                 'upl': 0, 'rising': 0, 'flat': 0, 'fall': 0, 'lst': 0,
                 'ind': 0, 'frgnr': 0, 'orgn': 0,
                 'series': [],                       # 오늘 데이터 없음(대기)
-                'series_prev': idx_series(records), # 전일 시계열(회색선)
+                'series_prev': gray_series,         # 전일 시계열(회색선)
                 'preopen': True,
             })
             continue
         out.append({
             'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
-            'idx': (abs(ir['idx']) if ir.get('idx') is not None else None), 'flu': ir.get('flu'),
+            'idx': abs(ir['idx']), 'flu': ir.get('flu'),
             'sig': ir.get('sig'), 'pred': ir.get('pred'),
             'upl': ir.get('upl'), 'rising': ir.get('rising'), 'flat': ir.get('flat'),
             'fall': ir.get('fall'), 'lst': ir.get('lst'),
             'ind': last.get('ind_netprps'), 'frgnr': last.get('frgnr_netprps'),
             'orgn': last.get('orgn_netprps'),
-            'series': idx_series(records),
-            'series_prev': idx_series(prev_records),
+            'series': today_series,
+            'series_prev': prev_series,
         })
     return {'markets': out}
 
