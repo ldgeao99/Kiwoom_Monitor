@@ -482,13 +482,14 @@ def send_investor_digest(now, slot):
     for d in dates:
         dt = datetime.strptime(d, '%Y-%m-%d')
         lab = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
+        tail = '  (오늘)' if d == today else ''   # 오늘 일자는 오른편에 표시
         rec = _netprps_upto(d, slot)      # 각 날의 slot 시각까지 누적
         if not rec or rec.get('frgnr_netprps') is None:
-            lines.append(f"{lab} : 데이터 없음")
+            lines.append(f"{lab} : 데이터 없음{tail}")
         else:
             f = int(rec.get('frgnr_netprps', 0))
             o = int(rec.get('orgn_netprps', 0))
-            lines.append(f"{lab} : {f:+,}억 / {o:+,}억")
+            lines.append(f"{lab} : {f:+,}억 / {o:+,}억{tail}")
     send_telegram_message("\n".join(lines))
     print(f"  → 다이제스트 전송({slot})")
 
