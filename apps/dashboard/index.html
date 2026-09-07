@@ -12,6 +12,15 @@
   * { box-sizing:border-box; }
   body { margin:0; padding:16px; background:var(--bg); color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif; }
+  /* 당겨서 새로고침(pull-to-refresh) 표시 */
+  #ptr { position:fixed; top:0; left:0; right:0; height:52px; z-index:1000;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    font-size:13px; color:var(--muted); background:var(--bg);
+    transform:translateY(-56px); will-change:transform; }
+  #ptr .ptr-spin { width:16px; height:16px; border-radius:50%;
+    border:2px solid #c7ccd2; border-top-color:#6b7280; opacity:0; }
+  #ptr.loading .ptr-spin { opacity:1; animation:ptr-rot .7s linear infinite; }
+  @keyframes ptr-rot { to { transform:rotate(360deg); } }
   .wrap { display:grid; grid-template-columns:1fr; gap:14px; max-width:1200px; margin:0 auto; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
@@ -156,6 +165,7 @@
 </style>
 </head>
 <body>
+<div id="ptr"><span class="ptr-spin"></span><span class="ptr-txt">당겨서 새로고침</span></div>
 <div class="page-title"><span>지수현황</span></div>
 <div class="mkt-cards" id="mkt-cards"></div>
 <div class="page-title"><span>종목등락현황</span></div>
@@ -964,6 +974,53 @@ function scheduleRefresh() {
     try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) {}
     apply();
   });
+})();
+
+// 위에서 아래로 당기면 페이지 새로고침 (모바일 pull-to-refresh)
+(function () {
+  const ptr = document.getElementById('ptr');
+  const txt = ptr.querySelector('.ptr-txt');
+  const REST = -56, DAMP = 0.5, THRESH = 64, MAX = 90;   // px
+  let startY = 0, dy = 0, pulling = false;
+  const atTop = () => (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+  // 내부 스크롤(표 등)이 위가 아니면 그쪽 스크롤을 우선
+  function inScrolled(el) {
+    while (el && el !== document.body) {
+      if (el.scrollHeight > el.clientHeight) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollTop > 0) return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+  addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || !atTop() || inScrolled(e.target)) { pulling = false; return; }
+    startY = e.touches[0].clientY; dy = 0; pulling = true;
+    ptr.classList.remove('loading'); ptr.style.transition = 'none';
+  }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (!pulling) return;
+    dy = e.touches[0].clientY - startY;
+    if (dy <= 0 || !atTop()) { pulling = false; ptr.style.transform = `translateY(${REST}px)`; return; }
+    e.preventDefault();                                  // 당기는 동안 기본 오버스크롤 억제
+    const pulled = Math.min(dy * DAMP, MAX);
+    ptr.style.transform = `translateY(${REST + pulled}px)`;
+    txt.textContent = pulled >= THRESH ? '놓으면 새로고침' : '당겨서 새로고침';
+  }, { passive: false });
+  addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+    ptr.style.transition = 'transform .25s ease';
+    if (Math.min(dy * DAMP, MAX) >= THRESH) {
+      ptr.classList.add('loading');
+      txt.textContent = '새로고침 중…';
+      ptr.style.transform = 'translateY(8px)';
+      setTimeout(() => location.reload(), 150);
+    } else {
+      ptr.style.transform = `translateY(${REST}px)`;
+    }
+  }, { passive: true });
 })();
 
 refresh();          // 최초 즉시 1회
