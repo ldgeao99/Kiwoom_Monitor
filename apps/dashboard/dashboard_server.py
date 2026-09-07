@@ -594,11 +594,20 @@ def records_for(market_key):
 
 
 def build_payload(market_key):
+    markets = [{'key': m['key'], 'name': m['name']} for m in MARKETS]
+    if in_preopen_window(now_kst()):
+        # 장 시작 전 대기: 전일 데이터 대신 빈 상태로 두고 클라이언트가 '대기 중' 표시
+        return {
+            'market': market_key, 'markets': markets,
+            'date': now_kst().strftime('%Y-%m-%d'), 'label': '',
+            'columns': columns_meta(), 'default_selected': DEFAULT_SELECTED,
+            'points': [], 'preopen': True,
+        }
     records, date_str = records_for(market_key)
     label = records[-1]['label'] if records else ''
     return {
         'market': market_key,
-        'markets': [{'key': m['key'], 'name': m['name']} for m in MARKETS],
+        'markets': markets,
         'date': date_str,
         'label': label,
         'columns': columns_meta(),

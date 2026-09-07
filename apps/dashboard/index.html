@@ -308,6 +308,7 @@ function renderTable() {
   document.getElementById('label-lbl').textContent = DATA.label || '';
   document.getElementById('date-lbl').textContent = DATA.date ? `기준일 ${DATA.date}` : '';
   const pts = DATA.points, cols = activeCols();
+  if (DATA.preopen) { host.innerHTML = '<div class="empty">장 시작 대기 중…</div>'; return; }
   if (!pts.length) { host.innerHTML = '<div class="empty">아직 기록된 데이터가 없습니다.</div>'; return; }
   if (!cols.length) { host.innerHTML = '<div class="empty">위에서 투자자를 선택하세요.</div>'; return; }
 
@@ -410,6 +411,7 @@ function renderChart() {
   const host = document.getElementById('chart-host');
   const pts = DATA.points, cols = activeCols();
   renderChartLegend(cols);
+  if (DATA.preopen) { host.innerHTML = '<div class="empty">장 시작 대기 중…</div>'; return; }
   if (!cols.length) { host.innerHTML = '<div class="empty">위에서 투자자를 선택하세요.</div>'; return; }
   if (pts.length < 2) { host.innerHTML = '<div class="empty">차트를 그리려면 2개 이상의 스냅샷이 필요합니다.</div>'; return; }
 
