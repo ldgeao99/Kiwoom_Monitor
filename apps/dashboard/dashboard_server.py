@@ -482,7 +482,7 @@ def send_investor_digest(now, slot):
     for d in dates:
         dt = datetime.strptime(d, '%Y-%m-%d')
         lab = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
-        tail = '  (오늘)' if d == today else ''   # 오늘 일자는 오른편에 표시
+        tail = ' (오늘)' if d == today else ''   # 오늘 일자는 오른편에 표시
         rec = _netprps_upto(d, slot)      # 각 날의 slot 시각까지 누적
         if not rec or rec.get('frgnr_netprps') is None:
             lines.append(f"{lab} : 데이터 없음{tail}")
