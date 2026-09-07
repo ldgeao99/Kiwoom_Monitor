@@ -659,11 +659,15 @@ def build_summary():
             prev_close = (today_series[-1]['idx'] if today_series
                           else (prev_series[-1]['idx'] if prev_series else None))
             gray_series = today_series if today_series else prev_series   # 직전 완료 세션 시계열
+            # 순매수는 대기 중에도 '오늘' 값으로 갱신(07~08시엔 오늘 데이터가 없어 0)
+            today_recs = read_records(m['key'], effective_date(now))
+            iv = today_recs[-1] if today_recs else {}
             out.append({
                 'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
                 'idx': prev_close, 'flu': 0.0, 'sig': None, 'pred': None,
                 'upl': 0, 'rising': 0, 'flat': 0, 'fall': 0, 'lst': 0,
-                'ind': 0, 'frgnr': 0, 'orgn': 0,
+                'ind': iv.get('ind_netprps', 0), 'frgnr': iv.get('frgnr_netprps', 0),
+                'orgn': iv.get('orgn_netprps', 0),
                 'series': [],                       # 오늘 데이터 없음(대기)
                 'series_prev': gray_series,         # 전일 시계열(회색선)
                 'preopen': True,
