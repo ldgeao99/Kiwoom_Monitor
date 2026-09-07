@@ -499,6 +499,19 @@ function mktSpark(prevSeries, todaySeries, base, flu) {
 }
 
 function mktCard(m, strong) {
+  if (m.preopen) {
+    // 장 시작 전 대기: 전일 종가 + (+0.00%) + 순매수 +0, 회색 배경 유지
+    const inv = ['개인', '외국인', '기관']
+      .map(l => `<div><div class="l">${l}</div><div class="v">+0</div></div>`).join('');
+    const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx : m.idx;
+    return `<div class="mkt-card flat"><div class="top"><div>`
+      + `<div class="nm">${m.name}</div>`
+      + (m.idx != null
+          ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(+0.00%)</div>`
+          : `<div class="empty">장 시작 대기 중…</div>`)
+      + `</div>${mktSpark(m.series_prev, [], prevClose, 0)}</div>`
+      + `<hr class="dv"><div class="inv">${inv}</div></div>`;
+  }
   const dc = m.flu > 0 ? 'up' : (m.flu < 0 ? 'down' : 'flat');
   const sc = strong ? ' strong' : '';
   const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]

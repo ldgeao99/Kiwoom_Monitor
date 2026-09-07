@@ -426,6 +426,19 @@ def in_index_window(now):
     return 9 * 60 <= mins <= 15 * 60 + 30
 
 
+# 장 시작(수집 시작 08시) 직전 대기 시간대: 07:00~08:00
+# 이 구간엔 지수현황을 '오늘 대기' 상태로 표시(전일 종가 + 등락률 0 + 순매수 0 + 회색)
+PREOPEN_START_HOUR = 7
+MARKET_OPEN_HOUR = 8
+
+
+def in_preopen_window(now):
+    """평일 07:00~08:00(장 시작 전 대기 시간대)이면 True."""
+    if now.weekday() >= 5:
+        return False
+    return PREOPEN_START_HOUR <= now.hour < MARKET_OPEN_HOUR
+
+
 def sleep_to_next_boundary(interval):
     """벽시계 경계(interval 배수, 예: 60초면 매 분 :00)까지 대기.
     epoch 초 기준이라 시간대와 무관하며, KST(+9:00)에서 60초 배수는 :00에 정렬된다."""
@@ -613,6 +626,7 @@ def idx_series(records):
 def build_summary():
     """코스피/코스닥 요약: 지수/등락률 + 개인·외국인·기관 순매수 + 지수 1분봉 종가 시계열(오늘+전거래일)."""
     out = []
+    preopen = in_preopen_window(now_kst())   # 07~08시 장 시작 전 대기 상태
     for m in MARKETS:
         records, date_str = records_for(m['key'])
         last = records[-1] if records else {}
@@ -625,6 +639,19 @@ def build_summary():
             if prevs:
                 prev_date = max(prevs)
                 prev_records = read_records(m['key'], prev_date)
+        if preopen:
+            # 장 시작 전: 전일 종가만 그대로, 등락률/순매수/종목현황은 0, 회색(대기)
+            yclose = abs(ir['idx']) if ir.get('idx') is not None else None
+            out.append({
+                'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
+                'idx': yclose, 'flu': 0.0, 'sig': None, 'pred': None,
+                'upl': 0, 'rising': 0, 'flat': 0, 'fall': 0, 'lst': 0,
+                'ind': 0, 'frgnr': 0, 'orgn': 0,
+                'series': [],                       # 오늘 데이터 없음(대기)
+                'series_prev': idx_series(records), # 전일 시계열(회색선)
+                'preopen': True,
+            })
+            continue
         out.append({
             'key': m['key'], 'name': m['disp'], 'date': date_str, 'prev_date': prev_date,
             'idx': (abs(ir['idx']) if ir.get('idx') is not None else None), 'flu': ir.get('flu'),
