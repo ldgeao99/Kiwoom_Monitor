@@ -547,7 +547,13 @@ def send_finviz_map():
         print('[finviz] 텔레그램 토큰/챗ID 미설정 — 전송 생략')
         return
     img_url = _finviz_image_url(FINVIZ_MAP_URL)
-    r = requests.get(img_url, timeout=30)
+    # Cloudflare가 비브라우저 요청을 403으로 막으므로 브라우저 User-Agent/Referer 부여
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                      '(KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Referer': 'https://finviz.com/',
+    }
+    r = requests.get(img_url, headers=headers, timeout=30)
     r.raise_for_status()
     api = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
     resp = requests.post(api,
