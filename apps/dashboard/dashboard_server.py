@@ -34,7 +34,6 @@
 import http.server
 import json
 import os
-import re
 import socketserver
 import sys
 import threading
@@ -55,9 +54,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))          # apps/dashboard
 REPO_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))         # 레포 루트
 DATA_DIR = os.path.join(BASE_DIR, 'daily_snapshot')            # 스냅샷 데이터 폴더
 os.makedirs(DATA_DIR, exist_ok=True)
-# 공용 모듈(common/publish_auth_token.py) + 같은 폴더 모듈(finviz_capture.py) import 경로
+# 공용 모듈(common/publish_auth_token.py) import 경로 추가
 sys.path.insert(0, os.path.join(REPO_ROOT, 'common'))
-sys.path.insert(0, BASE_DIR)
 
 from publish_auth_token import get_access_token
 
@@ -510,66 +508,6 @@ def maybe_send_digest(now):
         print(f"  다이제스트 전송 실패: {e}")
 
 
-# ─────────────── finviz 맵 이미지 텔레그램 전송(매일 07:00 KST) ───────────────
-# 헤드리스 크롬(Playwright)으로 맵 '페이지'를 직접 렌더링→캡처하므로 항상 최신 맵.
-# .env FINVIZ_MAP_URLS(콤마 구분)로 교체 가능(없으면 기본값). 반드시 map 페이지 URL.
-FINVIZ_MAP_URLS = [u.strip() for u in (_load_env_value('FINVIZ_MAP_URLS') or (
-    'https://finviz.com/map?t=sec_all&st=d1,'
-    'https://finviz.com/map?t=cap&st=d1'
-)).split(',') if u.strip()]
-FINVIZ_MAP_TIME = '07:00'   # KST 전송 시각
-_finviz_map_sent = set()    # 'YYYY-MM-DD' — 하루 1회 전송 보장
-
-# 맵 종류(t 파라미터) → 표시 이름
-_FINVIZ_LABELS = {'sec_all': 'All Stocks', 'cap': 'Market Cap', 'sec': 'S&P 500', 'geo': 'World'}
-
-
-def _finviz_label(page_url):
-    t = re.search(r'[?&]t=([^&]+)', page_url)
-    key = t.group(1) if t else ''
-    return _FINVIZ_LABELS.get(key, key or 'Map')
-
-
-def send_finviz_map():
-    """설정된 모든 finviz 맵을 헤드리스 크롬으로 캡처해 텔레그램으로 사진 전송."""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print('[finviz] 텔레그램 토큰/챗ID 미설정 — 전송 생략')
-        return
-    try:
-        from finviz_capture import capture
-    except Exception as e:
-        print(f'[finviz] Playwright 미설치 — 캡처 불가(전송 생략): {e}')
-        return
-    api = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
-    for page_url in FINVIZ_MAP_URLS:
-        label = _finviz_label(page_url)
-        try:
-            png = capture(page_url)     # 맵 페이지 렌더→canvas 캡처(항상 최신, 시각은 이미지에 포함)
-            cap = f'📊 Finviz 맵 ({label}, 1D)'
-            resp = requests.post(api,
-                                 data={'chat_id': TELEGRAM_CHAT_ID, 'caption': cap},
-                                 files={'photo': ('finviz_map.png', png, 'image/png')})
-            if resp.status_code != 200:
-                print(f'[finviz 전송 에러] HTTP {resp.status_code} - {resp.text}')
-            else:
-                print(f'  → finviz 맵 전송({label})')
-        except Exception as e:
-            print(f'  finviz 맵 캡처/전송 실패({label}): {e}')
-
-
-def maybe_send_finviz_map(now):
-    if now.strftime('%H:%M') != FINVIZ_MAP_TIME:
-        return
-    key = now.strftime('%Y-%m-%d')
-    if key in _finviz_map_sent:
-        return
-    _finviz_map_sent.add(key)
-    try:
-        send_finviz_map()
-    except Exception as e:
-        print(f'  finviz 섹터맵 전송 실패: {e}')
-
-
 def run_loop(interval=60, start_h=8, end_h=20):
     """평일 start_h~end_h 시간대에 매 경계(:00)에 맞춰 모든 시장을 poll_once (무한 루프)."""
     print(f'{interval}초 간격(정각 정렬) 자동 반복 누적 시작 '
@@ -578,7 +516,6 @@ def run_loop(interval=60, start_h=8, end_h=20):
     token = None
     idle_notified = False
     while True:
-        maybe_send_finviz_map(now_kst())       # 매일 07:00 KST finviz 섹터맵
         if in_collect_window(now_kst(), start_h, end_h):
             idle_notified = False
             for market in MARKETS:
