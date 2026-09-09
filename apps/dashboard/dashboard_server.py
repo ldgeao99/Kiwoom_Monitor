@@ -41,7 +41,6 @@ import threading
 import time
 import requests
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 from urllib.parse import urlparse, parse_qs
 
 # 서버 환경 시간대(UTC 등)와 무관하게 항상 한국시간(KST) 기준으로 동작
@@ -56,8 +55,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))          # apps/dashboard
 REPO_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))         # 레포 루트
 DATA_DIR = os.path.join(BASE_DIR, 'daily_snapshot')            # 스냅샷 데이터 폴더
 os.makedirs(DATA_DIR, exist_ok=True)
-# 공용 모듈(common/publish_auth_token.py) import 경로 추가
+# 공용 모듈(common/publish_auth_token.py) + 같은 폴더 모듈(finviz_capture.py) import 경로
 sys.path.insert(0, os.path.join(REPO_ROOT, 'common'))
+sys.path.insert(0, BASE_DIR)
 
 from publish_auth_token import get_access_token
 
@@ -511,31 +511,17 @@ def maybe_send_digest(now):
 
 
 # ─────────────── finviz 맵 이미지 텔레그램 전송(매일 07:00 KST) ───────────────
-# 여러 맵을 보낼 수 있음. .env FINVIZ_MAP_URLS(콤마 구분)로 교체 가능(없으면 기본값).
-# published_map 페이지 URL 또는 publish.finviz.com PNG URL 모두 허용.
+# 헤드리스 크롬(Playwright)으로 맵 '페이지'를 직접 렌더링→캡처하므로 항상 최신 맵.
+# .env FINVIZ_MAP_URLS(콤마 구분)로 교체 가능(없으면 기본값). 반드시 map 페이지 URL.
 FINVIZ_MAP_URLS = [u.strip() for u in (_load_env_value('FINVIZ_MAP_URLS') or (
-    'https://finviz.com/published_map?t=sec_all&st=d1&f=090926&i=sec_all_d1_182843770,'
-    'https://finviz.com/published_map?t=cap&st=d1&f=090926&i=cap_d1_184388155'
+    'https://finviz.com/map?t=sec_all&st=d1,'
+    'https://finviz.com/map?t=cap&st=d1'
 )).split(',') if u.strip()]
 FINVIZ_MAP_TIME = '07:00'   # KST 전송 시각
 _finviz_map_sent = set()    # 'YYYY-MM-DD' — 하루 1회 전송 보장
 
 # 맵 종류(t 파라미터) → 표시 이름
 _FINVIZ_LABELS = {'sec_all': 'All Stocks', 'cap': 'Market Cap', 'sec': 'S&P 500', 'geo': 'World'}
-_FINVIZ_UA = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                  '(KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-    'Referer': 'https://finviz.com/',
-}
-
-
-def _finviz_image_url(page_url):
-    """published_map 페이지 URL → 실제 PNG URL(publish.finviz.com/{f}/{i}.png). 이미 png면 그대로."""
-    f = re.search(r'[?&]f=([^&]+)', page_url)
-    i = re.search(r'[?&]i=([^&]+)', page_url)
-    if f and i:
-        return f'https://publish.finviz.com/{f.group(1)}/{i.group(1)}.png'
-    return page_url
 
 
 def _finviz_label(page_url):
@@ -544,39 +530,31 @@ def _finviz_label(page_url):
     return _FINVIZ_LABELS.get(key, key or 'Map')
 
 
-def _fmt_et(last_modified):
-    """HTTP Last-Modified(GMT) → 미국 동부시간(ET) 표기. 실패 시 빈 문자열."""
-    if not last_modified:
-        return ''
-    try:
-        dt = datetime.strptime(last_modified.replace(' GMT', ''), '%a, %d %b %Y %H:%M:%S')
-        dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo('America/New_York'))
-        return dt.strftime('%a %b %d, %I:%M %p') + ' ET'
-    except Exception:
-        return ''
-
-
 def send_finviz_map():
-    """설정된 모든 finviz 맵 PNG를 내려받아 텔레그램으로 사진 전송."""
+    """설정된 모든 finviz 맵을 헤드리스 크롬으로 캡처해 텔레그램으로 사진 전송."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print('[finviz] 텔레그램 토큰/챗ID 미설정 — 전송 생략')
         return
+    try:
+        from finviz_capture import capture
+    except Exception as e:
+        print(f'[finviz] Playwright 미설치 — 캡처 불가(전송 생략): {e}')
+        return
     api = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
     for page_url in FINVIZ_MAP_URLS:
+        label = _finviz_label(page_url)
         try:
-            r = requests.get(_finviz_image_url(page_url), headers=_FINVIZ_UA, timeout=30)
-            r.raise_for_status()
-            when = _fmt_et(r.headers.get('Last-Modified', ''))
-            cap = f'📊 Finviz 맵 ({_finviz_label(page_url)}, 1D)' + (f' · {when}' if when else '')
+            png = capture(page_url)     # 맵 페이지 렌더→canvas 캡처(항상 최신, 시각은 이미지에 포함)
+            cap = f'📊 Finviz 맵 ({label}, 1D)'
             resp = requests.post(api,
                                  data={'chat_id': TELEGRAM_CHAT_ID, 'caption': cap},
-                                 files={'photo': ('finviz_map.png', r.content, 'image/png')})
+                                 files={'photo': ('finviz_map.png', png, 'image/png')})
             if resp.status_code != 200:
                 print(f'[finviz 전송 에러] HTTP {resp.status_code} - {resp.text}')
             else:
-                print(f'  → finviz 맵 전송({_finviz_label(page_url)})')
+                print(f'  → finviz 맵 전송({label})')
         except Exception as e:
-            print(f'  finviz 맵 전송 실패({page_url}): {e}')
+            print(f'  finviz 맵 캡처/전송 실패({label}): {e}')
 
 
 def maybe_send_finviz_map(now):
