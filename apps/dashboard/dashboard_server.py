@@ -538,7 +538,7 @@ def _finviz_caption(page_url):
             when = ' · ' + dt.strftime('%a %b %d, %I:%M %p') + ' ET'
         except Exception:
             pass
-    return f'📊 Finviz 섹터맵 (S&P500, 1D){when}'
+    return f'📊 Finviz 섹터맵 (All Stocks, 1D){when}'
 
 
 def send_finviz_map():
