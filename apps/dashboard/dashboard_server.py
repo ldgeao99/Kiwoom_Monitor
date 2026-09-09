@@ -34,6 +34,7 @@
 import http.server
 import json
 import os
+import re
 import socketserver
 import sys
 import threading
@@ -508,6 +509,69 @@ def maybe_send_digest(now):
         print(f"  다이제스트 전송 실패: {e}")
 
 
+# ─────────────── finviz 섹터맵 이미지 텔레그램 전송(매일 07:00 KST) ───────────────
+# URL은 .env의 FINVIZ_MAP_URL로 교체 가능(없으면 아래 기본값). published_map 페이지
+# URL 또는 publish.finviz.com PNG URL 모두 허용.
+FINVIZ_MAP_URL = _load_env_value('FINVIZ_MAP_URL') or \
+    'https://finviz.com/published_map?t=sec_all&st=d1&f=090926&i=sec_all_d1_182843770'
+FINVIZ_MAP_TIME = '07:00'   # KST 전송 시각
+_finviz_map_sent = set()    # 'YYYY-MM-DD' — 하루 1회 전송 보장
+
+
+def _finviz_image_url(page_url):
+    """published_map 페이지 URL → 실제 PNG URL(publish.finviz.com/{f}/{i}.png). 이미 png면 그대로."""
+    f = re.search(r'[?&]f=([^&]+)', page_url)
+    i = re.search(r'[?&]i=([^&]+)', page_url)
+    if f and i:
+        return f'https://publish.finviz.com/{f.group(1)}/{i.group(1)}.png'
+    return page_url
+
+
+def _finviz_caption(page_url):
+    """URL에 박힌 날짜(f=MMDDYY)+시각(i 끝 HHMMSSmmm)을 ET 시각으로 표기."""
+    f = re.search(r'[?&]f=(\d{6})', page_url)
+    t = re.search(r'_(\d{9})(?:\D|$)', page_url)
+    when = ''
+    if f and t:
+        try:
+            dt = datetime.strptime(f.group(1) + t.group(1)[:6], '%m%d%y%H%M%S')
+            when = ' · ' + dt.strftime('%a %b %d, %I:%M %p') + ' ET'
+        except Exception:
+            pass
+    return f'📊 Finviz 섹터맵 (S&P500, 1D){when}'
+
+
+def send_finviz_map():
+    """finviz 섹터맵 PNG를 내려받아 텔레그램으로 사진 전송."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print('[finviz] 텔레그램 토큰/챗ID 미설정 — 전송 생략')
+        return
+    img_url = _finviz_image_url(FINVIZ_MAP_URL)
+    r = requests.get(img_url, timeout=30)
+    r.raise_for_status()
+    api = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto'
+    resp = requests.post(api,
+                         data={'chat_id': TELEGRAM_CHAT_ID, 'caption': _finviz_caption(FINVIZ_MAP_URL)},
+                         files={'photo': ('finviz_map.png', r.content, 'image/png')})
+    if resp.status_code != 200:
+        print(f'[finviz 전송 에러] HTTP {resp.status_code} - {resp.text}')
+    else:
+        print('  → finviz 섹터맵 전송')
+
+
+def maybe_send_finviz_map(now):
+    if now.strftime('%H:%M') != FINVIZ_MAP_TIME:
+        return
+    key = now.strftime('%Y-%m-%d')
+    if key in _finviz_map_sent:
+        return
+    _finviz_map_sent.add(key)
+    try:
+        send_finviz_map()
+    except Exception as e:
+        print(f'  finviz 섹터맵 전송 실패: {e}')
+
+
 def run_loop(interval=60, start_h=8, end_h=20):
     """평일 start_h~end_h 시간대에 매 경계(:00)에 맞춰 모든 시장을 poll_once (무한 루프)."""
     print(f'{interval}초 간격(정각 정렬) 자동 반복 누적 시작 '
@@ -516,6 +580,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
     token = None
     idle_notified = False
     while True:
+        maybe_send_finviz_map(now_kst())       # 매일 07:00 KST finviz 섹터맵
         if in_collect_window(now_kst(), start_h, end_h):
             idle_notified = False
             for market in MARKETS:
