@@ -340,6 +340,41 @@ def check_move(st, cur_v):
     return None
 
 
+# ── 지수 시가(당일 첫 지수) 돌파/이탈 알림 ──
+_open_cross_state = {}      # mkey -> {'date','open','side'}
+OPEN_CROSS_EPS = 0.0003     # 0.03% 데드밴드(시가 경계 진동으로 인한 반복 알림 방지)
+
+
+def _today_open_idx(market_key, date_str, fallback):
+    """당일 첫 지수(=시가). 저장 파일에서 찾고 없으면 fallback(현재값)."""
+    for r in read_records(market_key, date_str):
+        if r.get('idx') is not None:
+            return abs(r['idx'])
+    return fallback
+
+
+def check_open_cross(market_key, date_str, idx):
+    """지수가 시가를 상향 돌파/하향 이탈하면 ('up'|'down', open, idx) 반환, 아니면 None.
+    데드밴드 밖으로 방향이 바뀔 때만 1회. 서버 재시작 시 파일의 시가를 다시 사용."""
+    st = _open_cross_state.get(market_key)
+    if st is None or st['date'] != date_str:
+        st = {'date': date_str, 'open': _today_open_idx(market_key, date_str, idx), 'side': None}
+        _open_cross_state[market_key] = st
+    open_px = st['open']
+    if not open_px or open_px <= 0:
+        return None
+    if idx > open_px * (1 + OPEN_CROSS_EPS):
+        side = 'up'
+    elif idx < open_px * (1 - OPEN_CROSS_EPS):
+        side = 'down'
+    else:
+        return None                      # 데드밴드 내 → 상태 유지, 알림 없음
+    if side != st['side']:
+        st['side'] = side
+        return (side, open_px, idx)
+    return None
+
+
 def poll_once(token, market):
     """market(dict)에 대해 1회 조회하여 해당 시장 JSONL에 append. 토큰을 반환."""
     if token is None:
@@ -404,6 +439,18 @@ def poll_once(token, market):
                               f"{record['t'][:5]}  이전 {prev_v:+,}억 · 현재 {cur_v:+,}억\n"
                               f"\n({ALERT_STEP:,}억 단위 변동 알림)")
         print(f"  → 텔레그램: {market['name']} {word} 이전 {prev_v:+,} 현재 {cur_v:+,}")
+
+    # --- 지수 시가 돌파/이탈 알림 (지수가 있을 때만) ---
+    if record.get('idx') is not None:
+        cross = check_open_cross(mkey, date_str, record['idx'])
+        if cross:
+            side, open_px, cur_px = cross
+            head = '🟢' if side == 'up' else '🔴'
+            word = '시가 돌파(상향)' if side == 'up' else '시가 이탈(하향)'
+            pct = (cur_px - open_px) / open_px * 100
+            send_telegram_message(f"{head} [{market['name']}] {word}\n"
+                                  f"{record['t'][:5]}  시가 {open_px:,.2f} · 현재 {cur_px:,.2f} ({pct:+.2f}%)")
+            print(f"  → 텔레그램: {market['name']} {word} 시가 {open_px:.2f} 현재 {cur_px:.2f}")
 
     with open(snapshot_path(mkey, date_str), 'a', encoding='utf-8') as f:
         f.write(json.dumps(record, ensure_ascii=False) + '\n')
