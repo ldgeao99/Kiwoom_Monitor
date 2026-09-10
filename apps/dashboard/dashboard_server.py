@@ -448,7 +448,7 @@ def sleep_to_next_boundary(interval):
 
 
 # 매 거래일 이 시각에 KOSPI 외국인/기관 순매수 다이제스트를 텔레그램 전송
-DIGEST_SLOTS = ('08:10', '08:20', '08:30', '09:10', '09:20')
+DIGEST_SLOTS = ('08:10', '08:20', '08:30', '08:50', '09:10', '09:20')
 _digest_sent = set()   # 'YYYY-MM-DD HH:MM' — 중복 발송 방지
 
 
