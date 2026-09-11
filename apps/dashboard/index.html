@@ -85,8 +85,8 @@
   /* 세로보기(차트 중심): 카드 1열 세로 배치 + 1분봉 차트를 크게 */
   .mkt-cards.chart-focus { grid-template-columns:1fr; }
   .mkt-cards.chart-focus .mkt-card .top { flex-direction:column; align-items:stretch; gap:6px; }
-  .mkt-cards.chart-focus .mkt-card .px { font-size:22px; }
-  .mkt-cards.chart-focus .mkt-card .spark { width:100%; height:104px; flex:none; }
+  .mkt-cards.chart-focus .mkt-card .px { font-size:19px; }
+  .mkt-cards.chart-focus .mkt-card .spark { width:100%; height:94px; flex:none; }
   /* 종목등락현황 표 (상한/상승/보합/하락/하한) */
   .breadth { max-width:1200px; margin:0 auto 12px; }
   .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
@@ -568,7 +568,7 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
 }
 
 function mktCard(m, strong) {
-  const SW = chartFocus ? 900 : 150, SH = chartFocus ? 104 : 56;   // 세로보기(차트 중심)면 크게
+  const SW = chartFocus ? 900 : 150, SH = chartFocus ? 94 : 56;   // 세로보기(차트 중심)면 크게
   if (m.preopen) {
     // 장 시작 전 대기: 전일 종가 + (+0.00%) + 회색 배경. 순매수는 오늘 값으로 갱신.
     const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]
