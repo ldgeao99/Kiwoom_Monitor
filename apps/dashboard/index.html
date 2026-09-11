@@ -495,33 +495,49 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
 
   // 정규장 시간축: 09:00(540분)~15:30(930분). 어제/오늘 데이터가 모두 있으면
   // 왼쪽 절반=어제, 오른쪽 절반=오늘로 나눠 각 구간을 시간비율로 배치.
-  const OPEN = 540, SPAN = 390;
+  const OPEN = 540, SPAN = 390;          // 정규장 09:00(540)~15:30(930), 390분
+  const PREV_W = 0.25;                    // 어제(회색)가 차지하는 가로 비율(오늘을 넓게)
   const inner = W - pad * 2;
   const hasPrev = prev.length > 0, hasToday = today.length > 0;
-  const mid = (hasPrev && hasToday) ? pad + inner * 0.5 : null;
+  const tmin = s => { const p = (s.t || '').split(':'); return (+p[0]) * 60 + (+p[1]); };
+  const clamp = v => Math.max(0, Math.min(1, v));
+  const mid = (hasPrev && hasToday) ? pad + inner * PREV_W : null;
   const pL = pad, pR = (mid == null) ? W - pad : mid;   // 어제 구간 x범위
   const tL = (mid == null) ? pad : mid, tR = W - pad;   // 오늘 구간 x범위
-  const tmin = s => { const p = (s.t || '').split(':'); return (+p[0]) * 60 + (+p[1]); };
-  const frac = s => Math.max(0, Math.min(1, (tmin(s) - OPEN) / SPAN));
-  const xPrev = s => pL + frac(s) * (pR - pL);
-  const xToday = s => tL + frac(s) * (tR - tL);
+  // 어제: 09:00~15:30 전체를 좁은 구간에 배치. 오늘: 09:00~'현재(마지막 데이터)'까지로
+  // 배치해 오른쪽 미래 여백을 없앰(최신값이 항상 오른쪽 끝).
+  const nowMin = hasToday ? tmin(today[today.length - 1]) : OPEN;
+  const todaySpan = Math.max(1, nowMin - OPEN);
+  const xPrev = s => pL + clamp((tmin(s) - OPEN) / SPAN) * (pR - pL);
+  const xToday = s => tL + clamp((tmin(s) - OPEN) / todaySpan) * (tR - tL);
   const y = v => pad + (H - pad*2) * (1 - (v - lo) / (hi - lo));
   const color = flu > 0 ? 'var(--pos)' : (flu < 0 ? 'var(--neg)' : 'var(--muted)');
 
+  // 공백(2분 초과)이면 계단식: 이전 y로 수평 이동 → 끝점 x에서 위/아래로 수직 이동
+  const GAP = 2;
+  const seg = (a, b) => (b.min - a.min > GAP)
+    ? `L${b.x.toFixed(1)},${a.y.toFixed(1)} L${b.x.toFixed(1)},${b.y.toFixed(1)} `
+    : `L${b.x.toFixed(1)},${b.y.toFixed(1)} `;
+  const gpts = prev.map(s => ({ x: xPrev(s), y: y(s.idx), min: tmin(s) }));
+  const tpts = today.map(s => ({ x: xToday(s), y: y(s.idx), min: tmin(s) }));
+
   let gray = '';
-  prev.forEach((s, i) => { gray += `${i === 0 ? 'M' : 'L'}${xPrev(s).toFixed(1)},${y(s.idx).toFixed(1)} `; });
+  gpts.forEach((p, i) => { gray += i === 0 ? `M${p.x.toFixed(1)},${p.y.toFixed(1)} ` : seg(gpts[i-1], p); });
 
-  // 오늘 라인: 어제 마지막 점에서 이어 그림
+  // 오늘 라인: 어제 마지막 점에서 이어 그림(경계는 수직 연결)
   let colr = '';
-  if (hasPrev) colr += `M${xPrev(prev[prev.length - 1]).toFixed(1)},${y(prev[prev.length - 1].idx).toFixed(1)} `;
-  today.forEach((s, i) => { colr += `${(i === 0 && !hasPrev) ? 'M' : 'L'}${xToday(s).toFixed(1)},${y(s.idx).toFixed(1)} `; });
+  if (hasPrev && gpts.length) { const lp = gpts[gpts.length-1]; colr += `M${lp.x.toFixed(1)},${lp.y.toFixed(1)} `; }
+  tpts.forEach((p, i) => {
+    if (i === 0) colr += `${hasPrev ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)} `;
+    else colr += seg(tpts[i-1], p);
+  });
 
-  // 오늘 구간 아래 영역 채움
+  // 오늘 구간 아래 영역 채움(라인과 동일한 계단식 경로)
   let area = '';
   if (hasToday) {
-    let a = `M${xToday(today[0]).toFixed(1)},${(H-pad).toFixed(1)} `;
-    today.forEach(s => { a += `L${xToday(s).toFixed(1)},${y(s.idx).toFixed(1)} `; });
-    a += `L${xToday(today[today.length - 1]).toFixed(1)},${(H-pad).toFixed(1)} Z`;
+    let a = `M${tpts[0].x.toFixed(1)},${(H-pad).toFixed(1)} L${tpts[0].x.toFixed(1)},${tpts[0].y.toFixed(1)} `;
+    for (let i = 1; i < tpts.length; i++) a += seg(tpts[i-1], tpts[i]);
+    a += `L${tpts[tpts.length-1].x.toFixed(1)},${(H-pad).toFixed(1)} Z`;
     area = `<path d="${a}" fill="${color}" opacity="0.10"/>`;
   }
   let baseLine = '';
