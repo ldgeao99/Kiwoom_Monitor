@@ -84,10 +84,11 @@
   .view-btn:hover { color:var(--text); }
   /* 세로보기(차트 중심): 카드 1열 세로 배치 + 1분봉 차트를 크게 */
   .mkt-cards.chart-focus { grid-template-columns:1fr; }
-  .mkt-cards.chart-focus .mkt-card .top { flex-direction:column; align-items:stretch; gap:1px; }
+  /* 지수값은 왼쪽(기본보기처럼), 차트는 오른쪽에서 넓게 */
+  .mkt-cards.chart-focus .mkt-card .top { align-items:center; gap:14px; }
+  .mkt-cards.chart-focus .mkt-card .top > div { flex:0 0 auto; }
   .mkt-cards.chart-focus .mkt-card .px { font-size:19px; }
-  .mkt-cards.chart-focus .mkt-card .fl { margin-bottom:0; }
-  .mkt-cards.chart-focus .mkt-card .spark { width:100%; height:84px; flex:none; margin-top:-2px; }
+  .mkt-cards.chart-focus .mkt-card .spark { flex:1 1 0; min-width:0; width:auto; height:84px; }
   /* 종목등락현황 표 (상한/상승/보합/하락/하한) */
   .breadth { max-width:1200px; margin:0 auto 12px; }
   .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
