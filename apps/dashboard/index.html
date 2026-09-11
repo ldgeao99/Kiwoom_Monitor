@@ -79,6 +79,14 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
+  .view-btn { margin-left:auto; font-size:13px; font-weight:600; color:var(--muted); background:none;
+    border:1px solid var(--line); border-radius:14px; padding:4px 12px; cursor:pointer; }
+  .view-btn:hover { color:var(--text); }
+  /* 세로보기(차트 중심): 카드 1열 세로 배치 + 1분봉 차트를 크게 */
+  .mkt-cards.chart-focus { grid-template-columns:1fr; }
+  .mkt-cards.chart-focus .mkt-card .top { flex-direction:column; align-items:stretch; gap:6px; }
+  .mkt-cards.chart-focus .mkt-card .px { font-size:22px; }
+  .mkt-cards.chart-focus .mkt-card .spark { width:100%; height:260px; flex:none; }
   /* 종목등락현황 표 (상한/상승/보합/하락/하한) */
   .breadth { max-width:1200px; margin:0 auto 12px; }
   .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
@@ -166,7 +174,8 @@
 </head>
 <body>
 <div id="ptr"><span class="ptr-spin"></span><span class="ptr-txt">당겨서 새로고침</span></div>
-<div class="page-title"><span>지수현황</span></div>
+<div class="page-title"><span>지수현황</span>
+  <button id="toggle-idxview" class="view-btn" type="button">세로보기</button></div>
 <div class="mkt-cards" id="mkt-cards"></div>
 <div class="page-title"><span>종목등락현황</span></div>
 <div class="breadth" id="breadth"></div>
@@ -221,6 +230,10 @@
 <script>
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
 let selected = null;           // Set<key> — 표시할 투자자
+
+// 지수현황 보기 모드: false=기본(좌우 카드), true=세로보기(1분봉 차트 중심)
+let chartFocus = false;
+try { chartFocus = localStorage.getItem('idx_chart_focus') === '1'; } catch (e) {}
 
 const fmtSigned = v => (v > 0 ? '+' : '') + v.toLocaleString();
 const cls = v => v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
@@ -468,8 +481,8 @@ const fmtFlu = v => (v == null) ? '' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
 const fmtNet = v => (v == null) ? '-' : (v > 0 ? '+' : '') + v.toLocaleString('ko-KR');
 
 // 어제(회색) + 오늘(방향색) 지수 1분봉 종가 라인. 경계에 세로선, 전일종가에 점선.
-function mktSpark(prevSeries, todaySeries, base, flu) {
-  const W = 150, H = 56, pad = 5;
+function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
+  const pad = 5;
   const prev = prevSeries || [], today = todaySeries || [];
   const all = prev.concat(today);
   if (all.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
@@ -504,13 +517,15 @@ function mktSpark(prevSeries, todaySeries, base, flu) {
   const divider = P > 0
     ? `<line x1="${x(P-1).toFixed(1)}" y1="${pad}" x2="${x(P-1).toFixed(1)}" y2="${H-pad}" stroke="#b8bec7" stroke-width="1"/>` : '';
 
+  const swMain = H > 100 ? 2.6 : 2, swGray = H > 100 ? 2 : 1.6;
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
     + area + baseLine + divider
-    + (gray ? `<path d="${gray}" fill="none" stroke="#b6bac1" stroke-width="1.6" stroke-linejoin="round"/>` : '')
-    + `<path d="${colr}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    + (gray ? `<path d="${gray}" fill="none" stroke="#b6bac1" stroke-width="${swGray}" stroke-linejoin="round"/>` : '')
+    + `<path d="${colr}" fill="none" stroke="${color}" stroke-width="${swMain}" stroke-linejoin="round"/></svg>`;
 }
 
 function mktCard(m, strong) {
+  const SW = chartFocus ? 900 : 150, SH = chartFocus ? 260 : 56;   // 세로보기(차트 중심)면 크게
   if (m.preopen) {
     // 장 시작 전 대기: 전일 종가 + (+0.00%) + 회색 배경. 순매수는 오늘 값으로 갱신.
     const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]
@@ -521,7 +536,7 @@ function mktCard(m, strong) {
       + (m.idx != null
           ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(+0.00%)</div>`
           : `<div class="empty">장 시작 대기 중…</div>`)
-      + `</div>${mktSpark(m.series_prev, [], prevClose, 0)}</div>`
+      + `</div>${mktSpark(m.series_prev, [], prevClose, 0, SW, SH)}</div>`
       + `<hr class="dv"><div class="inv">${inv}</div></div>`;
   }
   const dc = m.flu > 0 ? 'up' : (m.flu < 0 ? 'down' : 'flat');
@@ -536,7 +551,7 @@ function mktCard(m, strong) {
     + `<div class="nm">${m.name}</div>`
     + (has ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(${fmtFlu(m.flu)})</div>`
            : `<div class="empty">데이터 수집 대기 중…</div>`)
-    + `</div>${mktSpark(m.series_prev, m.series, prevClose, m.flu)}</div>`
+    + `</div>${mktSpark(m.series_prev, m.series, prevClose, m.flu, SW, SH)}</div>`
     + `<hr class="dv"><div class="inv">${inv}</div></div>`;
 }
 
@@ -1022,6 +1037,25 @@ function scheduleRefresh() {
     }
   }, { passive: true });
 })();
+
+// 지수현황 보기 모드 토글(기본 ↔ 세로보기/차트 중심)
+function applyIdxView() {
+  const host = document.getElementById('mkt-cards');
+  if (host) host.classList.toggle('chart-focus', chartFocus);
+  const btn = document.getElementById('toggle-idxview');
+  if (btn) btn.textContent = chartFocus ? '기본보기' : '세로보기';
+}
+(function () {
+  const btn = document.getElementById('toggle-idxview');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    chartFocus = !chartFocus;
+    try { localStorage.setItem('idx_chart_focus', chartFocus ? '1' : '0'); } catch (e) {}
+    applyIdxView();
+    renderSummaryCards();   // 스파크를 새 크기로 다시 그림
+  });
+})();
+applyIdxView();
 
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
