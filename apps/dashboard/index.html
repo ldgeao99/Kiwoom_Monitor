@@ -481,6 +481,8 @@ const fmtFlu = v => (v == null) ? '' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
 const fmtNet = v => (v == null) ? '-' : (v > 0 ? '+' : '') + v.toLocaleString('ko-KR');
 
 // 어제(회색) + 오늘(방향색) 지수 1분봉 종가 라인. 경계에 세로선, 전일종가에 점선.
+// x축은 '점 순서'가 아니라 '실제 시간(정규장 09:00~15:30)' 기준 → 중간에 데이터가
+// 비면(수집 중단 등) 그 시간만큼 벌어지고 양 끝점이 직선으로 이어진다.
 function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   const pad = 5;
   const prev = prevSeries || [], today = todaySeries || [];
@@ -490,23 +492,36 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   let lo = Math.min(...vals), hi = Math.max(...vals);   // 실제 지수 변동 범위로 스케일(전일종가에 눌리지 않도록)
   if (lo === hi) hi = lo + 1;
   const yp = (hi - lo) * 0.12; lo -= yp; hi += yp;      // 위아래 여백
-  const n = all.length, P = prev.length;
-  const x = i => pad + (W - pad*2) * i / (n - 1);
+
+  // 정규장 시간축: 09:00(540분)~15:30(930분). 어제/오늘 데이터가 모두 있으면
+  // 왼쪽 절반=어제, 오른쪽 절반=오늘로 나눠 각 구간을 시간비율로 배치.
+  const OPEN = 540, SPAN = 390;
+  const inner = W - pad * 2;
+  const hasPrev = prev.length > 0, hasToday = today.length > 0;
+  const mid = (hasPrev && hasToday) ? pad + inner * 0.5 : null;
+  const pL = pad, pR = (mid == null) ? W - pad : mid;   // 어제 구간 x범위
+  const tL = (mid == null) ? pad : mid, tR = W - pad;   // 오늘 구간 x범위
+  const tmin = s => { const p = (s.t || '').split(':'); return (+p[0]) * 60 + (+p[1]); };
+  const frac = s => Math.max(0, Math.min(1, (tmin(s) - OPEN) / SPAN));
+  const xPrev = s => pL + frac(s) * (pR - pL);
+  const xToday = s => tL + frac(s) * (tR - tL);
   const y = v => pad + (H - pad*2) * (1 - (v - lo) / (hi - lo));
   const color = flu > 0 ? 'var(--pos)' : (flu < 0 ? 'var(--neg)' : 'var(--muted)');
 
   let gray = '';
-  if (P > 0) for (let i = 0; i < P; i++) gray += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(prev[i].idx).toFixed(1)} `;
-  const cStart = P > 0 ? P - 1 : 0;   // 어제 마지막 점에서 이어 그림
+  prev.forEach((s, i) => { gray += `${i === 0 ? 'M' : 'L'}${xPrev(s).toFixed(1)},${y(s.idx).toFixed(1)} `; });
+
+  // 오늘 라인: 어제 마지막 점에서 이어 그림
   let colr = '';
-  for (let i = cStart; i < n; i++) colr += `${i === cStart ? 'M' : 'L'}${x(i).toFixed(1)},${y(all[i].idx).toFixed(1)} `;
+  if (hasPrev) colr += `M${xPrev(prev[prev.length - 1]).toFixed(1)},${y(prev[prev.length - 1].idx).toFixed(1)} `;
+  today.forEach((s, i) => { colr += `${(i === 0 && !hasPrev) ? 'M' : 'L'}${xToday(s).toFixed(1)},${y(s.idx).toFixed(1)} `; });
 
   // 오늘 구간 아래 영역 채움
   let area = '';
-  if (today.length) {
-    let a = `M${x(P).toFixed(1)},${(H-pad).toFixed(1)} `;
-    for (let i = P; i < n; i++) a += `L${x(i).toFixed(1)},${y(all[i].idx).toFixed(1)} `;
-    a += `L${x(n-1).toFixed(1)},${(H-pad).toFixed(1)} Z`;
+  if (hasToday) {
+    let a = `M${xToday(today[0]).toFixed(1)},${(H-pad).toFixed(1)} `;
+    today.forEach(s => { a += `L${xToday(s).toFixed(1)},${y(s.idx).toFixed(1)} `; });
+    a += `L${xToday(today[today.length - 1]).toFixed(1)},${(H-pad).toFixed(1)} Z`;
     area = `<path d="${a}" fill="${color}" opacity="0.10"/>`;
   }
   let baseLine = '';
@@ -514,8 +529,8 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
     const yb = Math.max(pad, Math.min(H - pad, y(base)));   // 범위 밖이면 가장자리에 고정
     baseLine = `<line x1="${pad}" y1="${yb.toFixed(1)}" x2="${W-pad}" y2="${yb.toFixed(1)}" stroke="#c7ccd2" stroke-width="1" stroke-dasharray="3 3"/>`;
   }
-  const divider = P > 0
-    ? `<line x1="${x(P-1).toFixed(1)}" y1="${pad}" x2="${x(P-1).toFixed(1)}" y2="${H-pad}" stroke="#b8bec7" stroke-width="1"/>` : '';
+  const divider = (mid != null)
+    ? `<line x1="${mid.toFixed(1)}" y1="${pad}" x2="${mid.toFixed(1)}" y2="${H-pad}" stroke="#b8bec7" stroke-width="1"/>` : '';
 
   const swMain = H > 100 ? 2.6 : 2, swGray = H > 100 ? 2 : 1.6;
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
