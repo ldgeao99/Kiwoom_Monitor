@@ -130,7 +130,7 @@ def send_telegram_message(text):
         return
     url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
     try:
-        r = requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': text})
+        r = requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': text}, timeout=15)
         if r.status_code != 200:
             print(f'[텔레그램 에러] HTTP {r.status_code} - {r.text}')
     except Exception as e:
@@ -158,7 +158,7 @@ def fetch_row(token, base_dt, mrkt_tp='0', inds_cd='001_AL'):
         'api-id': 'ka10051',
     }
     data = {'mrkt_tp': mrkt_tp, 'amt_qty_tp': '0', 'base_dt': base_dt, 'stex_tp': '3'}
-    resp = requests.post(url, headers=headers, json=data)
+    resp = requests.post(url, headers=headers, json=data, timeout=15)
     resp.raise_for_status()
     body = resp.json()
     if body.get('return_code') != 0:
@@ -182,7 +182,7 @@ def fetch_index(token, idx_cd):
         'next-key': '',
         'api-id': 'ka20003',
     }
-    resp = requests.post(url, headers=headers, json={'inds_cd': idx_cd})
+    resp = requests.post(url, headers=headers, json={'inds_cd': idx_cd}, timeout=15)
     resp.raise_for_status()
     body = resp.json()
     if body.get('return_code') != 0:
@@ -206,7 +206,7 @@ def fetch_program(token, stk_cd, amt_qty_tp='1', cont_yn='N', next_key=''):
         'api-id': 'ka90008',
     }
     data = {'amt_qty_tp': amt_qty_tp, 'stk_cd': stk_cd, 'date': now_kst().strftime('%Y%m%d')}
-    resp = requests.post(url, headers=headers, json=data)
+    resp = requests.post(url, headers=headers, json=data, timeout=15)
     resp.raise_for_status()
     body = resp.json()
     if body.get('return_code') != 0:
@@ -223,7 +223,7 @@ def fetch_rank(token, qry_tp='5'):
         'authorization': f'Bearer {token}',
         'api-id': 'ka00198',
     }
-    resp = requests.post(url, headers=headers, json={'qry_tp': qry_tp})
+    resp = requests.post(url, headers=headers, json={'qry_tp': qry_tp}, timeout=15)
     resp.raise_for_status()
     body = resp.json()
     if body.get('return_code') not in (None, 0):
@@ -563,24 +563,30 @@ def run_loop(interval=60, start_h=8, end_h=20):
     token = None
     idle_notified = False
     while True:
-        if in_collect_window(now_kst(), start_h, end_h):
-            idle_notified = False
-            for market in MARKETS:
-                try:
-                    token = poll_once(token, market)
-                except Exception as e:
-                    print(f"  {market['name']} 조회 실패: {e}")
-                    token = None  # 토큰 만료 등 대비해 재발급
-            maybe_send_digest(now_kst())       # 08:10 / 09:10 다이제스트
-            prune_old_snapshots()              # 새 날짜 파일 생성 대비 정리
-            sleep_to_next_boundary(interval)   # 다음 :00 까지 대기(드리프트 없음)
-        else:
-            if not idle_notified:
-                stamp = now_kst().strftime('%Y-%m-%d %H:%M:%S')
-                print(f'[{stamp}] 수집 시간대 밖 — 대기 중 '
-                      f'(평일 {start_h:02d}:00~{end_h:02d}:00에 재개)')
-                idle_notified = True
-            sleep_to_next_boundary(60)  # 시간대 밖에서는 매 분 :00에 확인
+        # 어떤 예외도 수집 스레드를 죽이지 못하게 루프 전체를 보호(다음 분에 재시도)
+        try:
+            if in_collect_window(now_kst(), start_h, end_h):
+                idle_notified = False
+                for market in MARKETS:
+                    try:
+                        token = poll_once(token, market)
+                    except Exception as e:
+                        print(f"  {market['name']} 조회 실패: {e}")
+                        token = None  # 토큰 만료 등 대비해 재발급
+                maybe_send_digest(now_kst())       # 08:10 / 09:10 다이제스트
+                prune_old_snapshots()              # 새 날짜 파일 생성 대비 정리
+                sleep_to_next_boundary(interval)   # 다음 :00 까지 대기(드리프트 없음)
+            else:
+                if not idle_notified:
+                    stamp = now_kst().strftime('%Y-%m-%d %H:%M:%S')
+                    print(f'[{stamp}] 수집 시간대 밖 — 대기 중 '
+                          f'(평일 {start_h:02d}:00~{end_h:02d}:00에 재개)')
+                    idle_notified = True
+                sleep_to_next_boundary(60)  # 시간대 밖에서는 매 분 :00에 확인
+        except Exception as e:
+            print(f"  [run_loop] 예기치 못한 오류(계속 진행): {e}")
+            token = None
+            sleep_to_next_boundary(60)
 
 
 def prune_old_snapshots():
@@ -778,7 +784,7 @@ def fetch_stock_list(token, mrkt_tp):
         'cont-yn': 'N', 'next-key': '',
         'api-id': 'ka10099',
     }
-    resp = requests.post(url, headers=headers, json={'mrkt_tp': mrkt_tp})
+    resp = requests.post(url, headers=headers, json={'mrkt_tp': mrkt_tp}, timeout=20)
     resp.raise_for_status()
     body = resp.json()
     if body.get('return_code') not in (None, 0):

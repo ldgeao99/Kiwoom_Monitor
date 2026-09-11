@@ -57,7 +57,7 @@ def get_access_token():
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=10)
 
         if response.status_code == 200:
             resp_json = response.json()
