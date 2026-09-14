@@ -140,7 +140,7 @@
   @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:9px 4px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; min-width:0; }
+  .mkt-card { border-radius:18px; padding:16px 18px 8px; background:#f5f6f8; min-width:0; }
   .mkt-card.up { background:#fdf1ef; } .mkt-card.down { background:#eef3fd; }
   /* 두 시장 비교: 더 강한 상승은 더 빨갛게, 더 약한(더 낮은) 하락은 더 파랗게 */
   .mkt-card.up.strong { background:#fadfd9; } .mkt-card.down.strong { background:#e1e9fb; }
@@ -155,7 +155,7 @@
   /* 좁은 화면: 2단을 유지하며 카드 내부를 압축 */
   @media (max-width:560px){
     .mkt-cards { gap:8px; }
-    .mkt-card { padding:12px 12px; border-radius:14px; }
+    .mkt-card { padding:12px 12px 7px; border-radius:14px; }
     .mkt-card .top { gap:8px; }
     .mkt-card .top > div { min-width:0; }
     .mkt-card .nm { font-size:13px; }
