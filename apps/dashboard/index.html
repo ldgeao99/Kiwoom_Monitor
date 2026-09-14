@@ -538,11 +538,10 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   let gray = '';
   gpts.forEach((p, i) => { gray += i === 0 ? `M${p.x.toFixed(1)},${p.y.toFixed(1)} ` : seg(gpts[i-1], p); });
 
-  // 오늘 라인: 어제 마지막 점에서 이어 그림(경계는 수직 연결)
+  // 오늘 라인: 어제와 잇지 않고 오늘 첫 점부터 새로 시작(어제 종가↔오늘 시가 연결선 생략)
   let colr = '';
-  if (hasPrev && gpts.length) { const lp = gpts[gpts.length-1]; colr += `M${lp.x.toFixed(1)},${lp.y.toFixed(1)} `; }
   tpts.forEach((p, i) => {
-    if (i === 0) colr += `${hasPrev ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)} `;
+    if (i === 0) colr += `M${p.x.toFixed(1)},${p.y.toFixed(1)} `;
     else colr += seg(tpts[i-1], p);
   });
 
