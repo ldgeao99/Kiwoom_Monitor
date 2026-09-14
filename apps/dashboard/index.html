@@ -512,7 +512,7 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   const vals = all.map(s => s.idx);
   let lo = Math.min(...vals), hi = Math.max(...vals);   // 실제 지수 변동 범위로 스케일(전일종가에 눌리지 않도록)
   if (lo === hi) hi = lo + 1;
-  const yp = (hi - lo) * (chartFocus ? 0.01 : 0.12); lo -= yp; hi += yp;   // 위아래 여백(세로보기는 진폭 크게)
+  const yp = (hi - lo) * (chartFocus ? 0 : 0.12); lo -= yp; hi += yp;   // 위아래 여백(세로보기는 진폭 최대)
 
   // 정규장 시간축: 09:00(540분)~15:30(930분). 어제/오늘 데이터가 모두 있으면
   // 왼쪽 절반=어제, 오른쪽 절반=오늘로 나눠 각 구간을 시간비율로 배치.
