@@ -500,7 +500,8 @@ const fmtNet = v => (v == null) ? '-' : (v > 0 ? '+' : '') + v.toLocaleString('k
 // 비면(수집 중단 등) 그 시간만큼 벌어지고 양 끝점이 직선으로 이어진다.
 function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   const pad = 5;
-  const prev = prevSeries || [], today = todaySeries || [];
+  const prev = prevSeries || [];
+  const today = (todaySeries || []).filter(s => (s.t || '').slice(0, 5) >= '09:01');   // 오늘은 09:01부터
   const all = prev.concat(today);
   if (all.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
   const vals = all.map(s => s.idx);
