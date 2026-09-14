@@ -149,15 +149,14 @@
   .mkt-card.up { background:#fdf1ef; } .mkt-card.down { background:#eef3fd; }
   /* 두 시장 비교: 더 강한 상승은 더 빨갛게, 더 약한(더 낮은) 하락은 더 파랗게 */
   .mkt-card.up.strong { background:#fadfd9; } .mkt-card.down.strong { background:#e1e9fb; }
-  .mkt-card .top { display:flex; justify-content:space-between; align-items:stretch; gap:10px; }
-  .mkt-card .top > div:first-child { display:flex; flex-direction:column; justify-content:center; }
+  .mkt-card .top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .mkt-card .nm { font-size:16px; font-weight:700; color:#6b7078; }
   .mkt-card .px { font-size:19px; font-weight:800; line-height:1.1; margin-top:2px; }
   .mkt-card .fl { font-size:12px; font-weight:700; }
   .mkt-card.up .px, .mkt-card.up .fl { color:var(--pos); }
   .mkt-card.down .px, .mkt-card.down .fl { color:var(--neg); }
   .mkt-card.flat .px, .mkt-card.flat .fl { color:var(--muted); }
-  .mkt-card .spark { width:150px; height:auto; flex:none; align-self:stretch; }
+  .mkt-card .spark { width:150px; height:74px; flex:none; }
   /* 좁은 화면: 2단을 유지하며 카드 내부를 압축 */
   @media (max-width:560px){
     .mkt-cards { gap:8px; }
@@ -167,11 +166,11 @@
     .mkt-card .nm { font-size:13px; }
     .mkt-card .px { font-size:17px; }
     .mkt-card .fl { font-size:12px; }
-    .mkt-card .spark { width:auto; flex:1 1 40px; min-width:40px; height:auto; }  /* 남는 폭에 맞춰 축소 */
+    .mkt-card .spark { width:auto; flex:1 1 40px; min-width:40px; height:64px; }  /* 남는 폭에 맞춰 축소 */
     .mkt-card .inv .l { font-size:11px; }
     .mkt-card .inv .v { font-size:12px; }
   }
-  @media (max-width:360px){ .mkt-card .spark { height:auto; } }
+  @media (max-width:360px){ .mkt-card .spark { height:56px; } }
   .mkt-card .dv { border:0; border-top:1px dashed #d6cfce; margin:12px 0 10px; }
   .mkt-card.down .dv { border-top-color:#cdd6e8; }
   .mkt-card .inv { display:grid; grid-template-columns:1fr 1fr 1fr; text-align:center; gap:6px; }
