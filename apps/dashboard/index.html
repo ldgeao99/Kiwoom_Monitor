@@ -89,6 +89,11 @@
   .mkt-cards.chart-focus .mkt-card .top > div { flex:0 0 auto; }
   .mkt-cards.chart-focus .mkt-card .px { font-size:19px; }
   .mkt-cards.chart-focus .mkt-card .spark { flex:1 1 0; min-width:0; width:auto; height:84px; }
+  /* 세로보기에서만 개인/외국인/기관 영역 높이 축소 */
+  .mkt-cards.chart-focus .mkt-card { padding-bottom:8px; }
+  .mkt-cards.chart-focus .mkt-card .dv { margin:3px 0 2px; }
+  .mkt-cards.chart-focus .mkt-card .inv .l { margin-bottom:0; line-height:1.2; }
+  .mkt-cards.chart-focus .mkt-card .inv .v { line-height:1.2; }
   /* 종목등락현황 표 (상한/상승/보합/하락/하한) */
   .breadth { max-width:1200px; margin:0 auto 12px; }
   .breadth-tbl { width:100%; border-collapse:collapse; background:var(--panel);
@@ -140,7 +145,7 @@
   @media (max-width:560px){ .breadth-tbl { font-size:12px; } .breadth-tbl th, .breadth-tbl td { padding:9px 4px; } }
   /* 상단 지수 요약 카드 (모바일에서도 좌우 2단 유지) */
   .mkt-cards { max-width:1200px; margin:0 auto 14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .mkt-card { border-radius:18px; padding:16px 18px 8px; background:#f5f6f8; min-width:0; }
+  .mkt-card { border-radius:18px; padding:16px 18px; background:#f5f6f8; min-width:0; }
   .mkt-card.up { background:#fdf1ef; } .mkt-card.down { background:#eef3fd; }
   /* 두 시장 비교: 더 강한 상승은 더 빨갛게, 더 약한(더 낮은) 하락은 더 파랗게 */
   .mkt-card.up.strong { background:#fadfd9; } .mkt-card.down.strong { background:#e1e9fb; }
@@ -155,7 +160,7 @@
   /* 좁은 화면: 2단을 유지하며 카드 내부를 압축 */
   @media (max-width:560px){
     .mkt-cards { gap:8px; }
-    .mkt-card { padding:12px 12px 7px; border-radius:14px; }
+    .mkt-card { padding:12px 12px; border-radius:14px; }
     .mkt-card .top { gap:8px; }
     .mkt-card .top > div { min-width:0; }
     .mkt-card .nm { font-size:13px; }
@@ -166,11 +171,11 @@
     .mkt-card .inv .v { font-size:12px; }
   }
   @media (max-width:360px){ .mkt-card .spark { height:38px; } }
-  .mkt-card .dv { border:0; border-top:1px dashed #d6cfce; margin:3px 0 2px; }
+  .mkt-card .dv { border:0; border-top:1px dashed #d6cfce; margin:12px 0 10px; }
   .mkt-card.down .dv { border-top-color:#cdd6e8; }
   .mkt-card .inv { display:grid; grid-template-columns:1fr 1fr 1fr; text-align:center; gap:6px; }
-  .mkt-card .inv .l { font-size:11px; color:var(--muted); margin-bottom:0; line-height:1.2; }
-  .mkt-card .inv .v { font-size:12px; font-weight:700; line-height:1.2; }
+  .mkt-card .inv .l { font-size:11px; color:var(--muted); margin-bottom:2px; }
+  .mkt-card .inv .v { font-size:12px; font-weight:700; }
   .zero { color:var(--muted); }
 </style>
 </head>
