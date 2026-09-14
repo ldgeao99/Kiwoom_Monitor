@@ -505,7 +505,7 @@ const fmtNet = v => (v == null) ? '-' : (v > 0 ? '+' : '') + v.toLocaleString('k
 // 비면(수집 중단 등) 그 시간만큼 벌어지고 양 끝점이 직선으로 이어진다.
 function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   const pad = 5;                       // x축 좌우 여백
-  const padY = chartFocus ? 0 : 5;     // y축 상하 여백(세로보기는 0)
+  const padY = 0;                      // y축 상하 여백 없음(기본/세로보기 모두)
   const prev = prevSeries || [];
   const today = (todaySeries || []).filter(s => (s.t || '').slice(0, 5) >= '09:01');   // 오늘은 09:01부터
   const all = prev.concat(today);
