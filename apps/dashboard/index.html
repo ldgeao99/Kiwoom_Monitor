@@ -527,7 +527,11 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56) {
   const xPrev = s => pL + clamp((tmin(s) - OPEN) / SPAN) * (pR - pL);
   const xToday = s => tL + clamp((tmin(s) - OPEN) / todaySpan) * (tR - tL);
   const y = v => pad + (H - pad*2) * (1 - (v - lo) / (hi - lo));
-  const color = flu > 0 ? 'var(--pos)' : (flu < 0 ? 'var(--neg)' : 'var(--muted)');
+  // 오늘 라인/영역 색: '오늘 시작점(첫 점)' 대비 현재가 위면 빨강, 아래면 파랑(배경색과 무관)
+  const tOpen = today.length ? today[0].idx : null;
+  const tCur = today.length ? today[today.length - 1].idx : null;
+  const color = (tOpen == null || tCur === tOpen) ? 'var(--muted)'
+              : (tCur > tOpen ? 'var(--pos)' : 'var(--neg)');
 
   // 공백(2분 초과)이면 계단식: 이전 y로 수평 이동 → 끝점 x에서 위/아래로 수직 이동
   const GAP = 2;
