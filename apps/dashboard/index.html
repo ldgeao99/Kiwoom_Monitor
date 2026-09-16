@@ -107,6 +107,7 @@
   .breadth-tbl .up { color:var(--pos); } .breadth-tbl .dn { color:var(--neg); } .breadth-tbl .flat { color:var(--muted); }
   .breadth-tbl .arw { font-size:11px; margin-left:3px; }
   .breadth-tbl .pct { color:var(--muted); font-weight:400; font-size:11px; }
+  .breadth-tbl .pct.low { color:#e5484d; font-weight:700; }   /* 상승비율 35% 미만 경고 */
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
@@ -184,8 +185,7 @@
 <div class="page-title"><span>지수현황</span>
   <button id="toggle-idxview" class="view-btn" type="button">세로보기</button></div>
 <div class="mkt-cards" id="mkt-cards"></div>
-<div class="page-title"><span>종목등락현황</span>
-  <button id="toggle-breadth" class="view-btn" type="button">접기 ▾</button></div>
+<div class="page-title"><span>종목등락현황</span></div>
 <div class="breadth" id="breadth"></div>
 <div class="page-title"><span>투자자별 매매동향</span></div>
 <div class="wrap">
@@ -632,7 +632,7 @@ function breadthTable(markets) {
     + `<th>하한<span class="arw dn">▼</span></th></tr>`;
   const rows = markets.map(m => {
     const pct = risePct(m);
-    const pctHtml = pct == null ? '' : ` <span class="pct">(${pct}%)</span>`;
+    const pctHtml = pct == null ? '' : ` <span class="pct${pct < 35 ? ' low' : ''}">(${pct}%)</span>`;
     return `<tr><td class="mk">${m.name}</td>`
       + `<td class="num up">${num(m.upl)}</td>`
       + `<td class="num up">${num(m.rising)}${pctHtml}</td>`
@@ -1119,25 +1119,6 @@ function applyIdxView() {
   });
 })();
 applyIdxView();
-
-// 종목등락현황 표 접기/펼치기 (상태 유지)
-(function () {
-  const btn = document.getElementById('toggle-breadth');
-  const box = document.getElementById('breadth');
-  if (!btn || !box) return;
-  let collapsed = false;
-  try { collapsed = localStorage.getItem('breadth_collapsed') === '1'; } catch (e) {}
-  const apply = () => {
-    box.hidden = collapsed;
-    btn.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
-  };
-  apply();
-  btn.addEventListener('click', () => {
-    collapsed = !collapsed;
-    try { localStorage.setItem('breadth_collapsed', collapsed ? '1' : '0'); } catch (e) {}
-    apply();
-  });
-})();
 
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
