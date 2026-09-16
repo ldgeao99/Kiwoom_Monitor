@@ -185,7 +185,8 @@
 <div class="page-title"><span>지수현황</span>
   <button id="toggle-idxview" class="view-btn" type="button">세로보기</button></div>
 <div class="mkt-cards" id="mkt-cards"></div>
-<div class="page-title"><span>종목등락현황</span></div>
+<div class="page-title"><span>종목등락현황</span>
+  <button id="toggle-breadth" class="view-btn" type="button">접기 ▾</button></div>
 <div class="breadth" id="breadth"></div>
 <div class="page-title"><span>투자자별 매매동향</span></div>
 <div class="wrap">
@@ -1119,6 +1120,25 @@ function applyIdxView() {
   });
 })();
 applyIdxView();
+
+// 종목등락현황 표 접기/펼치기 (상태 유지, 기본 펼침)
+(function () {
+  const btn = document.getElementById('toggle-breadth');
+  const box = document.getElementById('breadth');
+  if (!btn || !box) return;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('breadth_collapsed') === '1'; } catch (e) {}
+  const apply = () => {
+    box.hidden = collapsed;
+    btn.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
+  };
+  apply();
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem('breadth_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    apply();
+  });
+})();
 
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
