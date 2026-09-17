@@ -711,6 +711,33 @@ def idx_series(records):
             if r.get('idx') is not None and '09:00' <= r['t'][:5] <= '15:30']
 
 
+# 나스닥100 선물(NQ=F) 등락률 — Yahoo Finance, 60초 캐시
+_nasdaq_cache = {'ts': 0.0, 'data': None}
+NASDAQ_TTL = 60
+
+
+def get_nasdaq_future():
+    """나스닥100 선물(NQ=F) 현재가/등락률(%). 60초 캐시, 실패 시 직전값(없으면 None)."""
+    now = time.time()
+    if _nasdaq_cache['data'] and now - _nasdaq_cache['ts'] < NASDAQ_TTL:
+        return _nasdaq_cache['data']
+    try:
+        r = requests.get('https://query1.finance.yahoo.com/v8/finance/chart/NQ=F',
+                         headers={'User-Agent': 'Mozilla/5.0'},
+                         params={'interval': '1d', 'range': '1d'}, timeout=10)
+        r.raise_for_status()
+        m = r.json()['chart']['result'][0]['meta']
+        price = m['regularMarketPrice']
+        prev = m.get('chartPreviousClose') or m.get('previousClose')
+        data = {'price': price, 'pct': (price / prev - 1) * 100} if (price and prev) else None
+        if data:
+            _nasdaq_cache.update(ts=now, data=data)
+        return _nasdaq_cache['data']
+    except Exception as e:
+        print(f'[나스닥선물] 조회 실패: {e}')
+        return _nasdaq_cache['data']
+
+
 def build_summary():
     """코스피/코스닥 요약: 지수/등락률 + 개인·외국인·기관 순매수 + 지수 1분봉 종가 시계열(오늘+전거래일)."""
     out = []
@@ -764,7 +791,7 @@ def build_summary():
             # 오늘 실제 시가(ka20001 open_pric) — 차트 시가선/색 기준. 당일에만.
             'open': (get_index_open(m, date_str) if date_str == now.strftime('%Y-%m-%d') else None),
         })
-    return {'markets': out}
+    return {'markets': out, 'nasdaq': get_nasdaq_future()}
 
 
 def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):

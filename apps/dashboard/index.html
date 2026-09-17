@@ -79,6 +79,8 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
+  .nasfut { font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap; }
+  .nasfut b { font-weight:700; }
   .view-btn { margin-left:auto; font-size:13px; font-weight:600; color:var(--muted); background:none;
     border:1px solid var(--line); border-radius:14px; padding:4px 12px; cursor:pointer; }
   .view-btn:hover { color:var(--text); }
@@ -183,6 +185,7 @@
 <body>
 <div id="ptr"><span class="ptr-spin"></span><span class="ptr-txt">당겨서 새로고침</span></div>
 <div class="page-title"><span>지수현황</span>
+  <span id="nasdaq-fut" class="nasfut"></span>
   <button id="toggle-idxview" class="view-btn" type="button">세로보기</button></div>
 <div class="mkt-cards" id="mkt-cards"></div>
 <div class="page-title"><span>종목등락현황</span>
@@ -663,6 +666,13 @@ async function renderSummaryCards() {
     }
     document.getElementById('mkt-cards').innerHTML = ms.map(m => mktCard(m, m.key === strongKey)).join('');
     document.getElementById('breadth').innerHTML = breadthTable(ms);
+    // 나스닥100 선물 등락률
+    const nf = document.getElementById('nasdaq-fut');
+    if (nf) {
+      const n = data.nasdaq;
+      nf.innerHTML = (n && n.pct != null)
+        ? `나스닥선물 <b class="${cls(n.pct)}">${(n.pct > 0 ? '+' : '') + n.pct.toFixed(2)}%</b>` : '';
+    }
   } catch (e) {}
 }
 
