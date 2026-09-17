@@ -672,7 +672,7 @@ async function renderSummaryCards() {
     if (nf) {
       const n = data.nasdaq;
       nf.innerHTML = (n && n.pct != null)
-        ? `나스닥100선물 <b class="${cls(n.pct)}">${(n.pct > 0 ? '+' : '') + n.pct.toFixed(2)}%</b> <span class="nasdelay">10분지연</span>` : '';
+        ? `나스닥100선물 <b class="${cls(n.pct)}">${(n.pct > 0 ? '+' : '') + n.pct.toFixed(2)}%</b> <span class="nasdelay">(10분지연)</span>` : '';
     }
   } catch (e) {}
 }
