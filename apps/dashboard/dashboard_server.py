@@ -590,6 +590,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
     while True:
         # 어떤 예외도 수집 스레드를 죽이지 못하게 루프 전체를 보호(다음 분에 재시도)
         try:
+            maybe_check_nasdaq_reversal(now_kst())   # 나스닥100선물 극점 반전 알림(24h)
             if in_collect_window(now_kst(), start_h, end_h):
                 idle_notified = False
                 for market in MARKETS:
@@ -736,6 +737,46 @@ def get_nasdaq_future():
     except Exception as e:
         print(f'[나스닥선물] 조회 실패: {e}')
         return _nasdaq_cache['data']
+
+
+# ── 나스닥100선물 극점 반전 알림 (07:00 KST 세션 리셋, ±0.5%) ──
+NASDAQ_REV_PCT = 0.5
+_nasdaq_rev_state = {}   # {'date','low','high','up_armed','down_armed'}
+
+
+def _nasdaq_session_date(now):
+    """선물 세션 기준 '당일'(07:00 KST 시작). 07시 전이면 전일."""
+    base = now if now.hour >= 7 else now - timedelta(days=1)
+    return base.strftime('%Y-%m-%d')
+
+
+def maybe_check_nasdaq_reversal(now):
+    """당일 최저점 대비 +0.5% 상승(🟢) / 최고점 대비 -0.5% 하락(🔴) 시 텔레그램.
+    새 최저/최고 갱신 시 반대 방향 감시 재무장 → 극점 반전마다 1회씩."""
+    data = get_nasdaq_future()
+    if not data or data.get('price') is None:
+        return
+    price = data['price']
+    sd = _nasdaq_session_date(now)
+    st = _nasdaq_rev_state
+    if st.get('date') != sd:      # 세션(07:00) 시작 → 극점 리셋
+        st.clear()
+        st.update(date=sd, low=price, high=price, up_armed=True, down_armed=True)
+        return
+    if price < st['low']:
+        st['low'] = price; st['up_armed'] = True      # 새 저점 → 상승 감시 재무장
+    if price > st['high']:
+        st['high'] = price; st['down_armed'] = True   # 새 고점 → 하락 감시 재무장
+    up = (price / st['low'] - 1) * 100 if st['low'] else 0.0
+    dn = (price / st['high'] - 1) * 100 if st['high'] else 0.0
+    if st.get('up_armed') and up >= NASDAQ_REV_PCT - 1e-9:
+        st['up_armed'] = False
+        send_telegram_message(f"🟢 나스닥100선물 상승\n당일저점 {st['low']:,.2f} 대비 +{up:.2f}%\n현재 {price:,.2f}")
+        print(f"  → 텔레그램: 나스닥선물 상승 +{up:.2f}%")
+    if st.get('down_armed') and dn <= -NASDAQ_REV_PCT + 1e-9:
+        st['down_armed'] = False
+        send_telegram_message(f"🔴 나스닥100선물 하락\n당일고점 {st['high']:,.2f} 대비 {dn:.2f}%\n현재 {price:,.2f}")
+        print(f"  → 텔레그램: 나스닥선물 하락 {dn:.2f}%")
 
 
 def build_summary():
