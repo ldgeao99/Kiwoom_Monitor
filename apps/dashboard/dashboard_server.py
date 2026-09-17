@@ -340,29 +340,53 @@ def check_move(st, cur_v):
     return None
 
 
-# ── 지수 시가(당일 첫 지수) 돌파/이탈 알림 ──
-_open_cross_state = {}      # mkey -> {'date','open','side'}
+# ── 지수 시가(당일 개장가) 돌파/이탈 알림 ──
+# 시가는 ka20003엔 없으므로 ka20001(업종현재가) open_pric 사용. (market,date)별 캐시(장중 불변).
+_open_cross_state = {}      # mkey -> {'date','side'}
+_open_price_cache = {}      # (mkey, date) -> 시가(float)
 OPEN_CROSS_EPS = 0.0003     # 0.03% 데드밴드(시가 경계 진동으로 인한 반복 알림 방지)
 
 
-def _today_open_idx(market_key, date_str, fallback):
-    """당일 첫 지수(=시가). 저장 파일에서 찾고 없으면 fallback(현재값)."""
-    for r in read_records(market_key, date_str):
-        if r.get('idx') is not None:
-            return abs(r['idx'])
-    return fallback
+def fetch_index_open(token, mrkt_tp, idx_cd):
+    """ka20001(업종현재가)에서 당일 시가(open_pric)를 조회. 없으면 None."""
+    url = 'https://api.kiwoom.com/api/dostk/sect'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'cont-yn': 'N', 'next-key': '', 'api-id': 'ka20001',
+    }
+    resp = requests.post(url, headers=headers, json={'mrkt_tp': mrkt_tp, 'inds_cd': idx_cd}, timeout=15)
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') not in (None, 0):
+        raise RuntimeError(f"업종현재가 API 오류: {body.get('return_msg')}")
+    op = to_number(body.get('open_pric'))
+    return abs(op) if op else None
 
 
-def check_open_cross(market_key, date_str, idx):
-    """지수가 시가를 상향 돌파/하향 이탈하면 ('up'|'down', open, idx) 반환, 아니면 None.
-    데드밴드 밖으로 방향이 바뀔 때만 1회. 서버 재시작 시 파일의 시가를 다시 사용."""
-    st = _open_cross_state.get(market_key)
-    if st is None or st['date'] != date_str:
-        st = {'date': date_str, 'open': _today_open_idx(market_key, date_str, idx), 'side': None}
-        _open_cross_state[market_key] = st
-    open_px = st['open']
+def get_index_open(market, date_str):
+    """당일 지수 시가(ka20001 open_pric). (market,date)별 1회 조회 후 캐시."""
+    key = (market['key'], date_str)
+    if key not in _open_price_cache:
+        try:
+            op = fetch_index_open(cached_token(), market['mrkt_tp'], market['idx_cd'])
+        except Exception as e:
+            print(f"  {market['name']} 시가 조회 실패: {e}")
+            op = None
+        if op:
+            _open_price_cache[key] = op
+    return _open_price_cache.get(key)
+
+
+def check_open_cross(market_key, date_str, open_px, idx):
+    """지수(idx)가 시가(open_px)를 상향 돌파/하향 이탈하면 ('up'|'down', open, idx) 반환.
+    데드밴드 밖으로 방향이 바뀔 때만 1회."""
     if not open_px or open_px <= 0:
         return None
+    st = _open_cross_state.get(market_key)
+    if st is None or st['date'] != date_str:
+        st = {'date': date_str, 'side': None}
+        _open_cross_state[market_key] = st
     if idx > open_px * (1 + OPEN_CROSS_EPS):
         side = 'up'
     elif idx < open_px * (1 - OPEN_CROSS_EPS):
@@ -442,7 +466,8 @@ def poll_once(token, market):
 
     # --- 지수 시가 돌파/이탈 알림 (지수가 있을 때만) ---
     if record.get('idx') is not None:
-        cross = check_open_cross(mkey, date_str, record['idx'])
+        open_px = get_index_open(market, date_str) or record['idx']   # 실제 시가(ka20001), 실패시 첫틱
+        cross = check_open_cross(mkey, date_str, open_px, record['idx'])
         if cross:
             side, open_px, cur_px = cross
             head = '🟢' if side == 'up' else '🔴'
