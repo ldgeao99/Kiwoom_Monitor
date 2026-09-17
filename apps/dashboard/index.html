@@ -81,6 +81,7 @@
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
   .nasfut { font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap; }
   .nasfut b { font-weight:700; }
+  .nasfut .nasdelay { font-size:10px; font-weight:400; color:var(--muted); }
   .view-btn { margin-left:auto; font-size:13px; font-weight:600; color:var(--muted); background:none;
     border:1px solid var(--line); border-radius:14px; padding:4px 12px; cursor:pointer; }
   .view-btn:hover { color:var(--text); }
@@ -671,7 +672,7 @@ async function renderSummaryCards() {
     if (nf) {
       const n = data.nasdaq;
       nf.innerHTML = (n && n.pct != null)
-        ? `나스닥100선물 <b class="${cls(n.pct)}">${(n.pct > 0 ? '+' : '') + n.pct.toFixed(2)}%</b>` : '';
+        ? `나스닥100선물 <b class="${cls(n.pct)}">${(n.pct > 0 ? '+' : '') + n.pct.toFixed(2)}%</b> <span class="nasdelay">10분지연</span>` : '';
     }
   } catch (e) {}
 }
