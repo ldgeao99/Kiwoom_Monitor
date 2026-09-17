@@ -761,6 +761,8 @@ def build_summary():
             'orgn': last.get('orgn_netprps'),
             'series': today_series,
             'series_prev': prev_series,
+            # 오늘 실제 시가(ka20001 open_pric) — 차트 시가선/색 기준. 당일에만.
+            'open': (get_index_open(m, date_str) if date_str == now.strftime('%Y-%m-%d') else None),
         })
     return {'markets': out}
 
