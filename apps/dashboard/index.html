@@ -508,7 +508,9 @@ function mktSpark(prevSeries, todaySeries, base, flu, W = 150, H = 56, openPx = 
   const pad = 5;                       // x축 좌우 여백
   const padY = 0;                      // y축 상하 여백 없음(기본/세로보기 모두)
   const prev = prevSeries || [];
-  const today = (todaySeries || []).filter(s => (s.t || '').slice(0, 5) >= '09:01');   // 오늘은 09:01부터
+  let today = (todaySeries || []).filter(s => (s.t || '').slice(0, 5) >= '09:01');   // 오늘은 09:01부터
+  // 동시호가로 확정된 실제 시가(open_pric)를 09:00 시작점으로 앵커링 → 라인이 시가선에서 출발
+  if (openPx != null && today.length) today = [{ t: '09:00:00', idx: openPx }, ...today];
   const all = prev.concat(today);
   if (all.length < 2) return `<svg class="spark" viewBox="0 0 ${W} ${H}"></svg>`;
   // 오늘 실제 시가(우선), 없으면 오늘 첫 점 — 시가선/색 기준. 스케일에도 포함해 항상 보이게.
