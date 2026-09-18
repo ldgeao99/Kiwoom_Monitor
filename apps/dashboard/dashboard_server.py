@@ -472,9 +472,8 @@ def poll_once(token, market):
             side, open_px, cur_px = cross
             head = '🟢' if side == 'up' else '🔴'
             word = '시가 돌파(상향)' if side == 'up' else '시가 이탈(하향)'
-            pct = (cur_px - open_px) / open_px * 100
             send_telegram_message(f"{head} [{market['name']}] {word}\n"
-                                  f"{record['t'][:5]}  시가 {open_px:,.2f} · 현재 {cur_px:,.2f} ({pct:+.2f}%)")
+                                  f"{record['t'][:5]}  시가 {open_px:,.2f} · 현재 {cur_px:,.2f}")
             print(f"  → 텔레그램: {market['name']} {word} 시가 {open_px:.2f} 현재 {cur_px:.2f}")
 
     with open(snapshot_path(mkey, date_str), 'a', encoding='utf-8') as f:
