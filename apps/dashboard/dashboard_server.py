@@ -729,7 +729,7 @@ def get_nasdaq_future():
         m = r.json()['chart']['result'][0]['meta']
         price = m['regularMarketPrice']
         prev = m.get('chartPreviousClose') or m.get('previousClose')
-        data = {'price': price, 'pct': (price / prev - 1) * 100} if (price and prev) else None
+        data = {'price': price, 'pct': (price / prev - 1) * 100, 'prev': prev} if (price and prev) else None
         if data:
             _nasdaq_cache.update(ts=now, data=data)
         return _nasdaq_cache['data']
@@ -768,13 +768,18 @@ def maybe_check_nasdaq_reversal(now):
         st['high'] = price; st['down_armed'] = True   # 새 고점 → 하락 감시 재무장
     up = (price / st['low'] - 1) * 100 if st['low'] else 0.0
     dn = (price / st['high'] - 1) * 100 if st['high'] else 0.0
+    prev = data.get('prev')                       # 전일종가(등락률 기준)
+    cur_pct = data.get('pct')                      # 현재가 전일대비 등락률
+    def _p(v):                                     # 전일종가 대비 등락률(%) 문자열
+        return f"({(v / prev - 1) * 100:+.2f}%)" if prev else ""
+    cur_s = f"({cur_pct:+.2f}%)" if cur_pct is not None else ""
     if st.get('up_armed') and up >= NASDAQ_REV_PCT - 1e-9:
         st['up_armed'] = False
-        send_telegram_message(f"🟢 나스닥100선물 상승\n당일저점 {st['low']:,.2f} 대비 +{up:.2f}%\n현재 {price:,.2f}")
+        send_telegram_message(f"🟢 나스닥100선물 상승\n당일저점 {st['low']:,.2f}{_p(st['low'])} 대비 +{up:.2f}%\n현재 {price:,.2f}{cur_s}")
         print(f"  → 텔레그램: 나스닥선물 상승 +{up:.2f}%")
     if st.get('down_armed') and dn <= -NASDAQ_REV_PCT + 1e-9:
         st['down_armed'] = False
-        send_telegram_message(f"🔴 나스닥100선물 하락\n당일고점 {st['high']:,.2f} 대비 {dn:.2f}%\n현재 {price:,.2f}")
+        send_telegram_message(f"🔴 나스닥100선물 하락\n당일고점 {st['high']:,.2f}{_p(st['high'])} 대비 {dn:.2f}%\n현재 {price:,.2f}{cur_s}")
         print(f"  → 텔레그램: 나스닥선물 하락 {dn:.2f}%")
 
 
