@@ -946,18 +946,26 @@ async function loadAllProgram() {
         + '&amt=' + progAmt + '&cont=Y&next=' + encodeURIComponent(progNext);
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {                                 // 429 등: 잠깐 쉬고 재시도
+        let bodyTxt = '';
+        try { bodyTxt = (await res.text()).slice(0, 200); } catch (e) {}
+        console.warn(`[연속조회] HTTP ${res.status} (page ${page + 1}, retry ${retry})`, bodyTxt);
         if (res.status === 429 && retry < 5) { retry++; await new Promise(r => setTimeout(r, 700)); continue; }
+        console.error(`[연속조회] 중단 — HTTP ${res.status}`);
         break;
       }
       retry = 0;
       const d = await res.json();
+      page++;
+      if (d.error) console.error(`[연속조회] page ${page} 서버오류:`, d.error);
+      console.log(`[연속조회] page ${page} OK · 건수 ${d.series ? d.series.length : 0} · cont ${d.cont} · next ${d.next ? d.next.slice(0, 12) + '…' : '(없음)'}`);
       progMerge(d.series);
       progCont = d.cont || 'N'; progNext = d.next || '';
       btn.textContent = '불러오는 중… (누르면 중단)';
-      if (++page % 3 === 0) progRedraw();            // 진행 표시(3페이지마다 갱신)
+      if (page % 3 === 0) progRedraw();              // 진행 표시(3페이지마다 갱신)
       await new Promise(r => setTimeout(r, 30));      // 페이지 간 지연
     }
-  } catch (e) {}
+    console.log(`[연속조회] 완료 · 총 ${page}페이지 · cont ${progCont}${progStop ? ' · 사용자중단' : ''}`);
+  } catch (e) { console.error('[연속조회] 예외:', e); }
   progLoading = false; progStop = false;
   btn.textContent = '연속조회';
   progRedraw();
