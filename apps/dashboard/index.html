@@ -691,8 +691,9 @@ async function renderSummaryCards() {
     if (nf) {
       const n = data.nasdaq;
       const f = v => (v == null) ? '-' : `<b class="${cls(v)}">${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
+      const fp = v => (v == null) ? '-' : `<b>${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;   // 색 없음
       nf.innerHTML = (n && n.cur != null)
-        ? `나스닥100선물 현재 ${f(n.cur)} 최저 ${f(n.low)} 최고 ${f(n.high)} <span class="nasdelay">(10분지연)</span>` : '';
+        ? `나스닥100선물 현재 ${f(n.cur)} 최저 ${fp(n.low)} 최고 ${fp(n.high)} <span class="nasdelay">(10분지연)</span>` : '';
     }
   } catch (e) {}
 }
