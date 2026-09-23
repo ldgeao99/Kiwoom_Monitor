@@ -111,6 +111,17 @@
   .breadth-tbl .arw { font-size:11px; margin-left:3px; }
   .breadth-tbl .pct { color:var(--muted); font-weight:400; font-size:11px; }
   .breadth-tbl .pct.low { color:#2563eb; font-weight:700; }   /* 상승비율 35% 미만 경고 */
+  /* 프로그램 순매수 상위 종목 */
+  .prm-wrap { max-width:1200px; margin:0 auto 24px; }
+  .pu-mkt { display:flex; gap:8px; margin-bottom:8px; }
+  .pu-mkt label { font-size:13px; padding:4px 12px; border:1px solid var(--line); border-radius:14px; cursor:pointer; color:var(--muted); }
+  .pu-mkt label.on { background:var(--sel); color:var(--text); border-color:var(--sel); }
+  .pu-tbl { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .pu-tbl th, .pu-tbl td { padding:7px 10px; font-size:13px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  .pu-tbl th { background:var(--head); color:var(--muted); font-weight:600; }
+  .pu-tbl td.mk { text-align:left; font-weight:600; cursor:pointer; }
+  .pu-tbl tbody tr:last-child td { border-bottom:0; }
+  .pu-tbl tbody tr:hover { background:var(--head); }
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
@@ -239,6 +250,11 @@
     <div id="prog-table"></div>
     <div id="prog-chart"></div>
   </div>
+</div>
+<div class="page-title"><span>프로그램 순매수 상위 종목</span></div>
+<div class="prm-wrap">
+  <div class="pu-mkt" id="pu-mkt"></div>
+  <div id="prm-upper"></div>
 </div>
 <script>
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
@@ -1019,10 +1035,50 @@ async function resolveAndLoad(raw) {
   });
 })();
 
+// ── 프로그램 순매수 상위 종목 (ka90003) ──
+let puMarket = 'kospi';
+try { puMarket = localStorage.getItem('prm_upper_market') || 'kospi'; } catch (e) {}
+
+function renderPuMkt() {
+  const host = document.getElementById('pu-mkt');
+  if (!host) return;
+  host.innerHTML = [['kospi', '코스피'], ['kosdaq', '코스닥']].map(([k, n]) =>
+    `<label class="${k === puMarket ? 'on' : ''}"><input type="radio" name="pumkt" value="${k}" ${k === puMarket ? 'checked' : ''}>${n}</label>`).join('');
+  host.querySelectorAll('input[name="pumkt"]').forEach(r => r.addEventListener('change', () => {
+    puMarket = r.value;
+    try { localStorage.setItem('prm_upper_market', puMarket); } catch (e) {}
+    renderPuMkt(); renderPrmUpper();
+  }));
+}
+
+async function renderPrmUpper() {
+  const host = document.getElementById('prm-upper');
+  if (!host) return;
+  try {
+    const res = await fetch('/api/prm_upper?mrkt=' + encodeURIComponent(puMarket), { cache: 'no-store' });
+    if (!res.ok) return;
+    const items = (await res.json()).items || [];
+    if (!items.length) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
+    const rows = items.map(it => {
+      const eok = Math.round(it.net / 100);   // 백만원 → 억원
+      return `<tr data-code="${it.code}">`
+        + `<td class="num">${it.rank}</td>`
+        + `<td class="mk">${it.name}</td>`
+        + `<td class="num ${cls(it.flu)}">${(it.flu > 0 ? '+' : '') + it.flu.toFixed(2)}%</td>`
+        + `<td class="num ${cls(it.net)}">${(eok > 0 ? '+' : '') + eok.toLocaleString('ko-KR')}억</td></tr>`;
+    }).join('');
+    host.innerHTML = `<table class="pu-tbl"><thead><tr><th>순위</th><th>종목명</th><th>등락률</th><th>순매수금액</th></tr></thead><tbody>${rows}</tbody></table>`;
+    host.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => {
+      const c = tr.getAttribute('data-code'); if (c) loadProgStock(c);
+    }));
+  } catch (e) {}
+}
+
 async function refresh() {
   renderSummaryCards();   // 상단 카드도 함께 갱신
   renderRank();           // 조회수 상위 종목 갱신
   renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
+  renderPrmUpper();       // 프로그램 순매수 상위 종목 갱신
   try {
     const res = await fetch('/api/netprps?mrkt=' + encodeURIComponent(curMarket), { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1155,6 +1211,7 @@ applyIdxView();
   });
 })();
 
+renderPuMkt();      // 프로그램 순매수 상위 시장 선택 UI
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
 </script>

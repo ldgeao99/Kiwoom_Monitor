@@ -971,6 +971,54 @@ def build_rank():
     return {'items': items}
 
 
+# 프로그램 순매수 상위 종목(ka90003) — 시장구분 코드
+_PRM_MRKT = {'kospi': 'P00101', 'kosdaq': 'P10102'}
+
+
+def fetch_prm_upper(token, mrkt_tp, trde_upper_tp='2', amt_qty_tp='1', stex_tp='3'):
+    """ka90003(프로그램순매수상위50). trde_upper_tp 2:순매수상위, stex_tp 3:통합."""
+    url = 'https://api.kiwoom.com/api/dostk/stkinfo'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'cont-yn': 'N', 'next-key': '', 'api-id': 'ka90003',
+    }
+    data = {'trde_upper_tp': trde_upper_tp, 'amt_qty_tp': amt_qty_tp,
+            'mrkt_tp': mrkt_tp, 'stex_tp': stex_tp}
+    resp = requests.post(url, headers=headers, json=data, timeout=15)
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') not in (None, 0):
+        raise RuntimeError(f"프로그램순매수상위 API 오류: {body.get('return_msg')}")
+    return body.get('prm_netprps_upper_50') or []
+
+
+def build_prm_upper(market_key):
+    """프로그램 순매수 상위: 순위/종목명/코드/현재가/등락률/프로그램순매수금액(백만원)."""
+    mrkt_tp = _PRM_MRKT.get(market_key, 'P00101')
+
+    def run(tok):
+        out = []
+        for r in fetch_prm_upper(tok, mrkt_tp):
+            out.append({
+                'rank': to_number(r.get('rank')),
+                'code': (r.get('stk_cd') or '').split('_')[0],
+                'name': r.get('stk_nm', ''),
+                'cur': abs(to_number(r.get('cur_prc'))),
+                'flu': to_number(r.get('flu_rt')),
+                'sig': str(r.get('flu_sig') or ''),
+                'net': to_number(r.get('prm_netprps_amt')),   # 백만원
+            })
+        return out
+
+    try:
+        items = run(cached_token())
+    except Exception:
+        _token_cache['token'] = None
+        items = run(cached_token())
+    return {'market': market_key, 'items': items}
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1008,6 +1056,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = build_rank()
             except Exception as e:
                 payload = {'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/prm_upper':
+            qs = parse_qs(parsed.query)
+            mkey = (qs.get('mrkt', [MARKETS[0]['key']])[0])
+            if mkey not in MARKET_BY_KEY:
+                mkey = MARKETS[0]['key']
+            try:
+                payload = build_prm_upper(mkey)
+            except Exception as e:
+                payload = {'market': mkey, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/stock':
