@@ -1065,10 +1065,10 @@ function renderPuTable() {
   if (!host) return;
   if (!puItems.length) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; if (btn) btn.style.display = 'none'; return; }
   let html = `<div class="pu-scroll${puExpanded ? ' expanded' : ''}"><table class="pu-tbl"><thead><tr>`
-    + `<th class="rk">순위</th><th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>순매수금액</th></tr></thead><tbody>`;
+    + `<th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>순매수금액</th></tr></thead><tbody>`;
   puItems.forEach(it => {
     const eok = Math.round(it.net / 100);   // 백만원 → 억원
-    html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수금액 조회"><td class="rk">${it.rank}</td>`
+    html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수금액 조회">`
       + `<td class="mk">${it.name}</td>`
       + `<td class="${cls(it.flu)}">${it.cur.toLocaleString('ko-KR')}</td>`
       + `<td class="${cls(it.flu)}">${(it.flu > 0 ? '+' : '') + it.flu.toFixed(2)}%</td>`
