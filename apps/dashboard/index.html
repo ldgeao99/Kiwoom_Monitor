@@ -1041,13 +1041,13 @@ async function resolveAndLoad(raw) {
 })();
 
 // ── 프로그램 순매수 상위 종목 (ka90003) ──
-let puMarket = 'kospi';
-try { puMarket = localStorage.getItem('prm_upper_market') || 'kospi'; } catch (e) {}
+let puMarket = 'all';
+try { puMarket = localStorage.getItem('prm_upper_market') || 'all'; } catch (e) {}
 
 function renderPuMkt() {
   const host = document.getElementById('pu-mkt');
   if (!host) return;
-  host.innerHTML = [['kospi', '코스피'], ['kosdaq', '코스닥'], ['all', '전체']].map(([k, n]) =>
+  host.innerHTML = [['all', '전체'], ['kospi', '코스피'], ['kosdaq', '코스닥']].map(([k, n]) =>
     `<label class="${k === puMarket ? 'on' : ''}"><input type="radio" name="pumkt" value="${k}" ${k === puMarket ? 'checked' : ''}>${n}</label>`).join('');
   host.querySelectorAll('input[name="pumkt"]').forEach(r => r.addEventListener('change', () => {
     puMarket = r.value;
