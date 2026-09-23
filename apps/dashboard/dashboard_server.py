@@ -312,31 +312,22 @@ def last_record(market_key, date_str):
     return records[-1] if records else None
 
 
-def _grid_floor(v):
-    """v를 아래쪽 1000 그리드로 내림(음수도 floor). 예: 2050->2000, -1500->-2000."""
-    return (int(v) // ALERT_STEP) * ALERT_STEP
-
-
 def _init_alert_state(market_key, date_str):
-    """기준선(level)을 그날 마지막 기록값의 그리드로 초기화(없으면 0).
+    """기준값(last_v)을 그날 마지막 기록값으로 초기화(없으면 0).
     서버 재시작 시 과거 이력을 되풀이 알림하지 않고 현재 위치에서 이어감."""
     prev = last_record(market_key, date_str)
     last_v = int(prev.get(ALERT_FIELD, 0)) if prev else 0
-    return {'date': date_str, 'level': _grid_floor(last_v), 'last_v': last_v}
+    return {'date': date_str, 'last_v': last_v}
 
 
 def check_move(st, cur_v):
-    """기준선(level)에서 한 칸(ALERT_STEP) 이상 움직였으면 알림 신호 반환.
-    반환: ('up'|'down', new_level, steps) 또는 None. 상태(level)는 움직인 만큼 이동."""
-    level = st['level']
-    if cur_v >= level + ALERT_STEP:
-        steps = (cur_v - level) // ALERT_STEP
-        st['level'] = level + steps * ALERT_STEP
-        return ('up', st['level'], steps)
-    if cur_v <= level - ALERT_STEP:
-        steps = (level - cur_v) // ALERT_STEP
-        st['level'] = level - steps * ALERT_STEP
-        return ('down', st['level'], steps)
+    """직전 알림값(last_v) 대비 ALERT_STEP(1000억) 이상 움직였을 때만 신호 반환.
+    반환: ('up'|'down', cur_v, diff) 또는 None. (기준값 갱신은 호출부에서 last_v=cur_v)"""
+    diff = cur_v - st['last_v']
+    if diff >= ALERT_STEP:
+        return ('up', cur_v, diff)
+    if diff <= -ALERT_STEP:
+        return ('down', cur_v, diff)
     return None
 
 
