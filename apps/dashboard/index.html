@@ -243,6 +243,7 @@
       <div class="prog-row">
         <input id="prog-stk" class="prog-input" value="005930" placeholder="종목코드/종목명">
         <button id="prog-go" class="prog-go" type="button">조회</button>
+        <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
       </div>
       <div class="prog-row">
         <span class="market-sel" id="prog-amt">
@@ -251,7 +252,6 @@
         </span>
         <span id="prog-name" class="prog-name"></span>
         <small class="prog-unit" id="prog-count"></small>
-        <button id="prog-more" class="prog-go" type="button" disabled>연속조회</button>
       </div>
     </div>
     <div id="prog-table"></div>
@@ -849,7 +849,7 @@ function drawProgramTable(series) {
   let tbody = host.querySelector('.prog-tbl tbody');
   if (!tbody) {
     const netLbl = progAmt === '2' ? '순매수수량' : '순매수금액';
-    const chgLbl = progAmt === '2' ? '순매수수량증감' : '순매수증감';
+    const chgLbl = '증감';
     host.innerHTML = '<div class="prog-tscroll"><table class="prog-tbl"><thead><tr>'
       + `<th>시간</th><th>현재가</th><th>등락률</th><th>${netLbl}</th><th>${chgLbl}</th></tr></thead><tbody></tbody></table></div>`;
     tbody = host.querySelector('.prog-tbl tbody');
