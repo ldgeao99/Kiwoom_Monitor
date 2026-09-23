@@ -79,7 +79,7 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
-  .nasfut { font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap; }
+  .nasfut { font-size:12px; font-weight:600; color:var(--muted); }
   .nasfut b { font-weight:700; }
   .nasfut .nasdelay { font-size:10px; font-weight:400; color:var(--muted); }
   .view-btn { margin-left:auto; font-size:13px; font-weight:600; color:var(--muted); background:none;
@@ -689,8 +689,9 @@ async function renderSummaryCards() {
     const nf = document.getElementById('nasdaq-fut');
     if (nf) {
       const n = data.nasdaq;
-      nf.innerHTML = (n && n.pct != null)
-        ? `나스닥100선물 <b class="${cls(n.pct)}">${(n.pct > 0 ? '+' : '') + n.pct.toFixed(2)}%</b> <span class="nasdelay">(10분지연)</span>` : '';
+      const f = v => (v == null) ? '-' : `<b class="${cls(v)}">${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
+      nf.innerHTML = (n && n.cur != null)
+        ? `나스닥100선물 현재 ${f(n.cur)} 최저 ${f(n.low)} 최고 ${f(n.high)} <span class="nasdelay">(10분지연)</span>` : '';
     }
   } catch (e) {}
 }

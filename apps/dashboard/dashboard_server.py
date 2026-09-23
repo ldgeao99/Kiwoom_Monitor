@@ -749,6 +749,18 @@ def _nasdaq_session_date(now):
     return base.strftime('%Y-%m-%d')
 
 
+def get_nasdaq_display():
+    """나스닥100선물 현재/당일최저/당일최고의 전일종가 대비 등락률(%). 없으면 None."""
+    data = get_nasdaq_future()
+    if not data:
+        return None
+    prev = data.get('prev')
+    st = _nasdaq_rev_state
+    def pct(v):
+        return (v / prev - 1) * 100 if (prev and v) else None
+    return {'cur': data.get('pct'), 'low': pct(st.get('low')), 'high': pct(st.get('high'))}
+
+
 def maybe_check_nasdaq_reversal(now):
     """당일 최저점 대비 +0.5% 상승(🟢) / 최고점 대비 -0.5% 하락(🔴) 시 텔레그램.
     새 최저/최고 갱신 시 반대 방향 감시 재무장 → 극점 반전마다 1회씩."""
@@ -836,7 +848,7 @@ def build_summary():
             # 오늘 실제 시가(ka20001 open_pric) — 차트 시가선/색 기준. 당일에만.
             'open': (get_index_open(m, date_str) if date_str == now.strftime('%Y-%m-%d') else None),
         })
-    return {'markets': out, 'nasdaq': get_nasdaq_future()}
+    return {'markets': out, 'nasdaq': get_nasdaq_display()}
 
 
 def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
