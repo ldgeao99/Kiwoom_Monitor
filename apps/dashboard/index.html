@@ -1244,6 +1244,7 @@ applyIdxView();
 renderPuMkt();      // 프로그램 순매수 상위 시장 선택 UI
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
+setInterval(renderPrmUpper, 30000);   // 프로그램 순매수 상위는 30초마다 별도 갱신
 </script>
 </body>
 </html>
