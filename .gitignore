@@ -7,3 +7,4 @@ common/krx_listed_companies.json
 __pycache__/
 *.pyc
 .idea/
+*.log
