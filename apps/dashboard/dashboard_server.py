@@ -994,7 +994,16 @@ def fetch_prm_upper(token, mrkt_tp, trde_upper_tp='2', amt_qty_tp='1', stex_tp='
 
 
 def build_prm_upper(market_key):
-    """프로그램 순매수 상위: 순위/종목명/코드/현재가/등락률/프로그램순매수금액(백만원)."""
+    """프로그램 순매수 상위: 순위/종목명/코드/현재가/등락률/프로그램순매수금액(백만원).
+    market_key='all'이면 코스피+코스닥을 합쳐 순매수금액 내림차순으로 재정렬."""
+    if market_key == 'all':
+        items = []
+        for mk in ('kospi', 'kosdaq'):
+            items += build_prm_upper(mk).get('items', [])
+        items.sort(key=lambda x: (x.get('net') or 0), reverse=True)
+        for i, it in enumerate(items):
+            it['rank'] = i + 1
+        return {'market': 'all', 'items': items}
     mrkt_tp = _PRM_MRKT.get(market_key, 'P00101')
 
     def run(tok):
@@ -1061,7 +1070,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/prm_upper':
             qs = parse_qs(parsed.query)
             mkey = (qs.get('mrkt', [MARKETS[0]['key']])[0])
-            if mkey not in MARKET_BY_KEY:
+            if mkey != 'all' and mkey not in MARKET_BY_KEY:
                 mkey = MARKETS[0]['key']
             try:
                 payload = build_prm_upper(mkey)
