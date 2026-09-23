@@ -436,7 +436,7 @@ def poll_once(token, market):
         return token
 
     # --- 외국인 순매수 milestone 알림 (파일 기록 전에 판정) ---
-    # 상승: 새 양수 천단위(+1000,+2000,…) 최초 도달 시만 / 하락: 새 음수 천단위(-1000,…) 최초 도달 시만
+    # 직전 알림값(last_v) 대비 ±ALERT_STEP(1000억) 이상 움직였을 때만: 상승 🟢 / 하락 🔴
     st = _alert_state.get(mkey)
     if st is None or st['date'] != date_str:
         st = _init_alert_state(mkey, date_str)   # 이 시점 파일엔 현재 레코드 미포함
