@@ -79,7 +79,8 @@
     display:flex; align-items:center; gap:10px; }
   .page-title a { margin-left:auto; font-size:13px; font-weight:400; color:var(--muted);
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
-  .nasfut { font-size:12px; font-weight:600; color:var(--muted); }
+  .nasfut { max-width:1200px; margin:-2px auto 10px; font-size:12px; font-weight:600; color:var(--muted); }
+  .nasfut:empty { display:none; }
   .nasfut b { font-weight:700; }
   .nasfut .nasdelay { font-size:10px; font-weight:400; color:var(--muted); }
   .view-btn { margin-left:auto; font-size:13px; font-weight:600; color:var(--muted); background:none;
@@ -198,8 +199,8 @@
 <body>
 <div id="ptr"><span class="ptr-spin"></span><span class="ptr-txt">당겨서 새로고침</span></div>
 <div class="page-title"><span>지수현황</span>
-  <span id="nasdaq-fut" class="nasfut"></span>
   <button id="toggle-idxview" class="view-btn" type="button">세로보기</button></div>
+<div id="nasdaq-fut" class="nasfut"></div>
 <div class="mkt-cards" id="mkt-cards"></div>
 <div class="page-title"><span>종목등락현황</span>
   <button id="toggle-breadth" class="view-btn" type="button">접기 ▾</button></div>
