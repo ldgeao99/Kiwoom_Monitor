@@ -962,7 +962,7 @@ async function loadAllProgram() {
       progCont = d.cont || 'N'; progNext = d.next || '';
       btn.textContent = '불러오는 중… (누르면 중단)';
       if (page % 3 === 0) progRedraw();              // 진행 표시(3페이지마다 갱신)
-      await new Promise(r => setTimeout(r, 30));      // 페이지 간 지연
+      // 페이지 간 지연 없음(응답이 모두 200이라 즉시 연속 요청). 429 발생 시 위에서 백오프.
     }
     console.log(`[연속조회] 완료 · 총 ${page}페이지 · cont ${progCont}${progStop ? ' · 사용자중단' : ''}`);
   } catch (e) { console.error('[연속조회] 예외:', e); }
