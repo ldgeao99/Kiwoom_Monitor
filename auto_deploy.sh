@@ -10,7 +10,7 @@ REMOTE=$(git rev-parse origin/main 2>/dev/null)
 [ -z "$REMOTE" ] && exit 0
 [ "$LOCAL" = "$REMOTE" ] && exit 0       # 변경 없음 → 종료(로그도 안 남김)
 
-echo "[$(date '+%F %T')] 새 커밋 감지($REMOTE) → 배포 시작"
+echo "[$(TZ='Asia/Seoul' date '+%F %T')] 새 커밋 감지($REMOTE) → 배포 시작"
 git pull --ff-only || { echo "  git pull 실패"; exit 1; }
 pkill -f 'dashboard_server.py' 2>/dev/null || true
 sleep 1
