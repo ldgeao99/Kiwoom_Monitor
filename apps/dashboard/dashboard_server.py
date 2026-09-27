@@ -475,9 +475,38 @@ def poll_once(token, market):
     return token
 
 
+# KRX(코스피/코스닥) 정규 휴장일 — 이 날은 주말처럼 수집/다이제스트를 하지 않는다.
+# 주말(토·일)은 weekday()로 자동 제외되므로 여기엔 '평일에 걸린 공휴일'만 넣으면 된다.
+# ※ 매년 초 KRX 공지(연말 폐장일 포함) 보고 갱신할 것.
+KR_MARKET_HOLIDAYS = frozenset({
+    # 2026년 (총 17일)
+    '2026-01-01',  # 신정
+    '2026-02-16', '2026-02-17', '2026-02-18',  # 설날 연휴
+    '2026-03-02',  # 삼일절 대체휴일(3/1 일)
+    '2026-05-01',  # 근로자의 날
+    '2026-05-05',  # 어린이날
+    '2026-05-25',  # 부처님오신날 대체휴일(5/24 일)
+    '2026-06-03',  # 전국동시지방선거
+    '2026-07-17',  # 제헌절
+    '2026-08-17',  # 광복절 대체휴일(8/15 토)
+    '2026-09-24', '2026-09-25',  # 추석 연휴(9/26 토·27 일은 주말)
+    '2026-10-05',  # 개천절 대체휴일(10/3 토)
+    '2026-10-09',  # 한글날
+    '2026-12-25',  # 성탄절
+    '2026-12-31',  # 연말 폐장일
+})
+
+
+def is_market_holiday(now):
+    """해당 일자가 KRX 휴장 공휴일이면 True(주말은 별도로 weekday()로 판단)."""
+    return now.strftime('%Y-%m-%d') in KR_MARKET_HOLIDAYS
+
+
 def in_collect_window(now, start_h, end_h):
-    """평일(월~금) 08:00~20:00 안이면 True. 주말은 항상 False."""
+    """평일(월~금) 08:00~20:00 안이면 True. 주말·공휴일은 항상 False."""
     if now.weekday() >= 5:          # 5:토, 6:일
+        return False
+    if is_market_holiday(now):      # 평일에 걸린 KRX 휴장 공휴일
         return False
     return start_h <= now.hour < end_h
 
@@ -495,8 +524,10 @@ MARKET_OPEN_HOUR = 8
 
 
 def in_preopen_window(now):
-    """평일 07:00~08:00(장 시작 전 대기 시간대)이면 True."""
+    """평일 07:00~08:00(장 시작 전 대기 시간대)이면 True. 주말·공휴일 제외."""
     if now.weekday() >= 5:
+        return False
+    if is_market_holiday(now):
         return False
     return PREOPEN_START_HOUR <= now.hour < MARKET_OPEN_HOUR
 
@@ -530,7 +561,8 @@ def _prev_data_dates(before_str, count):
     dates = sorted(name[len(prefix):-len('.jsonl')]
                    for name in os.listdir(DATA_DIR)
                    if name.startswith(prefix) and name.endswith('.jsonl'))
-    dates = [d for d in dates if d < before_str]
+    # 미만 + 공휴일 제외(연휴 중 실수로 만들어진 스냅샷 파일이 있어도 걸러낸다)
+    dates = [d for d in dates if d < before_str and d not in KR_MARKET_HOLIDAYS]
     return list(reversed(dates))[:count]
 
 
