@@ -136,6 +136,14 @@
   .pu-tbl tbody tr:hover { background:var(--head); }
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
+  /* 종목 캔들 차트 */
+  .chart-wrap { max-width:1200px; margin:0 auto 24px; }
+  .chart-head { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .chart-name { font-size:13px; font-weight:600; color:var(--text); }
+  #stock-chart { padding:8px 10px; }
+  #chart-tf { margin-left:auto; margin-bottom:0; font-weight:400; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  #chart-tf input { display:none; }                    /* 봉 주기: 라디오 점 숨김 */
+  #chart-tf label { white-space:nowrap; padding:4px 10px; }
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
   .rank-scroll { max-height:341px; overflow-y:auto; }   /* 프로그램 순매수 상위(.pu-scroll)와 동일 */
   .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
@@ -237,6 +245,17 @@
 <div class="rank-wrap">
   <div class="panel">
     <div id="rank-host"></div>
+  </div>
+</div>
+<div class="page-title"><span>종목 차트</span><div class="pu-mkt" id="chart-tf"></div></div>
+<div class="chart-wrap">
+  <div class="chart-head">
+    <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
+    <button id="chart-go" class="prog-go" type="button">조회</button>
+    <span id="chart-name" class="chart-name"></span>
+  </div>
+  <div class="panel">
+    <div id="stock-chart"></div>
   </div>
 </div>
 <div class="page-title"><span>프로그램 상위 종목</span><div class="pu-mkt" id="pu-side"></div></div>
@@ -730,7 +749,7 @@ function renderRankTable() {
     + '<th class="rk"></th><th style="text-align:left">종목명</th>'
     + '<th>현재가</th><th>등락률</th><th>30초비</th></tr></thead><tbody>';
   shown.forEach(it => {
-    html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수금액 조회"><td class="rk">${it.rank}</td>`
+    html += `<tr data-code="${it.code}" title="클릭하면 종목 차트 조회"><td class="rk">${it.rank}</td>`
       + `<td class="nm">${it.name}${rankChgHtml(it.rank_sign, it.rank_chg)}</td>`
       + priceCell(it.price, it.psign)
       + `<td class="${pctCls(it.chgr)}">${(it.chgr > 0 ? '+' : '') + it.chgr.toFixed(2)}%</td>`
@@ -751,13 +770,120 @@ async function renderRank() {
     renderRankTable();
   } catch (e) {}
 }
-// 조회순위 종목 클릭 → 프로그램 순매수금액 조회 + 해당 섹션으로 스크롤
+// 조회순위 종목 클릭 → 종목 차트 조회(+프로그램 순매수도 함께) + 차트로 스크롤
 document.getElementById('rank-host').addEventListener('click', e => {
   const tr = e.target.closest('tr[data-code]');
   if (!tr) return;
-  loadProgStock(tr.dataset.code);
-  document.querySelector('.prog-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const code = tr.dataset.code;
+  const it = (rankItems || []).find(x => x.code === code);
+  setChartStock(code, it ? it.name : '');
+  loadProgStock(code);
+  document.querySelector('.chart-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
+
+// ── 종목 캔들 차트 (분/일/주/월봉) ──
+let chartCode = '', chartName = '', chartTf = 'D';
+try { chartTf = localStorage.getItem('stock_chart_tf') || 'D'; } catch (e) {}
+try { chartCode = localStorage.getItem('stock_chart_code') || ''; } catch (e) {}
+
+const CHART_TFS = [['1m','1분'],['3m','3분'],['10m','10분'],['15m','15분'],['D','일'],['W','주'],['M','월']];
+
+function renderChartTf() {
+  const host = document.getElementById('chart-tf');
+  if (!host) return;
+  host.innerHTML = CHART_TFS.map(([k, n]) =>
+    `<label class="${k === chartTf ? 'on' : ''}"><input type="radio" name="charttf" value="${k}" ${k === chartTf ? 'checked' : ''}>${n}</label>`).join('');
+  host.querySelectorAll('input[name="charttf"]').forEach(r => r.addEventListener('change', () => {
+    chartTf = r.value;
+    try { localStorage.setItem('stock_chart_tf', chartTf); } catch (e) {}
+    renderChartTf(); loadCandles();
+  }));
+}
+
+function drawCandles(items, tf) {
+  const host = document.getElementById('stock-chart');
+  if (!host) return;
+  if (!items || items.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
+  const W = 760, H = 300, mL = 8, mR = 64, mT = 10, mB = 22;
+  const iw = W - mL - mR, ih = H - mT - mB, n = items.length;
+  let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
+  if (lo === hi) hi = lo + 1;
+  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+  const cw = iw / n, bw = Math.max(1, Math.min(cw * 0.7, 9));
+  const xc = i => mL + cw * (i + 0.5);
+  const y = v => mT + ih * (1 - (v - lo) / (hi - lo));
+
+  const ticks = 5; let grid = '';
+  for (let k = 0; k <= ticks; k++) {
+    const v = lo + (hi - lo) * k / ticks, yy = y(v);
+    grid += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
+    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
+  }
+
+  const isMin = tf.endsWith('m');
+  const fmt = t => isMin
+    ? (t.length >= 12 ? t.slice(8,10)+':'+t.slice(10,12) : t)
+    : (t.length >= 8 ? t.slice(4,6)+'/'+t.slice(6,8) : t);
+  let xlab = ''; const step = Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += step) {
+    const xx = xc(i);
+    xlab += `<text x="${xx.toFixed(1)}" y="${H-6}" font-size="10" fill="#9aa0a8" text-anchor="middle">${fmt(items[i].t)}</text>`;
+  }
+
+  let body = '';
+  items.forEach((d, i) => {
+    const col = d.c >= d.o ? 'var(--pos)' : 'var(--neg)';
+    const x = xc(i), yH = y(d.h), yL = y(d.l), yO = y(d.o), yC = y(d.c);
+    const top = Math.min(yO, yC), bh = Math.max(1, Math.abs(yC - yO));
+    body += `<line x1="${x.toFixed(1)}" y1="${yH.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yL.toFixed(1)}" stroke="${col}" stroke-width="1"/>`;
+    body += `<rect x="${(x-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}"/>`;
+  });
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
+    + grid + body + xlab + '</svg>';
+}
+
+async function loadCandles() {
+  const host = document.getElementById('stock-chart');
+  if (!chartCode) { if (host) host.innerHTML = '<div class="empty">종목을 클릭하거나 코드를 입력하세요.</div>'; return; }
+  try {
+    const res = await fetch('/api/candles?code=' + encodeURIComponent(chartCode) + '&tf=' + chartTf, { cache: 'no-store' });
+    if (!res.ok) return;
+    const d = await res.json();
+    if (d.error && !(d.items || []).length) { if (host) host.innerHTML = '<div class="empty">' + d.error + '</div>'; return; }
+    drawCandles(d.items || [], d.tf || chartTf);
+  } catch (e) {}
+}
+
+function setChartStock(code, name) {
+  chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
+  if (name) chartName = name;
+  try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
+  const inp = document.getElementById('chart-code'); if (inp) inp.value = chartCode;
+  const nm = document.getElementById('chart-name'); if (nm) nm.textContent = chartName ? `${chartName} (${chartCode})` : chartCode;
+  loadCandles();
+}
+
+async function resolveChart(raw) {
+  const v = (raw || '').trim();
+  if (!v) return;
+  const digits = v.replace(/\D/g, '');
+  if (digits.length === 6) { setChartStock(digits, ''); return; }
+  try {
+    const res = await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
+    if (!res.ok) return;
+    const d = await res.json();
+    if (d && d.code) setChartStock(d.code, d.name || '');
+    else { const nm = document.getElementById('chart-name'); if (nm) nm.textContent = `"${v}" 종목을 찾지 못했습니다`; }
+  } catch (e) {}
+}
+
+(function () {
+  const go = document.getElementById('chart-go'), inp = document.getElementById('chart-code');
+  if (!go || !inp) return;
+  go.addEventListener('click', () => resolveChart(inp.value));
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') resolveChart(inp.value); });
+})();
 
 // ── 하단: 특정 종목 프로그램 순매수금액 차트 ──
 let progStk = (function () {
@@ -1269,6 +1395,8 @@ applyIdxView();
 
 renderPuSide();     // 프로그램 상위: 순매수/순매도 선택 UI
 renderPuMkt();      // 프로그램 상위: 시장 선택 UI
+renderChartTf();    // 종목 차트: 봉 주기 선택 UI
+if (chartCode) setChartStock(chartCode, '');   // 마지막 조회 종목 복원
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
 setInterval(renderPrmUpper, 30000);   // 프로그램 순매수 상위는 30초마다 별도 갱신

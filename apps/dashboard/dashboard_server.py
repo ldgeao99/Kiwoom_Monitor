@@ -1066,6 +1066,68 @@ def build_prm_upper(market_key, side='2'):
     return {'market': market_key, 'side': side, 'items': items}
 
 
+# ── 종목 캔들 차트 (분/일/주/월봉) ──
+# tf -> (api-id, 응답 리스트 키, 시간 필드, 추가 요청 파라미터)
+_CANDLE_TF = {
+    '1m':  ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '1'}),
+    '3m':  ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '3'}),
+    '10m': ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '10'}),
+    '15m': ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '15'}),
+    'D':   ('ka10081', 'stk_dt_pole_chart_qry',  'dt', {}),
+    'W':   ('ka10082', 'stk_stk_pole_chart_qry', 'dt', {}),
+    'M':   ('ka10083', 'stk_mth_pole_chart_qry', 'dt', {}),
+}
+
+
+def fetch_candles(token, code, tf):
+    """분/일/주/월봉 OHLCV 리스트와 시간 필드명을 반환(ka10080~83)."""
+    api_id, list_key, tkey, extra = _CANDLE_TF[tf]
+    url = 'https://api.kiwoom.com/api/dostk/chart'
+    headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'authorization': f'Bearer {token}',
+        'cont-yn': 'N', 'next-key': '', 'api-id': api_id,
+    }
+    data = {'stk_cd': code, 'base_dt': now_kst().strftime('%Y%m%d'), 'upd_stkpc_tp': '1'}
+    data.update(extra)
+    resp = requests.post(url, headers=headers, json=data, timeout=15)
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get('return_code') not in (None, 0):
+        raise RuntimeError(f"차트 API 오류: {body.get('return_msg')}")
+    return body.get(list_key) or [], tkey
+
+
+def build_candles(code, tf, limit=140):
+    """종목 캔들 차트: 시간 오름차순 OHLCV. 최근 limit개만 반환."""
+    tf = tf if tf in _CANDLE_TF else 'D'
+
+    def run(tok):
+        rows, tkey = fetch_candles(tok, code, tf)
+        out = []
+        for r in rows:
+            out.append({
+                't': str(r.get(tkey) or ''),
+                'o': abs(to_number(r.get('open_pric'))),
+                'h': abs(to_number(r.get('high_pric'))),
+                'l': abs(to_number(r.get('low_pric'))),
+                'c': abs(to_number(r.get('cur_prc'))),
+                'v': abs(to_number(r.get('trde_qty'))),
+            })
+        return out
+
+    try:
+        items = run(cached_token())
+    except Exception:
+        _token_cache['token'] = None
+        items = run(cached_token())
+    items = [it for it in items if it['t'] and it['h'] > 0]
+    items.sort(key=lambda x: x['t'])
+    if limit and len(items) > limit:
+        items = items[-limit:]
+    return {'code': code, 'tf': tf, 'items': items}
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1117,6 +1179,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = build_prm_upper(mkey, side)
             except Exception as e:
                 payload = {'market': mkey, 'side': side, 'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/candles':
+            qs = parse_qs(parsed.query)
+            code = (qs.get('code', [''])[0] or '').split('_')[0].strip()
+            tf = qs.get('tf', ['D'])[0]
+            if tf not in _CANDLE_TF:
+                tf = 'D'
+            if not code:
+                payload = {'code': '', 'tf': tf, 'items': [], 'error': '종목코드 없음'}
+            else:
+                try:
+                    payload = build_candles(code, tf)
+                except Exception as e:
+                    payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/stock':
