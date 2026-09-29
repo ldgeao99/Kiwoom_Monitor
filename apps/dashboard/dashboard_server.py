@@ -1079,14 +1079,14 @@ _CANDLE_TF = {
 }
 
 
-def fetch_candles(token, code, tf):
-    """분/일/주/월봉 OHLCV 리스트와 시간 필드명을 반환(ka10080~83)."""
+def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
+    """분/일/주/월봉 1페이지 조회. (행 리스트, 시간필드명, 응답 cont-yn, next-key) 반환."""
     api_id, list_key, tkey, extra = _CANDLE_TF[tf]
     url = 'https://api.kiwoom.com/api/dostk/chart'
     headers = {
         'Content-Type': 'application/json;charset=UTF-8',
         'authorization': f'Bearer {token}',
-        'cont-yn': 'N', 'next-key': '', 'api-id': api_id,
+        'cont-yn': cont_yn, 'next-key': next_key, 'api-id': api_id,
     }
     data = {'stk_cd': code, 'base_dt': now_kst().strftime('%Y%m%d'), 'upd_stkpc_tp': '1'}
     data.update(extra)
@@ -1095,17 +1095,35 @@ def fetch_candles(token, code, tf):
     body = resp.json()
     if body.get('return_code') not in (None, 0):
         raise RuntimeError(f"차트 API 오류: {body.get('return_msg')}")
-    return body.get(list_key) or [], tkey
+    cy = (resp.headers.get('cont-yn', '') or '').upper()
+    nk = resp.headers.get('next-key', '') or ''
+    return body.get(list_key) or [], tkey, cy, nk
 
 
 def build_candles(code, tf, limit=140):
-    """종목 캔들 차트: 시간 오름차순 OHLCV. 최근 limit개만 반환."""
+    """종목 캔들 차트(시간 오름차순 OHLCV).
+    분봉(1/3/10/15분)은 오늘 장시작(09:00)까지 자동 연속조회 후 오늘분만 반환.
+    일/주/월봉은 1페이지에서 최근 limit개만 반환."""
     tf = tf if tf in _CANDLE_TF else 'D'
+    is_min = tf.endswith('m')
+    open_ts = now_kst().strftime('%Y%m%d') + '090000'   # 오늘 장 시작 시각
 
     def run(tok):
-        rows, tkey = fetch_candles(tok, code, tf)
+        rows_all = []
+        cont, nk, pages, tkey = 'N', '', 0, None
+        while True:
+            rows, tkey, cy, nk2 = fetch_candles(tok, code, tf, cont, nk)
+            rows_all.extend(rows)
+            pages += 1
+            if not is_min:
+                break                                   # 일/주/월은 1페이지면 충분
+            oldest = min((str(r.get(tkey) or '') for r in rows), default='')
+            # 오늘 장시작까지 내려갔거나 · 다음 페이지 없거나 · 상한(20p) 도달 시 종료
+            if cy != 'Y' or not nk2 or (oldest and oldest <= open_ts) or pages >= 20:
+                break
+            cont, nk = 'Y', nk2
         out = []
-        for r in rows:
+        for r in rows_all:
             out.append({
                 't': str(r.get(tkey) or ''),
                 'o': abs(to_number(r.get('open_pric'))),
@@ -1123,7 +1141,9 @@ def build_candles(code, tf, limit=140):
         items = run(cached_token())
     items = [it for it in items if it['t'] and it['h'] > 0]
     items.sort(key=lambda x: x['t'])
-    if limit and len(items) > limit:
+    if is_min:
+        items = [it for it in items if it['t'] >= open_ts]   # 오늘 장시작~현재
+    elif limit and len(items) > limit:
         items = items[-limit:]
     return {'code': code, 'tf': tf, 'items': items}
 

@@ -141,9 +141,8 @@
   .chart-head { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .chart-name { font-size:13px; font-weight:600; color:var(--text); }
   #stock-chart { padding:8px 10px; }
-  #chart-tf { margin-left:auto; margin-bottom:0; font-weight:400; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-  #chart-tf input { display:none; }                    /* 봉 주기: 라디오 점 숨김 */
-  #chart-tf label { white-space:nowrap; padding:4px 10px; }
+  .chart-sel { margin-left:auto; font-size:13px; font-weight:400; padding:4px 26px 4px 12px; cursor:pointer;
+    color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:14px; }
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
   .rank-scroll { max-height:341px; overflow-y:auto; }   /* 프로그램 순매수 상위(.pu-scroll)와 동일 */
   .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
@@ -247,7 +246,7 @@
     <div id="rank-host"></div>
   </div>
 </div>
-<div class="page-title"><span>종목 차트</span><div class="pu-mkt" id="chart-tf"></div></div>
+<div class="page-title"><span>종목 차트</span><select id="chart-tf" class="chart-sel"></select></div>
 <div class="chart-wrap">
   <div class="chart-head">
     <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
@@ -792,12 +791,12 @@ function renderChartTf() {
   const host = document.getElementById('chart-tf');
   if (!host) return;
   host.innerHTML = CHART_TFS.map(([k, n]) =>
-    `<label class="${k === chartTf ? 'on' : ''}"><input type="radio" name="charttf" value="${k}" ${k === chartTf ? 'checked' : ''}>${n}</label>`).join('');
-  host.querySelectorAll('input[name="charttf"]').forEach(r => r.addEventListener('change', () => {
-    chartTf = r.value;
+    `<option value="${k}" ${k === chartTf ? 'selected' : ''}>${n}</option>`).join('');
+  host.onchange = () => {
+    chartTf = host.value;
     try { localStorage.setItem('stock_chart_tf', chartTf); } catch (e) {}
-    renderChartTf(); loadCandles();
-  }));
+    loadCandles();
+  };
 }
 
 function drawCandles(items, tf) {
