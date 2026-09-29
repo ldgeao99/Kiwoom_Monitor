@@ -1404,6 +1404,8 @@ applyIdxView();
   const apply = () => {
     box.hidden = collapsed;
     if (sel) sel.style.display = collapsed ? 'none' : '';   // 접으면 봉 주기 선택도 숨김
+    // 펼침: select(margin-left:auto)이 우측 정렬 담당 / 접힘: select 숨겨지므로 버튼이 담당
+    btn.style.marginLeft = collapsed ? 'auto' : '0';
     btn.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
   };
   apply();
