@@ -1102,24 +1102,29 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
 
 def build_candles(code, tf, limit=140):
     """종목 캔들 차트(시간 오름차순 OHLCV).
-    분봉(1/3/10/15분)은 오늘 장시작(09:00)까지 자동 연속조회 후 오늘분만 반환.
+    분봉(1/3/10/15분)은 '최신 거래일 세션'을 장시작(09:00)까지 자동 연속조회해서 보여준다.
+    (오늘 데이터가 있으면 오늘 09:00~현재, 장 전/휴장이면 직전 거래일 09:00~마감).
     일/주/월봉은 1페이지에서 최근 limit개만 반환."""
     tf = tf if tf in _CANDLE_TF else 'D'
     is_min = tf.endswith('m')
-    open_ts = now_kst().strftime('%Y%m%d') + '090000'   # 오늘 장 시작 시각
 
     def run(tok):
         rows_all = []
         cont, nk, pages, tkey = 'N', '', 0, None
+        session_open = None
         while True:
             rows, tkey, cy, nk2 = fetch_candles(tok, code, tf, cont, nk)
             rows_all.extend(rows)
             pages += 1
             if not is_min:
                 break                                   # 일/주/월은 1페이지면 충분
+            if session_open is None:
+                # 최신 세션 일자 = 첫 페이지의 가장 큰 날짜(오늘 or 직전 거래일)
+                latest = max((str(r.get(tkey) or '')[:8] for r in rows), default='')
+                session_open = (latest + '090000') if latest else ''
             oldest = min((str(r.get(tkey) or '') for r in rows), default='')
-            # 오늘 장시작까지 내려갔거나 · 다음 페이지 없거나 · 상한(20p) 도달 시 종료
-            if cy != 'Y' or not nk2 or (oldest and oldest <= open_ts) or pages >= 20:
+            # 세션 장시작까지 내려갔거나 · 다음 페이지 없거나 · 상한(20p) 도달 시 종료
+            if cy != 'Y' or not nk2 or (session_open and oldest and oldest <= session_open) or pages >= 20:
                 break
             cont, nk = 'Y', nk2
         out = []
@@ -1132,18 +1137,19 @@ def build_candles(code, tf, limit=140):
                 'c': abs(to_number(r.get('cur_prc'))),
                 'v': abs(to_number(r.get('trde_qty'))),
             })
-        return out
+        return out, session_open
 
     try:
-        items = run(cached_token())
+        items, session_open = run(cached_token())
     except Exception:
         _token_cache['token'] = None
-        items = run(cached_token())
+        items, session_open = run(cached_token())
     items = [it for it in items if it['t'] and it['h'] > 0]
     items.sort(key=lambda x: x['t'])
-    if is_min:
-        items = [it for it in items if it['t'] >= open_ts]   # 오늘 장시작~현재
-    elif limit and len(items) > limit:
+    if is_min and session_open:
+        sdate = session_open[:8]
+        items = [it for it in items if it['t'][:8] == sdate and it['t'] >= session_open]  # 최신 세션 09:00~
+    elif not is_min and limit and len(items) > limit:
         items = items[-limit:]
     return {'code': code, 'tf': tf, 'items': items}
 
