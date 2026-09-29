@@ -1399,8 +1399,8 @@ applyIdxView();
   const box = document.querySelector('.chart-wrap');
   const sel = document.getElementById('chart-tf');
   if (!btn || !box) return;
-  let collapsed = false;
-  try { collapsed = localStorage.getItem('stock_chart_collapsed') === '1'; } catch (e) {}
+  let collapsed = true;   // 기본 접힘
+  try { if (localStorage.getItem('stock_chart_collapsed') === '0') collapsed = false; } catch (e) {}
   const apply = () => {
     box.hidden = collapsed;
     if (sel) sel.style.display = collapsed ? 'none' : '';   // 접으면 봉 주기 선택도 숨김
