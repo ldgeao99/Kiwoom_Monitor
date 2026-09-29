@@ -143,6 +143,7 @@
   #stock-chart { padding:8px 10px; }
   .chart-sel { margin-left:auto; font-size:13px; font-weight:400; padding:4px 26px 4px 12px; cursor:pointer;
     color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:14px; }
+  #toggle-chart { margin-left:0; }   /* 봉 주기 select 바로 옆(제목 우측 그룹) */
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
   .rank-scroll { max-height:341px; overflow-y:auto; }   /* 프로그램 순매수 상위(.pu-scroll)와 동일 */
   .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
@@ -246,7 +247,7 @@
     <div id="rank-host"></div>
   </div>
 </div>
-<div class="page-title"><span>종목 차트</span><select id="chart-tf" class="chart-sel"></select></div>
+<div class="page-title"><span>종목 차트</span><select id="chart-tf" class="chart-sel"></select><button id="toggle-chart" class="view-btn" type="button">접기 ▾</button></div>
 <div class="chart-wrap">
   <div class="chart-head">
     <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
@@ -1388,6 +1389,27 @@ applyIdxView();
   btn.addEventListener('click', () => {
     collapsed = !collapsed;
     try { localStorage.setItem('breadth_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    apply();
+  });
+})();
+
+// 종목 차트 접기/펼치기 (상태 유지, 기본 펼침)
+(function () {
+  const btn = document.getElementById('toggle-chart');
+  const box = document.querySelector('.chart-wrap');
+  const sel = document.getElementById('chart-tf');
+  if (!btn || !box) return;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('stock_chart_collapsed') === '1'; } catch (e) {}
+  const apply = () => {
+    box.hidden = collapsed;
+    if (sel) sel.style.display = collapsed ? 'none' : '';   // 접으면 봉 주기 선택도 숨김
+    btn.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
+  };
+  apply();
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem('stock_chart_collapsed', collapsed ? '1' : '0'); } catch (e) {}
     apply();
   });
 })();
