@@ -231,8 +231,9 @@
     <div id="rank-host"></div>
   </div>
 </div>
-<div class="page-title"><span>프로그램 순매수 상위 종목</span></div>
+<div class="page-title"><span>프로그램 상위 종목</span></div>
 <div class="prm-wrap">
+  <div class="pu-mkt" id="pu-side"></div>
   <div class="pu-mkt" id="pu-mkt"></div>
   <div class="panel">
     <div id="prm-upper"></div>
@@ -1041,9 +1042,11 @@ async function resolveAndLoad(raw) {
   });
 })();
 
-// ── 프로그램 순매수 상위 종목 (ka90003) ──
+// ── 프로그램 상위 종목 (ka90003) ──
 let puMarket = 'all';
 try { puMarket = localStorage.getItem('prm_upper_market') || 'all'; } catch (e) {}
+let puSide = '2';   // '2':순매수상위, '1':순매도상위
+try { puSide = localStorage.getItem('prm_upper_side') === '1' ? '1' : '2'; } catch (e) {}
 
 function renderPuMkt() {
   const host = document.getElementById('pu-mkt');
@@ -1057,6 +1060,18 @@ function renderPuMkt() {
   }));
 }
 
+function renderPuSide() {
+  const host = document.getElementById('pu-side');
+  if (!host) return;
+  host.innerHTML = [['2', '순매수'], ['1', '순매도']].map(([k, n]) =>
+    `<label class="${k === puSide ? 'on' : ''}"><input type="radio" name="puside" value="${k}" ${k === puSide ? 'checked' : ''}>${n}</label>`).join('');
+  host.querySelectorAll('input[name="puside"]').forEach(r => r.addEventListener('change', () => {
+    puSide = r.value;
+    try { localStorage.setItem('prm_upper_side', puSide); } catch (e) {}
+    renderPuSide(); renderPrmUpper();
+  }));
+}
+
 let puItems = [];
 let puExpanded = false;
 try { puExpanded = localStorage.getItem('prm_upper_expanded') === '1'; } catch (e) {}
@@ -1066,8 +1081,9 @@ function renderPuTable() {
   const btn = document.getElementById('pu-toggle');
   if (!host) return;
   if (!puItems.length) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; if (btn) btn.style.display = 'none'; return; }
+  const amtLbl = puSide === '1' ? '순매도금액' : '순매수금액';
   let html = `<div class="pu-scroll${puExpanded ? ' expanded' : ''}"><table class="pu-tbl"><thead><tr>`
-    + `<th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>순매수금액</th></tr></thead><tbody>`;
+    + `<th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>${amtLbl}</th></tr></thead><tbody>`;
   puItems.forEach((it, i) => {
     const eok = Math.round(it.net / 100);   // 백만원 → 억원
     const flag = i === 0 ? ' 🚩' : '';       // 1위 종목 표시
@@ -1090,7 +1106,7 @@ function renderPuTable() {
 
 async function renderPrmUpper() {
   try {
-    const res = await fetch('/api/prm_upper?mrkt=' + encodeURIComponent(puMarket), { cache: 'no-store' });
+    const res = await fetch('/api/prm_upper?mrkt=' + encodeURIComponent(puMarket) + '&tp=' + puSide, { cache: 'no-store' });
     if (!res.ok) return;
     puItems = (await res.json()).items || [];
     renderPuTable();
@@ -1244,7 +1260,8 @@ applyIdxView();
   });
 })();
 
-renderPuMkt();      // 프로그램 순매수 상위 시장 선택 UI
+renderPuSide();     // 프로그램 상위: 순매수/순매도 선택 UI
+renderPuMkt();      // 프로그램 상위: 시장 선택 UI
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
 setInterval(renderPrmUpper, 30000);   // 프로그램 순매수 상위는 30초마다 별도 갱신

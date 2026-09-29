@@ -1028,22 +1028,25 @@ def fetch_prm_upper(token, mrkt_tp, trde_upper_tp='2', amt_qty_tp='1', stex_tp='
     return body.get('prm_netprps_upper_50') or []
 
 
-def build_prm_upper(market_key):
-    """프로그램 순매수 상위: 순위/종목명/코드/현재가/등락률/프로그램순매수금액(백만원).
-    market_key='all'이면 코스피+코스닥을 합쳐 순매수금액 내림차순으로 재정렬."""
+def build_prm_upper(market_key, side='2'):
+    """프로그램 상위: 순위/종목명/코드/현재가/등락률/프로그램순매수금액(백만원).
+    side '2':순매수상위, '1':순매도상위(ka90003 trde_upper_tp).
+    market_key='all'이면 코스피+코스닥을 합쳐 재정렬(순매수는 내림차순, 순매도는 오름차순)."""
+    side = '1' if str(side) == '1' else '2'
     if market_key == 'all':
         items = []
         for mk in ('kospi', 'kosdaq'):
-            items += build_prm_upper(mk).get('items', [])
-        items.sort(key=lambda x: (x.get('net') or 0), reverse=True)
+            items += build_prm_upper(mk, side).get('items', [])
+        # 순매수(2): 큰 순매수금액 먼저 / 순매도(1): 큰 순매도금액(가장 음수) 먼저
+        items.sort(key=lambda x: (x.get('net') or 0), reverse=(side == '2'))
         for i, it in enumerate(items):
             it['rank'] = i + 1
-        return {'market': 'all', 'items': items}
+        return {'market': 'all', 'side': side, 'items': items}
     mrkt_tp = _PRM_MRKT.get(market_key, 'P00101')
 
     def run(tok):
         out = []
-        for r in fetch_prm_upper(tok, mrkt_tp):
+        for r in fetch_prm_upper(tok, mrkt_tp, trde_upper_tp=side):
             out.append({
                 'rank': to_number(r.get('rank')),
                 'code': (r.get('stk_cd') or '').split('_')[0],
@@ -1060,7 +1063,7 @@ def build_prm_upper(market_key):
     except Exception:
         _token_cache['token'] = None
         items = run(cached_token())
-    return {'market': market_key, 'items': items}
+    return {'market': market_key, 'side': side, 'items': items}
 
 
 # 서빙 허용 HTML 파일: 경로 -> 파일명
@@ -1107,10 +1110,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             mkey = (qs.get('mrkt', [MARKETS[0]['key']])[0])
             if mkey != 'all' and mkey not in MARKET_BY_KEY:
                 mkey = MARKETS[0]['key']
+            side = qs.get('tp', ['2'])[0]
+            if side not in ('1', '2'):
+                side = '2'
             try:
-                payload = build_prm_upper(mkey)
+                payload = build_prm_upper(mkey, side)
             except Exception as e:
-                payload = {'market': mkey, 'items': [], 'error': str(e)}
+                payload = {'market': mkey, 'side': side, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/stock':
