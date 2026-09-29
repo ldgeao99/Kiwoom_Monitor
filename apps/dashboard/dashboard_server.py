@@ -1088,7 +1088,9 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
         'authorization': f'Bearer {token}',
         'cont-yn': cont_yn, 'next-key': next_key, 'api-id': api_id,
     }
-    data = {'stk_cd': code, 'base_dt': now_kst().strftime('%Y%m%d'), 'upd_stkpc_tp': '1'}
+    # 거래소 접미사 없는 6자리는 통합(SOR/_AL, NXT+KRX 최우선)으로 조회
+    stk_cd = code if '_' in code else f'{code}_AL'
+    data = {'stk_cd': stk_cd, 'base_dt': now_kst().strftime('%Y%m%d'), 'upd_stkpc_tp': '1'}
     data.update(extra)
     resp = requests.post(url, headers=headers, json=data, timeout=15)
     resp.raise_for_status()
