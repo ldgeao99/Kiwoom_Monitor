@@ -163,7 +163,7 @@
     color:var(--muted); font-size:12px; padding:8px; cursor:pointer; }
   /* 프로그램 순매수금액 */
   .prog-wrap { max-width:1200px; margin:0 auto 16px; }
-  .prog-input { width:96px; font-size:13px; padding:4px 8px; border:1px solid var(--line);
+  .prog-input { width:140px; font-size:13px; padding:4px 8px; border:1px solid var(--line);
     border-radius:8px; font-variant-numeric:tabular-nums; }
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
@@ -889,7 +889,7 @@ function setChartStock(code, name) {
   chartName = name || '';
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
   const inp = document.getElementById('chart-code'); if (inp) inp.value = chartName || chartCode;
-  const nm = document.getElementById('chart-name'); if (nm) nm.textContent = chartName ? `${chartName} (${chartCode})` : chartCode;
+  const nm = document.getElementById('chart-name'); if (nm) nm.textContent = '';
   loadCandles();
 }
 
@@ -1063,7 +1063,7 @@ async function renderProgram() {
     const res = await fetch('/api/program?stk=' + encodeURIComponent(progStk) + '&amt=' + progAmt, { cache: 'no-store' });
     if (!res.ok) return;
     const d = await res.json();
-    document.getElementById('prog-name').textContent = d.name ? `${d.name} (${d.stk_cd})` : d.stk_cd;
+    document.getElementById('prog-name').textContent = '';
     progMerge(d.series);
     if (!progInited) { progCont = d.cont || 'N'; progNext = d.next || ''; progInited = true; }
     progRedraw();
