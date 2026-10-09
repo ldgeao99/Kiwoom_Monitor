@@ -867,7 +867,7 @@ function drawCandles(items, tf) {
     return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   }).join('');
   const legend = CHART_MAS.map(([period, color]) =>
-    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}이평</span>`
+    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
   host.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px;padding:8px;font-size:12px" aria-label="종가 기준 이동평균선">${legend}</div>`
     + `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
