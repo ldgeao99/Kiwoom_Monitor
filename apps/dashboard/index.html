@@ -170,8 +170,9 @@
   .prog-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
-  .prog-tscroll { max-height:280px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
-  .prog-tbl { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
+  /* 헤더 1행 + 데이터 6행 (행당 29px + 상단 테두리) */
+  .prog-tscroll { max-height:204px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
+  .prog-tbl { width:100%; border-collapse:collapse; font-size:12px; line-height:18px; font-variant-numeric:tabular-nums; }
   .prog-tbl th, .prog-tbl td { padding:5px 10px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
   .prog-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; }
   .prog-tbl td.tm { text-align:center; color:var(--muted); }
@@ -1220,7 +1221,7 @@ function renderPuTable() {
   puItems.forEach((it, i) => {
     const eok = Math.round(it.net / 100);   // 백만원 → 억원
     const flag = i === 0 ? ' 🚩' : '';       // 1위 종목 표시
-    html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수금액 조회">`
+    html += `<tr data-code="${it.code}" title="클릭하면 프로그램 순매수와 종목 차트 조회">`
       + `<td class="mk">${it.name}${flag}</td>`
       + `<td class="${cls(it.flu)}">${it.cur.toLocaleString('ko-KR')}</td>`
       + `<td class="${cls(it.flu)}">${(it.flu > 0 ? '+' : '') + it.flu.toFixed(2)}%</td>`
@@ -1232,7 +1233,12 @@ function renderPuTable() {
   host.innerHTML = html;
   host.querySelector('.pu-scroll').scrollTop = top;
   host.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => {
-    const c = tr.getAttribute('data-code'); if (c) loadProgStock(c);
+    const code = tr.getAttribute('data-code');
+    if (!code) return;
+    const it = puItems.find(x => x.code === code);
+    setChartStock(code, it ? it.name : '');
+    loadProgStock(code);
+    document.querySelector('.chart-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = puItems.length > 10 ? '' : 'none'; }
 }
