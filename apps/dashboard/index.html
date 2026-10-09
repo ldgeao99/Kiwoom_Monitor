@@ -156,6 +156,10 @@
     white-space:normal; line-height:1.25; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
+  .amount-rank-title { flex-wrap:wrap; }
+  .amount-rank-filter { display:flex; align-items:center; gap:4px; margin-left:auto; font-size:13px; font-weight:400; cursor:pointer; white-space:nowrap; }
+  .amount-rank-title .view-btn { margin-left:0; }
+  @media (max-width:560px) { .amount-rank-title { font-size:16px; gap:6px; } .amount-rank-filter { font-size:11px; } .amount-rank-title .view-btn { font-size:11px; padding:4px 8px; } }
   #amount-rank-host .rank-tbl { table-layout:fixed; }
   #amount-rank-host td.nm { overflow:hidden; text-overflow:ellipsis; }
   #amount-rank-host .rank-tbl tbody td:nth-child(3) { text-align:right; }
@@ -255,9 +259,8 @@
     <div id="rank-host"></div>
   </div>
 </div>
-<div class="page-title"><span>거래대금 상위 종목</span><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
+<div class="page-title amount-rank-title"><span>거래대금 상위 종목</span><label class="amount-rank-filter"><input id="exclude-etf-etn" type="checkbox" role="switch" checked>ETF/ETN 제외</label><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
 <div class="rank-wrap" id="amount-rank-content">
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:8px;cursor:pointer"><input id="exclude-etf-etn" type="checkbox" role="switch">ETF/ETN 제외</label>
   <div class="panel">
     <div id="amount-rank-host"></div>
     <div id="amount-rank-status" role="status" style="padding:8px 12px;font-size:12px;color:var(--muted)" hidden></div>
