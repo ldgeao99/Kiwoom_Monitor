@@ -181,6 +181,10 @@
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
   .prog-unit { margin-left:auto; color:var(--muted); font-weight:400; }
   /* 헤더 1행 + 데이터 6행 (행당 29px + 상단 테두리) */
+  #prog-table { min-height:212px; display:flow-root; }
+  #prog-chart { aspect-ratio:760 / 280; position:relative; }
+  #prog-chart > svg { position:absolute; inset:0; }
+  #prog-chart > .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:8px; box-sizing:border-box; }
   .prog-tscroll { max-height:204px; overflow:auto; border-top:1px solid var(--line); margin-top:8px; }
   .prog-tbl { width:100%; border-collapse:collapse; font-size:12px; line-height:18px; font-variant-numeric:tabular-nums; }
   .prog-tbl th, .prog-tbl td { padding:5px 10px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
@@ -945,11 +949,12 @@ let listedStockSelection = 0;
 async function selectListedStock(code, name) {
   const selection = ++listedStockSelection;
   const requests = [setChartStock(code, name), loadProgStock(code, name)];
+  const initialHeight = document.documentElement.scrollHeight;
   scrollToPageBottom();
   await Promise.allSettled(requests);
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   if (selection !== listedStockSelection) return;
-  scrollToPageBottom();
+  if (document.documentElement.scrollHeight !== initialHeight) scrollToPageBottom();
 }
 
 // 차트 접힘 상태는 유지한다.
