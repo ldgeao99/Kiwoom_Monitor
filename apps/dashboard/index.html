@@ -922,10 +922,12 @@ function drawCandles(items, tf) {
     `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
   const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
+  const latestAmount = fullItems[fullItems.length - 1].amount_eok;
+  const hasLatestAmount = Number.isFinite(latestAmount);
   const hasAmounts = amounts.some(value => value !== null);
   const amountTop = 338, amountBottom = H - 10, amountHeight = amountBottom - amountTop;
   // 1·2·5 계열의 정수 간격으로 눈금을 맞춘다 (예: 500억, 1,000억).
-  const rawAmountMax = Math.max(1, ...amounts.filter(value => value !== null));
+  const rawAmountMax = Math.max(1, ...amounts.filter(value => value !== null), hasLatestAmount ? latestAmount : 0);
   const targetStep = Math.max(1, rawAmountMax / 2);
   const magnitude = 10 ** Math.floor(Math.log10(targetStep));
   const amountStep = [1, 2, 5, 10].find(value => value * magnitude >= targetStep) * magnitude;
@@ -946,6 +948,15 @@ function drawCandles(items, tf) {
       const color = items[i].c >= items[i].o ? 'var(--pos)' : 'var(--neg)';
       amountChart += `<rect data-amount="${amount}" data-time="${items[i].t}" x="${(xc(i)-bw/2).toFixed(1)}" y="${amountY(amount).toFixed(1)}" width="${bw.toFixed(1)}" height="${(amount / amountMax * amountHeight).toFixed(1)}" fill="${color}"><title>${fmt(items[i].t)} 거래대금 ${amountFmt(amount)}억</title></rect>`;
     });
+  }
+  if (hasLatestAmount) {
+    const labelY = amountY(latestAmount);
+    const label = latestAmount.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+    const fit = label.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
+    amountChart += `<g class="current-amount-label" data-amount="${latestAmount}">`
+      + `<title>최신 봉 거래대금 ${amountFmt(latestAmount)}억</title>`
+      + `<rect x="${mL+iw+3}" y="${(labelY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="#d1d5db"/>`
+      + `<text x="${mL+iw+mR/2}" y="${(labelY+4).toFixed(1)}" font-size="11" fill="#374151" text-anchor="middle"${fit}>${label}</text></g>`;
   }
   amountChart += '</g>';
 
