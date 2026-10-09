@@ -1000,14 +1000,31 @@ async function loadCandles(more = false) {
   }
 }
 
-// 두 손가락 간격으로 보이는 봉 수를 조절한다. 한 손가락 세로 스크롤은 유지한다.
+// 두 손가락은 확대/축소, 한 손가락 가로 움직임은 표시 기간 이동.
 (function () {
   const host = document.getElementById('stock-chart');
-  let pinch = null, frame = null;
+  let pinch = null, pan = null, frame = null;
   const distance = touches => Math.hypot(touches[0].clientX - touches[1].clientX,
                                         touches[0].clientY - touches[1].clientY);
+  const redraw = () => {
+    if (frame !== null) return;
+    const generation = candleGeneration;
+    frame = requestAnimationFrame(() => {
+      frame = null;
+      if (generation === candleGeneration) drawCandles(candleItems, chartTf);
+    });
+  };
+  const beginPan = touch => {
+    const rect = host.querySelector('svg').getBoundingClientRect();
+    pan = { x: touch.clientX, y: touch.clientY, offset: candleViewOffset,
+            count: candleViewCount || candleItems.length, width: rect.width * 688 / 760,
+            horizontal: false, generation: candleGeneration };
+  };
   host.addEventListener('touchstart', event => {
-    if (event.touches.length !== 2 || candleItems.length < 2 || !event.target.closest('.candle-plot')) return;
+    if (candleItems.length < 2 || !event.target.closest('.candle-plot')) return;
+    if (event.touches.length === 1) { beginPan(event.touches[0]); return; }
+    pan = null;
+    if (event.touches.length !== 2) { pinch = null; return; }
     const gap = distance(event.touches);
     if (gap < 1) return;
     event.preventDefault();
@@ -1018,29 +1035,40 @@ async function loadCandles(more = false) {
     const end = candleItems.length - candleViewOffset;
     pinch = { gap, count, fraction, anchor: end - count + count * fraction, generation: candleGeneration };
   }, { passive: false });
-  // SVG를 다시 그려도 동일 제스처가 이어지도록 document에서 이동을 받는다.
+  // 차트를 다시 그려도 터치 대상과 진행 중인 제스처는 유지한다.
   document.addEventListener('touchmove', event => {
-    if (!pinch) return;
-    if (event.touches.length !== 2 || pinch.generation !== candleGeneration) { pinch = null; return; }
-    event.preventDefault();
-    const gap = distance(event.touches);
-    if (gap < 1) return;
-    const total = candleItems.length;
-    const count = Math.max(Math.min(10, total), Math.min(total, Math.round(pinch.count * pinch.gap / gap)));
-    const end = Math.max(count, Math.min(total, Math.round(pinch.anchor + count * (1 - pinch.fraction))));
-    candleViewCount = count === total ? null : count;
-    candleViewOffset = total - end;
-    if (frame === null) {
-      const generation = candleGeneration;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        if (generation === candleGeneration) drawCandles(candleItems, chartTf);
-      });
+    if (pinch) {
+      if (event.touches.length !== 2 || pinch.generation !== candleGeneration) { pinch = null; return; }
+      event.preventDefault();
+      const gap = distance(event.touches);
+      if (gap < 1) return;
+      const total = candleItems.length;
+      const count = Math.max(Math.min(10, total), Math.min(total, Math.round(pinch.count * pinch.gap / gap)));
+      const end = Math.max(count, Math.min(total, Math.round(pinch.anchor + count * (1 - pinch.fraction))));
+      candleViewCount = count === total ? null : count;
+      candleViewOffset = total - end;
+      redraw();
+      return;
     }
+    if (!pan) return;
+    if (event.touches.length !== 1 || pan.generation !== candleGeneration) { pan = null; return; }
+    const dx = event.touches[0].clientX - pan.x, dy = event.touches[0].clientY - pan.y;
+    if (!pan.horizontal) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+      if (Math.abs(dy) >= Math.abs(dx)) { pan = null; return; } // 세로는 페이지 스크롤
+      pan.horizontal = true;
+    }
+    event.preventDefault();
+    candleViewOffset = Math.max(0, Math.min(candleItems.length - pan.count,
+      pan.offset + Math.round(dx / pan.width * pan.count)));
+    redraw();
   }, { passive: false });
-  const finish = () => { pinch = null; };
-  document.addEventListener('touchend', finish, { passive: true });
-  document.addEventListener('touchcancel', finish, { passive: true });
+  document.addEventListener('touchend', event => {
+    const active = pinch || pan;
+    pinch = null; pan = null;
+    if (active && event.touches.length === 1 && candleItems.length >= 2) beginPan(event.touches[0]);
+  }, { passive: true });
+  document.addEventListener('touchcancel', () => { pinch = null; pan = null; }, { passive: true });
 })();
 
 function setChartStock(code, name) {
