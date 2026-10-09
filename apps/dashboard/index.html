@@ -1075,18 +1075,19 @@ function drawCandles(items, tf) {
     xlab += `<text x="${xx.toFixed(1)}" y="${priceH-6}" font-size="10" fill="#000000" text-anchor="middle">${fmt(items[i].t)}</text>`;
   }
 
-  // 분봉은 거래일, 일봉은 월 경계를 두 캔들 사이에 표시한다.
+  // 분봉은 거래일, 일봉은 표시 봉 수에 따라 월/연 경계를 표시한다.
   let daySeparators = '';
+  const yearlyBoundaries = tf === 'D' && n > 250;
   if (isMin || tf === 'D') {
     for (let i = 1; i < n; i++) {
       const previousDate = items[i - 1].t.slice(0, 8);
       const date = items[i].t.slice(0, 8);
       if (!/^\d{8}$/.test(date) || !/^\d{8}$/.test(previousDate)) continue;
-      const boundaryLength = isMin ? 8 : 6;
+      const boundaryLength = isMin ? 8 : yearlyBoundaries ? 4 : 6;
       if (date.slice(0, boundaryLength) === previousDate.slice(0, boundaryLength)) continue;
       const xx = (mL + cw * i).toFixed(1);
-      const separatorClass = isMin ? 'candle-day-separator' : 'candle-month-separator';
-      const label = isMin ? `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}` : `${date.slice(0,4)}-${date.slice(4,6)}`;
+      const separatorClass = isMin ? 'candle-day-separator' : yearlyBoundaries ? 'candle-year-separator' : 'candle-month-separator';
+      const label = isMin ? `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}` : yearlyBoundaries ? date.slice(0,4) : `${date.slice(0,4)}-${date.slice(4,6)}`;
       daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-mB}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"><title>${label}</title></line>`;
     }
   }
