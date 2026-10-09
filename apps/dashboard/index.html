@@ -146,6 +146,7 @@
   #pu-side input { display:none; }   /* 세그먼트 버튼: 라디오 점 숨김 */
   #pu-side label + label { border-left:1px solid var(--line); }
   #pu-side label.on:first-child { background:#fdf1ef; color:var(--pos); }
+  #pu-side label.on:nth-child(2) { background:#fff3e0; color:#ea580c; }
   #pu-side label.on:last-child  { background:#eef3fd; color:var(--neg); }
   .pu-scroll { max-height:341px; overflow-y:auto; }        /* 접힘: 헤더+약 10행 */
   .pu-scroll.expanded { max-height:1400px; }
@@ -1746,7 +1747,7 @@ function renderPuMkt() {
 function renderPuSide() {
   const host = document.getElementById('pu-side');
   if (!host) return;
-  host.innerHTML = [['2', '순매수'], ['1', '순매도'], ['both', '함께']].map(([k, n]) =>
+  host.innerHTML = [['2', '순매수'], ['both', '함께'], ['1', '순매도']].map(([k, n]) =>
     `<label class="${k === puSide ? 'on' : ''}"><input type="radio" name="puside" value="${k}" ${k === puSide ? 'checked' : ''}>${n}</label>`).join('');
   host.querySelectorAll('input[name="puside"]').forEach(r => r.addEventListener('change', () => {
     puSide = r.value;
