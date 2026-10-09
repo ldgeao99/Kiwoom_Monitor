@@ -780,7 +780,7 @@ document.getElementById('rank-host').addEventListener('click', e => {
   const code = tr.dataset.code;
   const it = (rankItems || []).find(x => x.code === code);
   setChartStock(code, it ? it.name : '');
-  loadProgStock(code);
+  loadProgStock(code, it ? it.name : '');
   scrollToPageBottom();
 });
 
@@ -1143,13 +1143,13 @@ function progReset() {
   const t = document.getElementById('prog-table'); if (t) t.innerHTML = '';   // 표 초기화(전체 재구성 유도)
 }
 
-// 종목코드로 조회 (검색창/localStorage/랭킹 클릭 공통)
-function loadProgStock(code) {
+// 조회에는 종목코드를 사용하고, 전달받은 종목명은 검색창에 표시한다.
+function loadProgStock(code, name = '') {
   const v = (code || '').replace(/\D/g, '').slice(0, 6);
   if (!v) return;
   progStk = v;
   const inp = document.getElementById('prog-stk');
-  if (inp) inp.value = v;
+  if (inp) inp.value = name || v;
   try { localStorage.setItem('netprps_prog_stk', v); } catch (e) {}
   progReset();
   renderProgram();
@@ -1167,7 +1167,7 @@ async function resolveAndLoad(raw) {
     const res = await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
     if (!res.ok) { nameEl.textContent = `검색 실패(HTTP ${res.status}) — 서버 재시작이 필요할 수 있습니다`; return; }
     const d = await res.json();
-    if (d && d.code) loadProgStock(d.code);
+    if (d && d.code) loadProgStock(d.code, d.name || '');
     else nameEl.textContent = `"${v}" 종목을 찾지 못했습니다`;
   } catch (e) {
     nameEl.textContent = '검색 오류: ' + e.message;
@@ -1265,7 +1265,7 @@ function renderPuTable() {
     if (!code) return;
     const it = puItems.find(x => x.code === code);
     setChartStock(code, it ? it.name : '');
-    loadProgStock(code);
+    loadProgStock(code, it ? it.name : '');
     scrollToPageBottom();
   }));
   if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = puItems.length > 10 ? '' : 'none'; }
