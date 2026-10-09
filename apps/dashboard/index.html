@@ -886,9 +886,9 @@ async function loadCandles() {
 
 function setChartStock(code, name) {
   chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
-  if (name) chartName = name;
+  chartName = name || '';
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
-  const inp = document.getElementById('chart-code'); if (inp) inp.value = chartCode;
+  const inp = document.getElementById('chart-code'); if (inp) inp.value = chartName || chartCode;
   const nm = document.getElementById('chart-name'); if (nm) nm.textContent = chartName ? `${chartName} (${chartCode})` : chartCode;
   loadCandles();
 }
