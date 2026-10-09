@@ -781,14 +781,12 @@ document.getElementById('rank-host').addEventListener('click', e => {
   const it = (rankItems || []).find(x => x.code === code);
   setChartStock(code, it ? it.name : '');
   loadProgStock(code);
-  scrollToStockChart();
+  scrollToPageBottom();
 });
 
-// 목록에서 선택하면 접힌 차트도 펼치고 제목부터 보여준다.
-function scrollToStockChart() {
-  const box = document.querySelector('.chart-wrap');
-  if (box && box.hidden) document.getElementById('toggle-chart').click();
-  document.getElementById('stock-chart-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+// 목록에서 선택하면 차트 접힘 상태를 유지하며 페이지 맨 아래로 이동한다.
+function scrollToPageBottom() {
+  window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 }
 
 // ── 종목 캔들 차트 (분/일/주/월봉) ──
@@ -1268,7 +1266,7 @@ function renderPuTable() {
     const it = puItems.find(x => x.code === code);
     setChartStock(code, it ? it.name : '');
     loadProgStock(code);
-    scrollToStockChart();
+    scrollToPageBottom();
   }));
   if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = puItems.length > 10 ? '' : 'none'; }
 }
