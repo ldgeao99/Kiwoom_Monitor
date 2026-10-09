@@ -252,6 +252,13 @@
     <div id="rank-host"></div>
   </div>
 </div>
+<div class="page-title"><span>거래대금 상위 종목</span><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
+<div class="rank-wrap" id="amount-rank-content">
+  <div class="panel">
+    <div id="amount-rank-host"></div>
+    <div id="amount-rank-status" role="status" style="padding:8px 12px;font-size:12px;color:var(--muted)" hidden></div>
+  </div>
+</div>
 <div class="page-title"><span>프로그램 상위 종목</span><div class="pu-mkt" id="pu-side"></div></div>
 <div class="prm-wrap">
   <div class="pu-mkt" id="pu-mkt"></div>
@@ -797,6 +804,98 @@ document.getElementById('rank-host').addEventListener('click', e => {
   selectListedStock(code, it ? it.name : '');
 });
 
+// 거래대금 순위: 10행 높이, 바닥 스크롤 시 다음 페이지 조회.
+let amountRankItems = [], amountRankCont = 'N', amountRankNext = '', amountRankLoading = false;
+function fitAmountRankHeight() {
+  const scroll = document.querySelector('#amount-rank-host .rank-scroll');
+  if (!scroll) return;
+  const table = scroll.querySelector('table');
+  scroll.style.maxHeight = (table.tHead.getBoundingClientRect().height
+    + [...table.tBodies[0].rows].slice(0, 10).reduce((sum, row) => sum + row.getBoundingClientRect().height, 0) + 1) + 'px';
+}
+new ResizeObserver(fitAmountRankHeight).observe(document.getElementById('amount-rank-host'));
+function renderAmountRankTable() {
+  const host = document.getElementById('amount-rank-host');
+  if (!amountRankItems.length) { host.innerHTML = '<div class="empty">거래대금 데이터가 없습니다.</div>'; return; }
+  let scroll = host.querySelector('.rank-scroll');
+  if (!scroll) {
+    host.innerHTML = '<div class="rank-scroll"><table class="rank-tbl"><thead><tr><th></th><th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>거래대금</th></tr></thead><tbody></tbody></table></div>';
+    scroll = host.querySelector('.rank-scroll');
+    scroll.addEventListener('scroll', () => {
+      if (scroll.scrollTop > 0 && scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 60) loadAmountRank(true);
+    });
+  }
+  const top = scroll.scrollTop;
+  const tbody = scroll.querySelector('tbody');
+  tbody.replaceChildren();
+  amountRankItems.forEach((item, index) => {
+    const row = document.createElement('tr');
+    row.dataset.code = item.code;
+    row.title = '클릭하면 프로그램 순매수와 종목 차트 조회';
+    const values = [item.rank || index + 1, item.name, item.price.toLocaleString('ko-KR'),
+      (item.flu > 0 ? '+' : '') + item.flu.toFixed(2) + '%',
+      item.amount_eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억'];
+    values.forEach((value, column) => {
+      const cell = row.insertCell(); cell.textContent = value;
+      cell.className = column === 0 ? 'rk' : column === 1 ? 'nm' : column < 4 ? cls(item.flu) : '';
+    });
+    tbody.append(row);
+  });
+  fitAmountRankHeight(); scroll.scrollTop = top;
+}
+async function loadAmountRank(more = false) {
+  if (amountRankLoading || (more && !(amountRankCont === 'Y' && amountRankNext))) return;
+  const scroll = document.querySelector('#amount-rank-host .rank-scroll');
+  // 추가 순위를 보는 동안 자동 갱신으로 첫 페이지에 돌아가지 않는다.
+  if (!more && amountRankItems.length && (scroll?.scrollTop > 0 || document.getElementById('amount-rank-content').hidden)) return;
+  amountRankLoading = true;
+  const status = document.getElementById('amount-rank-status');
+  status.hidden = false; status.textContent = '불러오는 중…';
+  const cursor = more ? amountRankNext : '';
+  try {
+    const url = '/api/amount_rank' + (more ? '?cont=Y&next=' + encodeURIComponent(cursor) : '');
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+    const merged = new Map((more ? amountRankItems : []).map(item => [item.code, item]));
+    (data.items || []).forEach(item => merged.set(item.code, item));
+    amountRankItems = [...merged.values()].sort((a, b) => a.rank - b.rank);
+    amountRankNext = data.next || '';
+    amountRankCont = more && amountRankNext === cursor ? 'N' : data.cont || 'N';
+    renderAmountRankTable();
+    status.textContent = amountRankCont === 'Y' && amountRankNext ? '' : '마지막 순위까지 표시했습니다.';
+    status.hidden = !status.textContent || !amountRankItems.length;
+  } catch (error) {
+    status.textContent = '조회 실패: ' + error.message + ' · ' + (more ? '조금 위로 스크롤한 뒤 다시 내려 재시도하세요.' : '다음 갱신 때 재시도합니다.');
+    status.hidden = false;
+  } finally { amountRankLoading = false; }
+}
+document.getElementById('amount-rank-host').addEventListener('click', event => {
+  const row = event.target.closest('tr[data-code]');
+  if (!row) return;
+  const item = amountRankItems.find(item => item.code === row.dataset.code);
+  if (item) selectListedStock(item.code, item.name);
+});
+(function () {
+  const button = document.getElementById('toggle-amount-rank');
+  const content = document.getElementById('amount-rank-content');
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('amount_rank_collapsed') === '1'; } catch (e) {}
+  const apply = () => {
+    content.hidden = collapsed;
+    button.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
+    button.setAttribute('aria-expanded', String(!collapsed));
+    if (!collapsed) fitAmountRankHeight();
+  };
+  apply();
+  button.addEventListener('click', () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem('amount_rank_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    apply();
+  });
+})();
+
 let listedStockSelection = 0;
 // 선택 즉시 하단으로 이동하고, 조회 후 화면 높이가 바뀌면 위치를 보정한다.
 async function selectListedStock(code, name) {
@@ -938,8 +1037,8 @@ function drawCandles(items, tf) {
   const comparable = Number.isFinite(previousClose) && previousClose > 0;
   const rising = comparable && lastCandle.c > previousClose;
   const falling = comparable && lastCandle.c < previousClose;
-  const closeBackground = rising ? '#e5484d' : falling ? '#dbeafe' : '#d1d5db';
-  const closeForeground = rising ? '#ffffff' : falling ? '#2563eb' : '#374151';
+  const closeBackground = rising ? '#e5484d' : falling ? '#2563eb' : '#d1d5db';
+  const closeForeground = rising || falling ? '#ffffff' : '#374151';
   const closeLabel = lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
   const closeFit = closeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
   const closeY = Math.max(mT + 10, Math.min(priceH - mB - 10, y(lastCandle.c)));
@@ -1520,6 +1619,7 @@ async function renderPrmUpper() {
 async function refresh() {
   renderSummaryCards();   // 상단 카드도 함께 갱신
   renderRank();           // 조회수 상위 종목 갱신
+  loadAmountRank();        // 거래대금 상위 종목 갱신
   renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
   renderPrmUpper();       // 프로그램 순매수 상위 종목 갱신
   try {

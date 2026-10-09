@@ -983,6 +983,38 @@ def search_stock(q):
     return _pick([(c, n) for c, n in _name_map.items()], q)
 
 
+def build_amount_rank(cont_yn='N', next_key=''):
+    """ka10032: 전체 시장/통합 거래소 거래대금 순위, 한 페이지."""
+    def run(token):
+        response = requests.post(
+            'https://api.kiwoom.com/api/dostk/rkinfo',
+            headers={'Content-Type': 'application/json;charset=UTF-8',
+                     'authorization': f'Bearer {token}', 'api-id': 'ka10032',
+                     'cont-yn': cont_yn, 'next-key': next_key},
+            json={'mrkt_tp': '000', 'mang_stk_incls': '0', 'stex_tp': '3'}, timeout=15)
+        response.raise_for_status()
+        body = response.json()
+        if body.get('return_code') not in (None, 0):
+            raise RuntimeError(f"거래대금 순위 API 오류: {body.get('return_msg')}")
+        items = []
+        for row in body.get('trde_prica_upper') or []:
+            code = str(row.get('stk_cd') or '').split('_')[0]
+            if not code:
+                continue
+            items.append({'code': code, 'name': row.get('stk_nm') or '',
+                          'rank': int(to_number(row.get('now_rank'))),
+                          'price': abs(to_number(row.get('cur_prc'))),
+                          'flu': to_number(row.get('flu_rt')),
+                          'amount_eok': abs(to_number(row.get('trde_prica'))) / 100})
+        return {'items': items, 'cont': response.headers.get('cont-yn', 'N').upper(),
+                'next': response.headers.get('next-key', '')}
+    try:
+        return run(cached_token())
+    except Exception:
+        _token_cache['token'] = None
+        return run(cached_token())
+
+
 def build_rank():
     """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
     def run(tok):
@@ -1214,6 +1246,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/summary':
             body = json.dumps(build_summary(), ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/amount_rank':
+            qs = parse_qs(parsed.query)
+            try:
+                payload = build_amount_rank('Y' if qs.get('cont', ['N'])[0] == 'Y' else 'N',
+                                            qs.get('next', [''])[0])
+            except Exception as e:
+                payload = {'items': [], 'cont': 'N', 'next': '', 'error': str(e)}
+            self._send(json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                       'application/json; charset=utf-8')
         elif path == '/api/rank':
             try:
                 payload = build_rank()
