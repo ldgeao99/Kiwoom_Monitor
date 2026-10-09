@@ -983,9 +983,44 @@ def search_stock(q):
     return _pick([(c, n) for c, n in _name_map.items()], q)
 
 
-def build_amount_rank(cont_yn='N', next_key=''):
+_exchange_traded_cache = {'date': None, 'codes': set()}
+_exchange_traded_lock = threading.Lock()
+
+
+def exchange_traded_codes(token):
+    """공식 ETF/ETN 시장 목록을 일별 캐시. 이름으로 상품 종류를 추측하지 않는다."""
+    today = now_kst().strftime('%Y-%m-%d')
+    with _exchange_traded_lock:
+        if _exchange_traded_cache['date'] == today:
+            return _exchange_traded_cache['codes']
+        codes = set()
+        for market in ('8', '60', '70', '90'):
+            cont, cursor, seen = 'N', '', set()
+            while True:
+                response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo',
+                    headers={'Content-Type': 'application/json;charset=UTF-8',
+                             'authorization': f'Bearer {token}', 'api-id': 'ka10099',
+                             'cont-yn': cont, 'next-key': cursor},
+                    json={'mrkt_tp': market}, timeout=20)
+                response.raise_for_status()
+                body = response.json()
+                if body.get('return_code') not in (None, 0):
+                    raise RuntimeError('ETF/ETN 목록 조회 실패: ' + str(body.get('return_msg')))
+                codes.update(str(row.get('code') or '').split('_')[0] for row in body.get('list') or [])
+                cursor = response.headers.get('next-key', '')
+                if response.headers.get('cont-yn', 'N').upper() != 'Y':
+                    break
+                if not cursor or cursor in seen:
+                    raise RuntimeError('ETF/ETN 목록 연속조회 키 오류')
+                seen.add(cursor); cont = 'Y'
+        _exchange_traded_cache.update(date=today, codes=codes)
+        return codes
+
+
+def build_amount_rank(cont_yn='N', next_key='', exclude_etf_etn=False):
     """ka10032: 전체 시장/통합 거래소 거래대금 순위, 한 페이지."""
     def run(token):
+        excluded = exchange_traded_codes(token) if exclude_etf_etn else set()
         response = requests.post(
             'https://api.kiwoom.com/api/dostk/rkinfo',
             headers={'Content-Type': 'application/json;charset=UTF-8',
@@ -999,7 +1034,7 @@ def build_amount_rank(cont_yn='N', next_key=''):
         items = []
         for row in body.get('trde_prica_upper') or []:
             code = str(row.get('stk_cd') or '').split('_')[0]
-            if not code:
+            if not code or code in excluded:
                 continue
             items.append({'code': code, 'name': row.get('stk_nm') or '',
                           'rank': int(to_number(row.get('now_rank'))),
@@ -1250,7 +1285,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             try:
                 payload = build_amount_rank('Y' if qs.get('cont', ['N'])[0] == 'Y' else 'N',
-                                            qs.get('next', [''])[0])
+                                            qs.get('next', [''])[0],
+                                            exclude_etf_etn=qs.get('exclude_etf_etn', ['0'])[0] == '1')
             except Exception as e:
                 payload = {'items': [], 'cont': 'N', 'next': '', 'error': str(e)}
             self._send(json.dumps(payload, ensure_ascii=False).encode('utf-8'),

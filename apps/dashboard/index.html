@@ -257,6 +257,7 @@
 </div>
 <div class="page-title"><span>거래대금 상위 종목</span><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
 <div class="rank-wrap" id="amount-rank-content">
+  <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:8px;cursor:pointer"><input id="exclude-etf-etn" type="checkbox" role="switch">ETF/ETN 제외</label>
   <div class="panel">
     <div id="amount-rank-host"></div>
     <div id="amount-rank-status" role="status" style="padding:8px 12px;font-size:12px;color:var(--muted)" hidden></div>
@@ -826,6 +827,7 @@ document.getElementById('rank-host').addEventListener('click', e => {
 
 // 거래대금 순위: 10행 높이, 바닥 스크롤 시 다음 페이지 조회.
 let amountRankItems = [], amountRankCont = 'N', amountRankNext = '', amountRankLoading = false;
+let amountRankGeneration = 0;
 function fitAmountRankHeight() {
   syncAmountRankColumnWidths();
   const scroll = document.querySelector('#amount-rank-host .rank-scroll');
@@ -871,14 +873,18 @@ async function loadAmountRank(more = false) {
   // 추가 순위를 보는 동안 자동 갱신으로 첫 페이지에 돌아가지 않는다.
   if (!more && amountRankItems.length && (scroll?.scrollTop > 0 || document.getElementById('amount-rank-content').hidden)) return;
   amountRankLoading = true;
+  const generation = amountRankGeneration;
+  const exclude = document.getElementById('exclude-etf-etn').checked;
   const status = document.getElementById('amount-rank-status');
   status.hidden = false; status.textContent = '불러오는 중…';
   const cursor = more ? amountRankNext : '';
   try {
-    const url = '/api/amount_rank' + (more ? '?cont=Y&next=' + encodeURIComponent(cursor) : '');
+    const url = '/api/amount_rank?exclude_etf_etn=' + (exclude ? '1' : '0')
+      + (more ? '&cont=Y&next=' + encodeURIComponent(cursor) : '');
     const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
+    if (generation !== amountRankGeneration) return;
     if (data.error) throw new Error(data.error);
     const merged = new Map((more ? amountRankItems : []).map(item => [item.code, item]));
     (data.items || []).forEach(item => merged.set(item.code, item));
@@ -889,10 +895,23 @@ async function loadAmountRank(more = false) {
     status.textContent = amountRankCont === 'Y' && amountRankNext ? '' : '마지막 순위까지 표시했습니다.';
     status.hidden = !status.textContent || !amountRankItems.length;
   } catch (error) {
+    if (generation !== amountRankGeneration) return;
     status.textContent = '조회 실패: ' + error.message + ' · ' + (more ? '조금 위로 스크롤한 뒤 다시 내려 재시도하세요.' : '다음 갱신 때 재시도합니다.');
     status.hidden = false;
-  } finally { amountRankLoading = false; }
+  } finally {
+    if (generation === amountRankGeneration) {
+      amountRankLoading = false;
+      if (exclude && amountRankItems.length < 10 && amountRankCont === 'Y' && amountRankNext && status.textContent === '') loadAmountRank(true);
+    }
+  }
 }
+document.getElementById('exclude-etf-etn').addEventListener('change', () => {
+  amountRankGeneration++;
+  amountRankLoading = false;
+  amountRankItems = []; amountRankCont = 'N'; amountRankNext = '';
+  document.getElementById('amount-rank-host').innerHTML = '';
+  loadAmountRank();
+});
 document.getElementById('amount-rank-host').addEventListener('click', event => {
   const row = event.target.closest('tr[data-code]');
   if (!row) return;
