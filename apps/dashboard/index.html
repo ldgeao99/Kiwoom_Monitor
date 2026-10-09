@@ -794,7 +794,7 @@ let chartCode = '', chartName = '', chartTf = 'D';
 try { chartTf = localStorage.getItem('stock_chart_tf') || 'D'; } catch (e) {}
 try { chartCode = localStorage.getItem('stock_chart_code') || ''; } catch (e) {}
 
-const CHART_MAS = [[5, '#ff00ff'], [10, '#0000ff'], [20, '#84cc16'], [60, '#ff0000'], [120, '#000000']];
+const CHART_MAS = [[5, '#ff00ff'], [10, '#0000ff'], [20, '#ffa500'], [60, '#84cc16'], [120, '#000000']];
 
 // 종가 기준 단순이동평균: 필요한 봉 수가 쌓인 지점부터 표시한다.
 function movingAverage(items, period) {
