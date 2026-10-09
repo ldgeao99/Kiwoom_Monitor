@@ -789,6 +789,37 @@ function scrollToPageBottom() {
   window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 }
 
+// 코드와 이름을 함께 보존한다. 기존 코드-only 저장값은 이름 조회로 보완한다.
+async function restoreStockInput(code, name, storageKey, inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (!name) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey + '_display') || 'null');
+      if (saved && saved.code === code) name = saved.name || '';
+    } catch (e) {}
+  }
+  input.value = name || code;
+  if (!code) return;
+  const initial = input.value;
+  if (!name) {
+    try {
+      const response = await fetch('/api/stock?q=' + encodeURIComponent(code), { cache: 'no-store' });
+      if (!response.ok) return;
+      const stock = await response.json();
+      if (stock.code !== code || !stock.name) return;
+      name = stock.name;
+    } catch (e) { return; }
+  }
+  // 늦은 응답으로 새 종목 선택이나 입력을 덮어쓰지 않는다.
+  if (input.value !== initial) return;
+  try {
+    if (localStorage.getItem(storageKey) !== code) return;
+    localStorage.setItem(storageKey + '_display', JSON.stringify({ code, name }));
+  } catch (e) {}
+  input.value = name;
+}
+
 // ── 종목 캔들 차트 (분/일/주/월봉) ──
 let chartCode = '', chartName = '', chartTf = 'D';
 try { chartTf = localStorage.getItem('stock_chart_tf') || 'D'; } catch (e) {}
@@ -888,7 +919,7 @@ function setChartStock(code, name) {
   chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
   chartName = name || '';
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
-  const inp = document.getElementById('chart-code'); if (inp) inp.value = chartName || chartCode;
+  restoreStockInput(chartCode, chartName, 'stock_chart_code', 'chart-code');
   const nm = document.getElementById('chart-name'); if (nm) nm.textContent = '';
   loadCandles();
 }
@@ -1148,9 +1179,8 @@ function loadProgStock(code, name = '') {
   const v = (code || '').replace(/\D/g, '').slice(0, 6);
   if (!v) return;
   progStk = v;
-  const inp = document.getElementById('prog-stk');
-  if (inp) inp.value = name || v;
   try { localStorage.setItem('netprps_prog_stk', v); } catch (e) {}
+  restoreStockInput(v, name, 'netprps_prog_stk', 'prog-stk');
   progReset();
   renderProgram();
 }
@@ -1176,7 +1206,7 @@ async function resolveAndLoad(raw) {
 
 (function () {
   const inp = document.getElementById('prog-stk');
-  inp.value = progStk;
+  restoreStockInput(progStk, '', 'netprps_prog_stk', 'prog-stk');
   document.getElementById('prog-go').addEventListener('click', () => resolveAndLoad(inp.value));
   document.getElementById('prog-more').addEventListener('click', () => {
     if (progLoading) progStop = true;   // 로딩 중 다시 누르면 중단

@@ -973,6 +973,9 @@ def search_stock(q):
     q = (q or '').strip()
     if not q:
         return None
+    if len(q) == 6 and q.isdigit():
+        name = stock_name(q)
+        return {'code': q, 'name': name} if name else None
     hit = _pick(stock_items(), q)
     if hit:
         return hit
