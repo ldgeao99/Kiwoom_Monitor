@@ -1075,6 +1075,18 @@ function drawCandles(items, tf) {
     xlab += `<text x="${xx.toFixed(1)}" y="${priceH-6}" font-size="10" fill="#000000" text-anchor="middle">${fmt(items[i].t)}</text>`;
   }
 
+  // 분봉의 거래일 경계는 두 캔들 사이에 표시한다(가격/거래대금 공통).
+  let daySeparators = '';
+  if (isMin) {
+    for (let i = 1; i < n; i++) {
+      const previousDate = items[i - 1].t.slice(0, 8);
+      const date = items[i].t.slice(0, 8);
+      if (!/^\d{8}$/.test(date) || !/^\d{8}$/.test(previousDate) || date === previousDate) continue;
+      const xx = (mL + cw * i).toFixed(1);
+      daySeparators += `<line class="candle-day-separator" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-mB}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"><title>${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}</title></line>`;
+    }
+  }
+
   let body = '';
   items.forEach((d, i) => {
     const col = d.c >= d.o ? 'var(--pos)' : 'var(--neg)';
@@ -1153,7 +1165,7 @@ function drawCandles(items, tf) {
   host.querySelector('.candle-legend').innerHTML = legend;
   const svg = host.querySelector('svg');
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + body + averages + xlab + closeMarker + amountChart;
+  svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart;
 }
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
