@@ -1088,7 +1088,7 @@ function drawCandles(items, tf) {
       const xx = (mL + cw * i).toFixed(1);
       const separatorClass = isMin ? 'candle-day-separator' : yearlyBoundaries ? 'candle-year-separator' : 'candle-month-separator';
       const label = isMin ? `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}` : yearlyBoundaries ? date.slice(0,4) : `${date.slice(0,4)}-${date.slice(4,6)}`;
-      daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-mB}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"><title>${label}</title></line>`;
+      daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-mB}" stroke="#9ca3af" stroke-width="1"><title>${label}</title></line>`;
     }
   }
 
