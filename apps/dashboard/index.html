@@ -784,10 +784,12 @@ document.getElementById('rank-host').addEventListener('click', e => {
 });
 
 let listedStockSelection = 0;
-// 비동기 조회로 표와 차트 높이가 바뀐 뒤 최종 페이지 하단으로 이동한다.
+// 선택 즉시 하단으로 이동하고, 조회 후 화면 높이가 바뀌면 위치를 보정한다.
 async function selectListedStock(code, name) {
   const selection = ++listedStockSelection;
-  await Promise.allSettled([setChartStock(code, name), loadProgStock(code, name)]);
+  const requests = [setChartStock(code, name), loadProgStock(code, name)];
+  scrollToPageBottom();
+  await Promise.allSettled(requests);
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   if (selection !== listedStockSelection) return;
   scrollToPageBottom();
