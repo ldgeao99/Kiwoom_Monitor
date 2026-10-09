@@ -1002,7 +1002,7 @@ function drawCandles(items, tf) {
   for (let k = 0; k <= ticks; k++) {
     const v = lo + (hi - lo) * k / ticks, yy = y(v);
     grid += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
-    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
+    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${Math.round(v).toLocaleString()}</text>`;
   }
 
   const isMin = tf.endsWith('m');
@@ -1012,7 +1012,7 @@ function drawCandles(items, tf) {
   let xlab = ''; const step = Math.max(1, Math.ceil(n / 6));
   for (let i = 0; i < n; i += step) {
     const xx = xc(i);
-    xlab += `<text x="${xx.toFixed(1)}" y="${priceH-6}" font-size="10" fill="#9aa0a8" text-anchor="middle">${fmt(items[i].t)}</text>`;
+    xlab += `<text x="${xx.toFixed(1)}" y="${priceH-6}" font-size="10" fill="#000000" text-anchor="middle">${fmt(items[i].t)}</text>`;
   }
 
   let body = '';
@@ -1066,7 +1066,7 @@ function drawCandles(items, tf) {
     for (let value = 0; value <= amountMax; value += amountStep) {
       const yy = amountY(value);
       amountChart += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`
-        + `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#9aa0a8">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
+        + `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
     }
     amounts.forEach((amount, i) => {
       if (amount === null) return;
