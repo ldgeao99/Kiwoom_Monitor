@@ -1119,10 +1119,15 @@ function drawCandles(items, tf) {
   const closeLabel = lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
   const closeFit = closeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
   const closeY = Math.max(mT + 10, Math.min(priceH - mB - 10, y(lastCandle.c)));
+  const closeChange = comparable ? (lastCandle.c / previousClose - 1) * 100 : null;
+  const changeLabel = closeChange === null ? '' : `${closeChange > 0 ? '+' : ''}${closeChange.toFixed(2)}%`;
+  const changeFit = changeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
+  const changeMarker = comparable
+    ? `<text class="last-close-change" x="${mL+iw+mR/2}" y="${(closeY+23).toFixed(1)}" font-size="11" fill="${closeBackground}" text-anchor="middle"${changeFit}>${changeLabel}</text>` : '';
   const closeMarker = `<g class="last-close-label" data-close="${lastCandle.c}">`
     + `<title>마지막 표시 봉 종가 ${closeLabel}원${comparable ? ' · 전일 종가 ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
     + `<rect x="${mL+iw+3}" y="${(closeY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="${closeBackground}"/>`
-    + `<text x="${mL+iw+mR/2}" y="${(closeY+4).toFixed(1)}" font-size="11" fill="${closeForeground}" text-anchor="middle"${closeFit}>${closeLabel}</text></g>`;
+    + `<text x="${mL+iw+mR/2}" y="${(closeY+4).toFixed(1)}" font-size="11" fill="${closeForeground}" text-anchor="middle"${closeFit}>${closeLabel}</text>` + changeMarker + '</g>';
   const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
   const latestAmount = items[items.length - 1].amount_eok;
   const hasLatestAmount = Number.isFinite(latestAmount);
