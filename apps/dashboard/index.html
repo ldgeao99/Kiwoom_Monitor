@@ -92,6 +92,14 @@
   /* 세로보기(차트 중심): 카드 1열 세로 배치 + 1분봉 차트를 크게 */
   .mkt-cards.chart-focus { grid-template-columns:1fr; }
   .mkt-cards.combined-view .spark { display:none; }
+  .mkt-cards.combined-view .mkt-card .top > div { display:grid; grid-template-columns:max-content max-content; align-items:baseline; column-gap:4px; }
+  .mkt-cards.combined-view .mkt-card .nm { grid-column:1 / -1; }
+  .mkt-cards.combined-view .mkt-card .px { font-size:14px; }
+  .mkt-cards.combined-view .mkt-card .fl { font-size:11px; white-space:nowrap; }
+  @media (max-width:360px) {
+    .mkt-cards.combined-view .mkt-card .px { font-size:12px; }
+    .mkt-cards.combined-view .mkt-card .fl { font-size:10px; }
+  }
   .combined-index-chart { grid-column:1 / -1; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; }
   .combined-index-chart svg { display:block; width:100%; height:auto; }
   .combined-index-legend { display:flex; gap:16px; font-size:12px; padding:4px 8px; }
