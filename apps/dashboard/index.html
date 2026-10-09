@@ -924,17 +924,22 @@ function drawCandles(items, tf) {
   const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
   const hasAmounts = amounts.some(value => value !== null);
   const amountTop = 338, amountBottom = H - 10, amountHeight = amountBottom - amountTop;
-  const amountMax = Math.max(1, ...amounts.filter(value => value !== null));
+  // 1·2·5 계열의 정수 간격으로 눈금을 맞춘다 (예: 500억, 1,000억).
+  const rawAmountMax = Math.max(1, ...amounts.filter(value => value !== null));
+  const targetStep = Math.max(1, rawAmountMax / 2);
+  const magnitude = 10 ** Math.floor(Math.log10(targetStep));
+  const amountStep = [1, 2, 5, 10].find(value => value * magnitude >= targetStep) * magnitude;
+  const amountMax = Math.ceil(rawAmountMax / amountStep) * amountStep;
   const amountY = value => amountBottom - value / amountMax * amountHeight;
   const amountFmt = value => value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
   let amountChart = '<g class="candle-amount" data-unit="억">'
     + `<line x1="${mL}" y1="309" x2="${mL+iw}" y2="309" stroke="#d5d8dd"/>`
     + `<text x="${mL}" y="328" font-size="12" fill="#6b7280">거래대금 (억${isMin ? ', 추정' : ''})${hasAmounts ? '' : ' · 미제공'}</text>`;
   if (hasAmounts) {
-    for (let k = 0; k <= 2; k++) {
-      const value = amountMax * k / 2, yy = amountY(value);
+    for (let value = 0; value <= amountMax; value += amountStep) {
+      const yy = amountY(value);
       amountChart += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`
-        + `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#9aa0a8">${amountFmt(value)}</text>`;
+        + `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#9aa0a8">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
     }
     amounts.forEach((amount, i) => {
       if (amount === null) return;
