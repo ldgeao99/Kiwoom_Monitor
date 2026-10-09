@@ -766,10 +766,10 @@ function syncAmountRankColumnWidths() {
     for (let i = 0; i < 5; i++) columns.append(document.createElement('col'));
     table.prepend(columns);
   }
-  columns.children[0].style.width = '40px';
+  const rankColumn = document.querySelector('#rank-host .rank-tbl thead th:first-child');
+  columns.children[0].style.width = rankColumn.getBoundingClientRect().width + 'px';
   columns.children[1].style.width = reference.getBoundingClientRect().width + 'px';
-  const lastColumn = document.querySelector('#rank-host .rank-tbl thead th:last-child');
-  columns.children[4].style.width = lastColumn.getBoundingClientRect().width + 'px';
+
 }
 
 function fitRankTableHeight() {
