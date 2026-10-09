@@ -257,8 +257,8 @@
     <div id="prm-upper"></div>
   </div>
 </div>
-<div class="page-title"><span>종목별 프로그램 순매수</span></div>
-<div class="prog-wrap">
+<div class="page-title"><span>종목별 프로그램 순매수</span><button id="toggle-program" class="view-btn" type="button" aria-controls="program-content" aria-expanded="true">접기 ▾</button></div>
+<div class="prog-wrap" id="program-content">
   <div class="panel">
     <div class="title prog-title">
       <div class="prog-row">
@@ -1453,6 +1453,25 @@ applyIdxView();
   btn.addEventListener('click', () => {
     collapsed = !collapsed;
     try { localStorage.setItem('breadth_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    apply();
+  });
+})();
+
+// 종목별 프로그램 순매수 접기/펼치기 (상태 유지, 기본 펼침)
+(function () {
+  const btn = document.getElementById('toggle-program');
+  const box = document.getElementById('program-content');
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('program_collapsed') === '1'; } catch (e) {}
+  const apply = () => {
+    box.hidden = collapsed;
+    btn.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  };
+  apply();
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem('program_collapsed', collapsed ? '1' : '0'); } catch (e) {}
     apply();
   });
 })();
