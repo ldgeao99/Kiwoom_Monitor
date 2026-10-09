@@ -921,6 +921,20 @@ function drawCandles(items, tf) {
   const legend = CHART_MAS.map(([period, color]) =>
     `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
+  const lastCandle = items[items.length - 1];
+  const previousClose = lastCandle.previous_close;
+  const comparable = Number.isFinite(previousClose) && previousClose > 0;
+  const rising = comparable && lastCandle.c > previousClose;
+  const falling = comparable && lastCandle.c < previousClose;
+  const closeBackground = rising ? '#e5484d' : falling ? '#dbeafe' : '#d1d5db';
+  const closeForeground = rising ? '#ffffff' : falling ? '#2563eb' : '#374151';
+  const closeLabel = lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+  const closeFit = closeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
+  const closeY = Math.max(mT + 10, Math.min(priceH - mB - 10, y(lastCandle.c)));
+  const closeMarker = `<g class="last-close-label" data-close="${lastCandle.c}">`
+    + `<title>마지막 표시 봉 종가 ${closeLabel}원${comparable ? ' · 전일 종가 ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
+    + `<rect x="${mL+iw+3}" y="${(closeY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="${closeBackground}"/>`
+    + `<text x="${mL+iw+mR/2}" y="${(closeY+4).toFixed(1)}" font-size="11" fill="${closeForeground}" text-anchor="middle"${closeFit}>${closeLabel}</text></g>`;
   const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
   const latestAmount = items[items.length - 1].amount_eok;
   const hasLatestAmount = Number.isFinite(latestAmount);
@@ -968,7 +982,7 @@ function drawCandles(items, tf) {
   host.querySelector('.candle-legend').innerHTML = legend;
   const svg = host.querySelector('svg');
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + body + averages + xlab + amountChart;
+  svg.innerHTML = grid + body + averages + xlab + closeMarker + amountChart;
 }
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';

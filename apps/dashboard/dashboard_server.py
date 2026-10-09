@@ -1135,12 +1135,24 @@ def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
             cont, nk = 'Y', nk2
         out = []
         for r in rows_all:
+            previous_close = None
+            if r.get('pred_pre') not in (None, ''):
+                change = to_number(r['pred_pre'])
+                sign = str(r.get('pred_pre_sig') or '')
+                if sign in ('4', '5'):
+                    change = -abs(change)
+                elif sign in ('1', '2'):
+                    change = abs(change)
+                previous_close = abs(to_number(r.get('cur_prc'))) - change
+                if previous_close <= 0:
+                    previous_close = None
             out.append({
                 't': str(r.get(tkey) or ''),
                 'o': abs(to_number(r.get('open_pric'))),
                 'h': abs(to_number(r.get('high_pric'))),
                 'l': abs(to_number(r.get('low_pric'))),
                 'c': abs(to_number(r.get('cur_prc'))),
+                'previous_close': previous_close,
                 'v': abs(to_number(r.get('trde_qty'))),
                 # 일봉은 백만원, 주/월봉은 원 단위. 분봉은 종가×거래량으로 추정.
                 'amount_eok': (abs(to_number(r.get('cur_prc'))) * abs(to_number(r.get('trde_qty'))) / 100_000_000
