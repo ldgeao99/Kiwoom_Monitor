@@ -412,7 +412,7 @@ def poll_once(token, market):
     for key, _name, _color in COLUMNS:
         record[key] = to_number(row.get(key))
 
-    # 지수(ka20003): 정규장 09:00~15:30 에만 수집(1분봉 종가). cur_prc 등은 이미 소수점 포함 실제값
+    # 지수(ka20003): 정규장 09:00~15:35 에만 수집(1분봉 종가). cur_prc 등은 이미 소수점 포함 실제값
     if in_index_window(now):
         try:
             irow = fetch_index(token, market['idx_cd'])
@@ -512,9 +512,9 @@ def in_collect_window(now, start_h, end_h):
 
 
 def in_index_window(now):
-    """지수(1분봉 종가) 수집 시간대: 정규장 09:00~15:30."""
+    """지수(1분봉 종가) 수집 시간대: 정규장 09:00~15:35."""
     mins = now.hour * 60 + now.minute
-    return 9 * 60 <= mins <= 15 * 60 + 30
+    return 9 * 60 <= mins <= 15 * 60 + 35
 
 
 # 장 시작(수집 시작 08시) 직전 대기 시간대: 07:00~08:00
@@ -729,9 +729,9 @@ def available_dates(market_key):
 
 
 def idx_series(records):
-    """지수 1분봉 종가 시계열 — 정규장 09:00~15:30 구간만. idx는 절댓값(가격)."""
+    """지수 1분봉 종가 시계열 — 정규장 09:00~15:35 구간만. idx는 절댓값(가격)."""
     return [{'t': r['t'], 'idx': abs(r['idx'])} for r in records
-            if r.get('idx') is not None and '09:00' <= r['t'][:5] <= '15:30']
+            if r.get('idx') is not None and '09:00' <= r['t'][:5] <= '15:35']
 
 
 # 나스닥100 선물(NQ=F) 등락률 — Yahoo Finance, 60초 캐시
@@ -864,7 +864,7 @@ def build_summary():
     for m in MARKETS:
         records, date_str = records_for(m['key'])
         last = records[-1] if records else {}
-        # 지수/등락/종목현황은 idx가 있는 마지막 레코드(=최근 정규장 값) 기준 → 장 마감 후에도 15:30 값 유지
+        # 지수/등락/종목현황은 idx가 있는 마지막 레코드(=최근 정규장 값) 기준 → 장 마감 후에도 마지막 수집 값 유지
         ir = next((r for r in reversed(records) if r.get('idx') is not None), {})
         # 전 거래일(현재 표시일보다 앞선 가장 최근 저장 일자) 시계열
         prev_records, prev_date = [], None
