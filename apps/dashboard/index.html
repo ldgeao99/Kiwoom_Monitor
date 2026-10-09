@@ -1041,7 +1041,7 @@ function drawCandles(items, tf) {
   const start = Math.max(0, end - (candleViewCount || items.length));
   const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
-  const W = 760, H = 430, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
+  const W = 760, H = 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
   fullAverages.forEach(values => values.slice(start, end).forEach(value => {
@@ -1088,7 +1088,7 @@ function drawCandles(items, tf) {
       const xx = (mL + cw * i).toFixed(1);
       const separatorClass = isMin ? 'candle-day-separator' : yearlyBoundaries ? 'candle-year-separator' : 'candle-month-separator';
       const label = isMin ? `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}` : yearlyBoundaries ? date.slice(0,4) : `${date.slice(0,4)}-${date.slice(4,6)}`;
-      daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-mB}" stroke="#9ca3af" stroke-width="1"><title>${label}</title></line>`;
+      daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-30}" stroke="#9ca3af" stroke-width="1"><title>${label}</title></line>`;
     }
   }
 
@@ -1127,7 +1127,7 @@ function drawCandles(items, tf) {
   const latestAmount = items[items.length - 1].amount_eok;
   const hasLatestAmount = Number.isFinite(latestAmount);
   const hasAmounts = amounts.some(value => value !== null);
-  const amountTop = 338, amountBottom = H - 10, amountHeight = amountBottom - amountTop;
+  const amountTop = 338, amountBottom = H - 30, amountHeight = amountBottom - amountTop;
   // 1·2·5 계열의 정수 간격으로 눈금을 맞춘다 (예: 500억, 1,000억).
   const rawAmountMax = Math.max(1, ...amounts.filter(value => value !== null), hasLatestAmount ? latestAmount : 0);
   const targetStep = Math.max(1, rawAmountMax / 2);
@@ -1162,6 +1162,27 @@ function drawCandles(items, tf) {
   }
   amountChart += '</g>';
 
+  // 거래대금 아래 공통 날짜 축: 월 경계와 연도 변경을 함께 표시한다.
+  let dateAxis = `<g class="candle-date-axis"><line x1="${mL}" x2="${mL+iw}" y1="${amountBottom}" y2="${amountBottom}" stroke="#9ca3af"/>`;
+  let lastDateLabelEnd = -Infinity, lastLabelYear = '';
+  items.forEach((item, i) => {
+    const date = item.t.slice(0, 8);
+    if (!/^\d{8}$/.test(date)) return;
+    const keyLength = isMin ? 8 : yearlyBoundaries ? 4 : 6;
+    if (i && date.slice(0, keyLength) === items[i - 1].t.slice(0, keyLength)) return;
+    const year = date.slice(0, 4), month = date.slice(4, 6);
+    const label = isMin ? `${month}/${date.slice(6,8)}`
+      : yearlyBoundaries ? year : year !== lastLabelYear ? `${year}/${month}` : month;
+    const xx = i ? mL + cw * i : mL;
+    if (xx < lastDateLabelEnd + 6) return;
+    const labelWidth = label.length * 6;
+    if (xx + labelWidth > mL + iw) return;
+    dateAxis += `<text x="${xx.toFixed(1)}" y="${H-8}" font-size="10" fill="#000000" data-date="${date}">${label}</text>`;
+    lastDateLabelEnd = xx + labelWidth;
+    lastLabelYear = year;
+  });
+  dateAxis += '</g>';
+
   // 터치 대상은 유지하고 SVG 내용만 갱신해 연속 핀치 동작이 끊기지 않게 한다.
   if (!host.querySelector('.candle-plot')) {
     host.innerHTML = '<div class="candle-legend" style="display:flex;flex-wrap:wrap;gap:12px;padding:0 8px;font-size:12px;line-height:15px" aria-label="종가 기준 이동평균선"></div>'
@@ -1170,7 +1191,7 @@ function drawCandles(items, tf) {
   host.querySelector('.candle-legend').innerHTML = legend;
   const svg = host.querySelector('svg');
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart;
+  svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart + dateAxis;
 }
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
