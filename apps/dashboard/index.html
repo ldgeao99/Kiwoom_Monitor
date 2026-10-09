@@ -143,6 +143,8 @@
   .chart-head { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .chart-name { font-size:13px; font-weight:600; color:var(--text); }
   #stock-chart { padding:8px 10px; }
+  .candle-plot { position:relative; }
+  .candle-touch-layer { position:absolute; inset:0; touch-action:pan-y; }
   .chart-sel { margin-left:auto; font-size:13px; font-weight:400; padding:4px 26px 4px 12px; cursor:pointer;
     color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:14px; }
   #toggle-chart { margin-left:0; }   /* 봉 주기 select 바로 옆(제목 우측 그룹) */
@@ -862,13 +864,23 @@ function renderChartTf() {
   };
 }
 
+let candleViewCount = null, candleViewOffset = 0;
+
 function drawCandles(items, tf) {
   const host = document.getElementById('stock-chart');
   if (!host) return;
   if (!items || items.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
+  const fullItems = items;
+  const end = Math.max(2, items.length - candleViewOffset);
+  const start = Math.max(0, end - (candleViewCount || items.length));
+  const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
+  items = fullItems.slice(start, end);
   const W = 760, H = 300, mL = 8, mR = 64, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = H - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
+  fullAverages.forEach(values => values.slice(start, end).forEach(value => {
+    if (value !== null) { lo = Math.min(lo, value); hi = Math.max(hi, value); }
+  }));
   if (lo === hi) hi = lo + 1;
   const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
   const cw = iw / n, bw = Math.max(1, Math.min(cw * 0.7, 9));
@@ -901,17 +913,23 @@ function drawCandles(items, tf) {
     body += `<rect x="${(x-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}"/>`;
   });
 
-  const averages = CHART_MAS.map(([period, color]) => {
-    const values = movingAverage(items, period);
+  const averages = CHART_MAS.map(([period, color], index) => {
+    const values = fullAverages[index].slice(start, end);
     const points = values.flatMap((value, i) => value === null ? [] : [`${xc(i).toFixed(1)},${y(value).toFixed(1)}`]);
     return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   }).join('');
   const legend = CHART_MAS.map(([period, color]) =>
     `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
-  host.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px;padding:8px;font-size:12px" aria-label="종가 기준 이동평균선">${legend}</div>`
-    + `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
-    + grid + body + averages + xlab + '</svg>';
+  // 터치 대상은 유지하고 SVG 내용만 갱신해 연속 핀치 동작이 끊기지 않게 한다.
+  if (!host.querySelector('.candle-plot')) {
+    host.innerHTML = '<div class="candle-legend" style="display:flex;flex-wrap:wrap;gap:12px;padding:8px;font-size:12px" aria-label="종가 기준 이동평균선"></div>'
+      + `<div class="candle-plot"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg><div class="candle-touch-layer" aria-hidden="true"></div></div>`;
+  }
+  host.querySelector('.candle-legend').innerHTML = legend;
+  const svg = host.querySelector('svg');
+  svg.dataset.visibleCandles = n;
+  svg.innerHTML = grid + body + averages + xlab;
 }
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
@@ -928,6 +946,7 @@ async function loadCandles(more = false) {
   const host = document.getElementById('stock-chart');
   if (!more) {
     candleItems = []; candleHistory = []; candleNext = ''; candleCont = 'N';
+    candleViewCount = null; candleViewOffset = 0;
   }
   candleLoading = true; updateCandleMore();
   try {
@@ -957,6 +976,49 @@ async function loadCandles(more = false) {
     if (generation === candleGeneration) { candleLoading = false; updateCandleMore(); }
   }
 }
+
+// 두 손가락 간격으로 보이는 봉 수를 조절한다. 한 손가락 세로 스크롤은 유지한다.
+(function () {
+  const host = document.getElementById('stock-chart');
+  let pinch = null, frame = null;
+  const distance = touches => Math.hypot(touches[0].clientX - touches[1].clientX,
+                                        touches[0].clientY - touches[1].clientY);
+  host.addEventListener('touchstart', event => {
+    if (event.touches.length !== 2 || candleItems.length < 2 || !event.target.closest('.candle-plot')) return;
+    const gap = distance(event.touches);
+    if (gap < 1) return;
+    event.preventDefault();
+    const rect = host.querySelector('svg').getBoundingClientRect();
+    const center = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+    const fraction = Math.max(0, Math.min(1, ((center - rect.left) / rect.width * 760 - 8) / 688));
+    const count = Math.min(candleViewCount || candleItems.length, candleItems.length);
+    const end = candleItems.length - candleViewOffset;
+    pinch = { gap, count, fraction, anchor: end - count + count * fraction, generation: candleGeneration };
+  }, { passive: false });
+  // SVG를 다시 그려도 동일 제스처가 이어지도록 document에서 이동을 받는다.
+  document.addEventListener('touchmove', event => {
+    if (!pinch) return;
+    if (event.touches.length !== 2 || pinch.generation !== candleGeneration) { pinch = null; return; }
+    event.preventDefault();
+    const gap = distance(event.touches);
+    if (gap < 1) return;
+    const total = candleItems.length;
+    const count = Math.max(Math.min(10, total), Math.min(total, Math.round(pinch.count * pinch.gap / gap)));
+    const end = Math.max(count, Math.min(total, Math.round(pinch.anchor + count * (1 - pinch.fraction))));
+    candleViewCount = count === total ? null : count;
+    candleViewOffset = total - end;
+    if (frame === null) {
+      const generation = candleGeneration;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (generation === candleGeneration) drawCandles(candleItems, chartTf);
+      });
+    }
+  }, { passive: false });
+  const finish = () => { pinch = null; };
+  document.addEventListener('touchend', finish, { passive: true });
+  document.addEventListener('touchcancel', finish, { passive: true });
+})();
 
 function setChartStock(code, name) {
   chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
