@@ -156,6 +156,8 @@
     white-space:normal; line-height:1.25; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
+  #amount-rank-host .rank-tbl { table-layout:fixed; }
+  #amount-rank-host td.nm { overflow:hidden; text-overflow:ellipsis; }
   .rank-tbl tbody tr { cursor:pointer; }
   .rank-tbl tbody tr:hover td { background:#f2f6ff; }
   .rank-tbl .pos { color:var(--pos); } .rank-tbl .neg { color:var(--neg); } .rank-tbl .zero { color:var(--muted); }
@@ -754,9 +756,24 @@ function priceCell(price, psign) {
   const cls = (psign === '1' || psign === '2') ? 'pos' : (psign === '4' || psign === '5') ? 'neg' : 'zero';
   return `<td class="${cls}">${price.toLocaleString('ko-KR')}</td>`;
 }
+function syncAmountRankNameWidth() {
+  const reference = document.querySelector('#rank-host .rank-tbl thead th:nth-child(2)');
+  const table = document.querySelector('#amount-rank-host .rank-tbl');
+  if (!reference || !table) return;
+  let columns = table.querySelector('colgroup');
+  if (!columns) {
+    columns = document.createElement('colgroup');
+    for (let i = 0; i < 5; i++) columns.append(document.createElement('col'));
+    table.prepend(columns);
+  }
+  columns.children[0].style.width = '40px';
+  columns.children[1].style.width = reference.getBoundingClientRect().width + 'px';
+}
+
 function fitRankTableHeight() {
   const scroll = document.querySelector('#rank-host .rank-scroll');
   if (!scroll) return;
+  syncAmountRankNameWidth();
   const table = scroll.querySelector('table');
   const rows = [...table.tBodies[0].rows].slice(0, 10);
   const height = table.tHead.getBoundingClientRect().height
@@ -807,6 +824,7 @@ document.getElementById('rank-host').addEventListener('click', e => {
 // 거래대금 순위: 10행 높이, 바닥 스크롤 시 다음 페이지 조회.
 let amountRankItems = [], amountRankCont = 'N', amountRankNext = '', amountRankLoading = false;
 function fitAmountRankHeight() {
+  syncAmountRankNameWidth();
   const scroll = document.querySelector('#amount-rank-host .rank-scroll');
   if (!scroll) return;
   const table = scroll.querySelector('table');
@@ -838,6 +856,7 @@ function renderAmountRankTable() {
     values.forEach((value, column) => {
       const cell = row.insertCell(); cell.textContent = value;
       cell.className = column === 0 ? 'rk' : column === 1 ? 'nm' : column < 4 ? cls(item.flu) : '';
+      if (column === 1) cell.title = item.name;
     });
     tbody.append(row);
   });
