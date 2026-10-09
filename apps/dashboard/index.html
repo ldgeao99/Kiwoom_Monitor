@@ -91,6 +91,10 @@
   .view-btn:hover { color:var(--text); }
   /* 세로보기(차트 중심): 카드 1열 세로 배치 + 1분봉 차트를 크게 */
   .mkt-cards.chart-focus { grid-template-columns:1fr; }
+  .mkt-cards.combined-view .spark { display:none; }
+  .combined-index-chart { grid-column:1 / -1; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; }
+  .combined-index-chart svg { display:block; width:100%; height:auto; }
+  .combined-index-legend { display:flex; gap:16px; font-size:12px; padding:4px 8px; }
   /* 지수값은 왼쪽(기본보기처럼), 차트는 오른쪽에서 넓게 */
   .mkt-cards.chart-focus .mkt-card .top { align-items:center; gap:14px; }
   .mkt-cards.chart-focus .mkt-card .top > div { flex:0 0 auto; }
@@ -317,9 +321,13 @@
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
 let selected = null;           // Set<key> — 표시할 투자자
 
-// 지수현황 보기 모드: false=기본(좌우 카드), true=세로보기(1분봉 차트 중심)
-let chartFocus = false;
-try { chartFocus = localStorage.getItem('idx_chart_focus') === '1'; } catch (e) {}
+// 지수현황 보기 모드: 기본 → 세로 → 함께보기
+let idxViewMode = 'default';
+try {
+  idxViewMode = localStorage.getItem('idx_view_mode') || (localStorage.getItem('idx_chart_focus') === '1' ? 'vertical' : 'default');
+} catch (e) {}
+if (!['default', 'vertical', 'combined'].includes(idxViewMode)) idxViewMode = 'default';
+let chartFocus = idxViewMode === 'vertical';
 
 const fmtSigned = v => (v > 0 ? '+' : '') + v.toLocaleString();
 const cls = v => v > 0 ? 'pos' : (v < 0 ? 'neg' : '');
@@ -700,6 +708,50 @@ function mktCard(m, strong) {
     + `<hr class="dv"><div class="inv">${inv}</div></div>`;
 }
 
+// 두 시장을 같은 시간축과 전일 종가 대비 등락률 축으로 비교한다.
+function combinedIndexChart(markets) {
+  const W = 900, H = 240, left = 50, right = 16, top = 12, bottom = 28;
+  const iw = W - left - right, ih = H - top - bottom;
+  const series = ['kospi', 'kosdaq'].map((key, index) => {
+    const market = markets.find(m => m.key === key);
+    if (!market) return {key, color: index ? '#0000ff' : '#ff0000', points: []};
+    const prev = market.series_prev || [];
+    const base = prev.length ? prev[prev.length - 1].idx
+      : Number.isFinite(market.idx) && Number.isFinite(market.pred) ? market.idx - market.pred : null;
+    const source = market.preopen ? [] : [...(market.open != null ? [{t:'09:00:00',idx:market.open}] : []), ...(market.series || [])];
+    const points = base > 0 ? source.map(point => {
+      const parts = (point.t || '').split(':');
+      return {minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
+    }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 930 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
+    return {key, color:index ? '#0000ff' : '#ff0000', points};
+  });
+  const values = series.flatMap(line => line.points.map(point => point.pct));
+  const legend = '<div class="combined-index-legend"><span style="color:#ff0000">━ 코스피</span><span style="color:#0000ff">━ 코스닥</span><span>전일 대비 (%)</span></div>';
+  if (!values.length) return `<div class="combined-index-chart">${legend}<div class="empty">장중 데이터 수집 대기 중…</div></div>`;
+  let lo = Math.min(0, ...values), hi = Math.max(0, ...values);
+  const padding = Math.max(0.1, (hi - lo) * 0.08); lo -= padding; hi += padding;
+  const x = minute => left + (minute - 540) / 390 * iw;
+  const y = pct => top + (hi - pct) / (hi - lo) * ih;
+  let drawing = '';
+  for (let i = 0; i <= 4; i++) {
+    const value = lo + (hi - lo) * i / 4, yy = y(value);
+    drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text x="${left-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
+  }
+  drawing += `<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="#9ca3af"/>`;
+  for (const minute of [540,600,660,720,780,840,900,930]) {
+    const xx = x(minute);
+    drawing += `<text x="${xx}" y="${H-7}" text-anchor="middle" font-size="11" fill="#000000">${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}</text>`;
+  }
+  series.forEach(line => {
+    if (!line.points.length) return;
+    const points = line.points.map(point => `${x(point.minute).toFixed(2)},${y(point.pct).toFixed(2)}`).join(' ');
+    drawing += `<polyline data-market="${line.key}" points="${points}" fill="none" stroke="${line.color}" stroke-width="2" stroke-linejoin="round"/>`;
+    const last = line.points[line.points.length - 1];
+    drawing += `<circle cx="${x(last.minute)}" cy="${y(last.pct)}" r="3" fill="${line.color}"/>`;
+  });
+  return `<div class="combined-index-chart">${legend}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="코스피 코스닥 전일 대비 등락률 비교">${drawing}</svg></div>`;
+}
+
 function breadthTable(markets) {
   const num = v => (v == null) ? '-' : v.toLocaleString('ko-KR');
   const risePct = m => {
@@ -738,7 +790,8 @@ async function renderSummaryCards() {
     } else if (ms.length === 2 && ms.every(m => m.flu < 0)) {
       strongKey = ms[0].flu <= ms[1].flu ? ms[0].key : ms[1].key;   // 더 약한(낮은) 하락
     }
-    document.getElementById('mkt-cards').innerHTML = ms.map(m => mktCard(m, m.key === strongKey)).join('');
+    document.getElementById('mkt-cards').innerHTML = ms.map(m => mktCard(m, m.key === strongKey)).join('')
+      + (idxViewMode === 'combined' ? combinedIndexChart(ms) : '');
     document.getElementById('breadth').innerHTML = breadthTable(ms);
     // 해외 지수: 현재/당일 최저/최고의 전일 종가 대비 등락률.
     const f = v => (v == null) ? '-' : `<b class="${cls(v)}">${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
@@ -1821,19 +1874,24 @@ function scheduleRefresh() {
   }, { passive: true });
 })();
 
-// 지수현황 보기 모드 토글(기본 ↔ 세로보기/차트 중심)
+// 지수현황 보기 모드 순환(기본 → 세로 → 함께보기)
 function applyIdxView() {
   const host = document.getElementById('mkt-cards');
-  if (host) host.classList.toggle('chart-focus', chartFocus);
+  if (host) {
+    host.classList.toggle('chart-focus', chartFocus);
+    host.classList.toggle('combined-view', idxViewMode === 'combined');
+  }
   const btn = document.getElementById('toggle-idxview');
-  if (btn) btn.textContent = chartFocus ? '기본보기' : '세로보기';
+  if (btn) btn.textContent = {default:'세로보기', vertical:'함께보기', combined:'기본보기'}[idxViewMode];
 }
 (function () {
   const btn = document.getElementById('toggle-idxview');
   if (!btn) return;
   btn.addEventListener('click', () => {
-    chartFocus = !chartFocus;
-    try { localStorage.setItem('idx_chart_focus', chartFocus ? '1' : '0'); } catch (e) {}
+    const modes = ['default', 'vertical', 'combined'];
+    idxViewMode = modes[(modes.indexOf(idxViewMode) + 1) % modes.length];
+    chartFocus = idxViewMode === 'vertical';
+    try { localStorage.setItem('idx_view_mode', idxViewMode); } catch (e) {}
     applyIdxView();
     renderSummaryCards();   // 스파크를 새 크기로 다시 그림
   });
