@@ -849,7 +849,7 @@ function renderAmountRankTable() {
   if (!amountRankItems.length) { host.innerHTML = '<div class="empty">거래대금 데이터가 없습니다.</div>'; return; }
   let scroll = host.querySelector('.rank-scroll');
   if (!scroll) {
-    host.innerHTML = '<div class="rank-scroll"><table class="rank-tbl"><thead><tr><th></th><th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>거래대금(억)</th></tr></thead><tbody></tbody></table></div>';
+    host.innerHTML = '<div class="rank-scroll"><table class="rank-tbl"><thead><tr><th></th><th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>거래대금</th></tr></thead><tbody></tbody></table></div>';
     scroll = host.querySelector('.rank-scroll');
     scroll.addEventListener('scroll', () => {
       if (scroll.scrollTop > 0 && scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 60) loadAmountRank(true);
@@ -865,7 +865,7 @@ function renderAmountRankTable() {
     row.title = '클릭하면 프로그램 순매수와 종목 차트 조회';
     const values = [exclude ? index + 1 : (item.rank || index + 1), item.name, item.price.toLocaleString('ko-KR'),
       (item.flu > 0 ? '+' : '') + item.flu.toFixed(2) + '%',
-      item.amount_eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 })];
+      item.amount_eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억'];
     values.forEach((value, column) => {
       const cell = row.insertCell(); cell.textContent = value;
       cell.className = column === 0 ? 'rk' : column === 1 ? 'nm' : column < 4 ? cls(item.flu) : '';
