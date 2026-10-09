@@ -1089,7 +1089,7 @@ function drawCandles(items, tf) {
     return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   }).join('');
   const legend = CHART_MAS.map(([period, color]) =>
-    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}</span>`
+    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
   const lastCandle = items[items.length - 1];
   const previousClose = lastCandle.previous_close;
@@ -1146,7 +1146,7 @@ function drawCandles(items, tf) {
 
   // 터치 대상은 유지하고 SVG 내용만 갱신해 연속 핀치 동작이 끊기지 않게 한다.
   if (!host.querySelector('.candle-plot')) {
-    host.innerHTML = '<div class="candle-legend" style="display:flex;flex-wrap:wrap;gap:12px;padding:8px;font-size:12px" aria-label="종가 기준 이동평균선"></div>'
+    host.innerHTML = '<div class="candle-legend" style="display:flex;flex-wrap:wrap;gap:12px;padding:0 8px;font-size:12px;line-height:15px" aria-label="종가 기준 이동평균선"></div>'
       + `<div class="candle-plot"><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto"></svg><div class="candle-touch-layer" aria-hidden="true"></div></div>`;
   }
   host.querySelector('.candle-legend').innerHTML = legend;
