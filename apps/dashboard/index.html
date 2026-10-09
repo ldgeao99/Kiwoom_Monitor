@@ -284,6 +284,7 @@
   <div class="chart-head">
     <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
     <button id="chart-go" class="prog-go" type="button">조회</button>
+    <button id="chart-more" class="prog-go" type="button" style="margin-left:auto" disabled>추가조회</button>
     <span id="chart-name" class="chart-name"></span>
   </div>
   <div class="panel">
@@ -903,16 +904,48 @@ function drawCandles(items, tf) {
     + grid + body + averages + xlab + '</svg>';
 }
 
-async function loadCandles() {
+let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
+let candleGeneration = 0, candleLoading = false;
+function updateCandleMore() {
+  const btn = document.getElementById('chart-more');
+  btn.disabled = candleLoading || (!candleHistory.length && !(candleCont === 'Y' && candleNext));
+  btn.textContent = candleLoading ? '불러오는 중…' : '추가조회';
+}
+async function loadCandles(more = false) {
+  if (more && (candleLoading || (!candleHistory.length && !(candleCont === 'Y' && candleNext)))) return;
+  const generation = more ? candleGeneration : ++candleGeneration;
+  const code = chartCode, tf = chartTf;
   const host = document.getElementById('stock-chart');
-  if (!chartCode) { if (host) host.innerHTML = '<div class="empty">종목을 클릭하거나 코드를 입력하세요.</div>'; return; }
+  if (!more) {
+    candleItems = []; candleHistory = []; candleNext = ''; candleCont = 'N';
+  }
+  candleLoading = true; updateCandleMore();
   try {
-    const res = await fetch('/api/candles?code=' + encodeURIComponent(chartCode) + '&tf=' + chartTf, { cache: 'no-store' });
-    if (!res.ok) return;
-    const d = await res.json();
-    if (d.error && !(d.items || []).length) { if (host) host.innerHTML = '<div class="empty">' + d.error + '</div>'; return; }
-    drawCandles(d.items || [], d.tf || chartTf);
-  } catch (e) {}
+    if (!code) { host.innerHTML = '<div class="empty">종목을 클릭하거나 코드를 입력하세요.</div>'; return; }
+    let data;
+    if (more && candleHistory.length) {
+      data = { items: candleHistory, cont: candleCont, next: candleNext };
+    } else {
+      let url = '/api/candles?code=' + encodeURIComponent(code) + '&tf=' + tf;
+      if (more) url += '&cont=Y&next=' + encodeURIComponent(candleNext);
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+      if (data.error) throw new Error(data.error);
+    }
+    if (generation !== candleGeneration) return;
+    const merged = new Map((more ? candleItems : []).map(item => [item.t, item]));
+    (data.items || []).forEach(item => merged.set(item.t, item));
+    candleItems = [...merged.values()].sort((a, b) => a.t.localeCompare(b.t));
+    candleHistory = data.history || [];
+    candleCont = data.cont || 'N'; candleNext = data.next || '';
+    document.getElementById('chart-name').textContent = '';
+    drawCandles(candleItems, tf);
+  } catch (e) {
+    if (generation === candleGeneration) document.getElementById('chart-name').textContent = '차트 조회 실패: ' + e.message;
+  } finally {
+    if (generation === candleGeneration) { candleLoading = false; updateCandleMore(); }
+  }
 }
 
 function setChartStock(code, name) {
@@ -941,6 +974,7 @@ async function resolveChart(raw) {
 (function () {
   const go = document.getElementById('chart-go'), inp = document.getElementById('chart-code');
   if (!go || !inp) return;
+  document.getElementById('chart-more').addEventListener('click', () => loadCandles(true));
   go.addEventListener('click', () => resolveChart(inp.value));
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') resolveChart(inp.value); });
 })();

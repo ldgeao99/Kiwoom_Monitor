@@ -1105,23 +1105,24 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
     return body.get(list_key) or [], tkey, cy, nk
 
 
-def build_candles(code, tf, limit=140):
+def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
     """종목 캔들 차트(시간 오름차순 OHLCV).
     분봉(1/3/10/15분)은 '최신 거래일 세션'을 장시작(09:00)까지 자동 연속조회해서 보여준다.
     (오늘 데이터가 있으면 오늘 09:00~현재, 장 전/휴장이면 직전 거래일 09:00~마감).
-    일/주/월봉은 1페이지에서 최근 limit개만 반환."""
+    일/주/월봉은 최근 limit개를 표시하고 나머지는 history로 보존한다.
+    연속조회는 다음 1페이지를 필터 없이 반환한다."""
     tf = tf if tf in _CANDLE_TF else 'D'
     is_min = tf.endswith('m')
 
     def run(tok):
         rows_all = []
-        cont, nk, pages, tkey = 'N', '', 0, None
+        cont, nk, pages, tkey = cont_yn, next_key, 0, None
         session_open = None
         while True:
             rows, tkey, cy, nk2 = fetch_candles(tok, code, tf, cont, nk)
             rows_all.extend(rows)
             pages += 1
-            if not is_min:
+            if not is_min or cont_yn == 'Y':
                 break                                   # 일/주/월은 1페이지면 충분
             if session_open is None:
                 # 최신 세션 일자 = 첫 페이지의 가장 큰 날짜(오늘 or 직전 거래일)
@@ -1142,21 +1143,26 @@ def build_candles(code, tf, limit=140):
                 'c': abs(to_number(r.get('cur_prc'))),
                 'v': abs(to_number(r.get('trde_qty'))),
             })
-        return out, session_open
+        return out, session_open, cy, nk2
 
     try:
-        items, session_open = run(cached_token())
+        items, session_open, cy, nk = run(cached_token())
     except Exception:
         _token_cache['token'] = None
-        items, session_open = run(cached_token())
+        items, session_open, cy, nk = run(cached_token())
     items = [it for it in items if it['t'] and it['h'] > 0]
     items.sort(key=lambda x: x['t'])
-    if is_min and session_open:
+    all_items = items
+    if cont_yn == 'Y':
+        pass
+    elif is_min and session_open:
         sdate = session_open[:8]
         items = [it for it in items if it['t'][:8] == sdate and it['t'] >= session_open]  # 최신 세션 09:00~
     elif not is_min and limit and len(items) > limit:
         items = items[-limit:]
-    return {'code': code, 'tf': tf, 'items': items}
+    shown = {it['t'] for it in items}
+    history = [it for it in all_items if it['t'] not in shown]
+    return {'code': code, 'tf': tf, 'items': items, 'history': history, 'cont': cy, 'next': nk}
 
 
 # 서빙 허용 HTML 파일: 경로 -> 파일명
@@ -1222,7 +1228,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = {'code': '', 'tf': tf, 'items': [], 'error': '종목코드 없음'}
             else:
                 try:
-                    payload = build_candles(code, tf)
+                    payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0])
                 except Exception as e:
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
