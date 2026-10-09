@@ -745,7 +745,7 @@ async function renderSummaryCards() {
     const fp = v => (v == null) ? '-' : `<b>${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
     [['nasdaq-fut', '나스닥100선물', data.nasdaq, 10],
      ['nikkei-index', '니케이225', data.nikkei, 30],
-     ['taiwan-index', '대만가권', data.taiwan, data.taiwan?.delay]].forEach(([id, name, n, delay]) => {
+     ['taiwan-index', '대만가권', data.taiwan, 20]].forEach(([id, name, n, delay]) => {
       const host = document.getElementById(id);
       const delayLabel = delay > 0 ? ` <span class="nasdelay">(${delay}분 지연)</span>` : '';
       host.innerHTML = (n && n.cur != null)
