@@ -856,13 +856,14 @@ function renderAmountRankTable() {
     });
   }
   const top = scroll.scrollTop;
+  const exclude = document.getElementById('exclude-etf-etn').checked;
   const tbody = scroll.querySelector('tbody');
   tbody.replaceChildren();
   amountRankItems.forEach((item, index) => {
     const row = document.createElement('tr');
     row.dataset.code = item.code;
     row.title = '클릭하면 프로그램 순매수와 종목 차트 조회';
-    const values = [item.rank || index + 1, item.name, item.price.toLocaleString('ko-KR'),
+    const values = [exclude ? index + 1 : (item.rank || index + 1), item.name, item.price.toLocaleString('ko-KR'),
       (item.flu > 0 ? '+' : '') + item.flu.toFixed(2) + '%',
       item.amount_eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억'];
     values.forEach((value, column) => {
