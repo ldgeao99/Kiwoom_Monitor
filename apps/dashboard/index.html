@@ -1047,9 +1047,14 @@ function drawCandles(items, tf) {
   const xc = i => mL + cw * (i + 0.5);
   const y = v => mT + ih * (1 - (v - lo) / (hi - lo));
 
-  const ticks = 5; let grid = '';
-  for (let k = 0; k <= ticks; k++) {
-    const v = lo + (hi - lo) * k / ticks, yy = y(v);
+  // 가격 범위에 맞는 1·2·5 계열의 원 단위 간격으로 눈금을 정렬한다.
+  const rawPriceStep = Math.max(1, (hi - lo) / 5);
+  const priceMagnitude = 10 ** Math.floor(Math.log10(rawPriceStep));
+  const priceStep = [1, 2, 5, 10].find(mult => mult * priceMagnitude >= rawPriceStep) * priceMagnitude;
+  let grid = '';
+  const firstPriceTick = Math.ceil(lo / priceStep) * priceStep;
+  for (let v = firstPriceTick; v <= hi; v += priceStep) {
+    const yy = y(v);
     grid += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
     grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${Math.round(v).toLocaleString()}</text>`;
   }
