@@ -142,11 +142,11 @@
   #pu-side label.on:last-child  { background:#eef3fd; color:var(--neg); }
   .pu-scroll { max-height:341px; overflow-y:auto; }        /* 접힘: 헤더+약 10행 */
   .pu-scroll.expanded { max-height:1400px; }
-  .pu-tbl { width:100%; border-collapse:collapse; }
+  .pu-tbl { width:100%; border-collapse:collapse; table-layout:fixed; }
   .pu-tbl th, .pu-tbl td { padding:7px 10px; font-size:13px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
   .pu-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1; }
   .pu-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
-  .pu-tbl td.mk, .pu-tbl thead th:first-child { max-width:5.5em; overflow:hidden; text-overflow:ellipsis; }   /* 종목명 폭 축소 */
+  .pu-tbl td.mk, .pu-tbl thead th:first-child { overflow:hidden; text-overflow:ellipsis; }   /* 종목명 폭 축소 */
   .pu-tbl td.mk { text-align:left; font-weight:600; cursor:pointer; }
   .pu-tbl tbody tr:hover { background:var(--head); }
   /* 조회수 상위 종목 */
@@ -845,7 +845,18 @@ function syncAmountRankColumnWidths() {
   columns.children[1].style.width = reference.getBoundingClientRect().width + 'px';
   const priceColumn = document.querySelector('#rank-host .rank-tbl thead th:nth-child(3)');
   columns.children[2].style.width = priceColumn.getBoundingClientRect().width + 'px';
+  syncProgramRankNameWidth();
 }
+
+function syncProgramRankNameWidth() {
+  const reference = document.querySelector('#amount-rank-host .rank-tbl thead th:nth-child(2)');
+  const column = document.querySelector('#prm-upper colgroup col');
+  if (!reference || !column) return;
+  const width = reference.getBoundingClientRect().width;
+  if (width > 0) column.style.width = width + 'px';
+}
+new ResizeObserver(syncProgramRankNameWidth).observe(document.getElementById('amount-rank-host'));
+new ResizeObserver(syncProgramRankNameWidth).observe(document.getElementById('prm-upper'));
 
 function fitRankTableHeight() {
   const scroll = document.querySelector('#rank-host .rank-scroll');
@@ -1738,7 +1749,7 @@ function renderPuTable() {
   if (!host) return;
   if (!puItems.length) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; if (btn) btn.style.display = 'none'; return; }
   const amtLbl = puSide === '1' ? '순매도금액' : '순매수금액';
-  let html = `<div class="pu-scroll${puExpanded ? ' expanded' : ''}"><table class="pu-tbl"><thead><tr>`
+  let html = `<div class="pu-scroll${puExpanded ? ' expanded' : ''}"><table class="pu-tbl"><colgroup><col><col><col><col></colgroup><thead><tr>`
     + `<th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>${amtLbl}</th></tr></thead><tbody>`;
   puItems.forEach((it, i) => {
     const eok = Math.round(it.net / 100);   // 백만원 → 억원
@@ -1753,6 +1764,7 @@ function renderPuTable() {
   const prev = host.querySelector('.pu-scroll');
   const top = prev ? prev.scrollTop : 0;
   host.innerHTML = html;
+  syncProgramRankNameWidth();
   host.querySelector('.pu-scroll').scrollTop = top;
   host.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => {
     const code = tr.getAttribute('data-code');
