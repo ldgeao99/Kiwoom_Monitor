@@ -83,6 +83,7 @@
     text-decoration:none; border:1px solid var(--line); border-radius:14px; padding:4px 12px; }
   .nasfut { max-width:1200px; margin:-2px auto 10px; font-size:12px; font-weight:600; color:var(--muted); }
   .nasfut:empty { display:none; }
+  .nasfut .index-name { display:inline-block; width:96px; }
   .nasfut b { font-weight:700; }
   .nasfut .nasdelay { font-size:10px; font-weight:400; color:var(--muted); }
   .view-btn { margin-left:auto; font-size:13px; font-weight:600; color:var(--muted); background:none;
@@ -744,11 +745,11 @@ async function renderSummaryCards() {
     const fp = v => (v == null) ? '-' : `<b>${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
     [['nasdaq-fut', '나스닥100선물', data.nasdaq, 10],
      ['nikkei-index', '니케이225', data.nikkei, data.nikkei?.delay],
-     ['taiwan-index', '대만가권지수', data.taiwan, data.taiwan?.delay]].forEach(([id, name, n, delay]) => {
+     ['taiwan-index', '대만가권', data.taiwan, data.taiwan?.delay]].forEach(([id, name, n, delay]) => {
       const host = document.getElementById(id);
       const delayLabel = delay > 0 ? ` <span class="nasdelay">(${delay}분지연)</span>` : '';
       host.innerHTML = (n && n.cur != null)
-        ? `${name} 현재 ${f(n.cur)} 최저 ${fp(n.low)} 최고 ${fp(n.high)}${delayLabel}` : '';
+        ? `<span class="index-name">${name}</span>현재 ${f(n.cur)} 최저 ${fp(n.low)} 최고 ${fp(n.high)}${delayLabel}` : '';
     });
   } catch (e) {}
 }
