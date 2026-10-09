@@ -780,12 +780,20 @@ document.getElementById('rank-host').addEventListener('click', e => {
   if (!tr) return;
   const code = tr.dataset.code;
   const it = (rankItems || []).find(x => x.code === code);
-  setChartStock(code, it ? it.name : '');
-  loadProgStock(code, it ? it.name : '');
-  scrollToPageBottom();
+  selectListedStock(code, it ? it.name : '');
 });
 
-// 목록에서 선택하면 차트 접힘 상태를 유지하며 페이지 맨 아래로 이동한다.
+let listedStockSelection = 0;
+// 비동기 조회로 표와 차트 높이가 바뀐 뒤 최종 페이지 하단으로 이동한다.
+async function selectListedStock(code, name) {
+  const selection = ++listedStockSelection;
+  await Promise.allSettled([setChartStock(code, name), loadProgStock(code, name)]);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  if (selection !== listedStockSelection) return;
+  scrollToPageBottom();
+}
+
+// 차트 접힘 상태는 유지한다.
 function scrollToPageBottom() {
   window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 }
@@ -954,7 +962,7 @@ function setChartStock(code, name) {
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
   restoreStockInput(chartCode, chartName, 'stock_chart_code', 'chart-code');
   const nm = document.getElementById('chart-name'); if (nm) nm.textContent = '';
-  loadCandles();
+  return loadCandles();
 }
 
 async function resolveChart(raw) {
@@ -1216,7 +1224,7 @@ function loadProgStock(code, name = '') {
   try { localStorage.setItem('netprps_prog_stk', v); } catch (e) {}
   restoreStockInput(v, name, 'netprps_prog_stk', 'prog-stk');
   progReset();
-  renderProgram();
+  return renderProgram();
 }
 
 // 입력값(종목코드 6자리 또는 종목명)으로 조회
@@ -1328,9 +1336,7 @@ function renderPuTable() {
     const code = tr.getAttribute('data-code');
     if (!code) return;
     const it = puItems.find(x => x.code === code);
-    setChartStock(code, it ? it.name : '');
-    loadProgStock(code, it ? it.name : '');
-    scrollToPageBottom();
+    selectListedStock(code, it ? it.name : '');
   }));
   if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = puItems.length > 10 ? '' : 'none'; }
 }
