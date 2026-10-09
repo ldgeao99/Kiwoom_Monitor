@@ -48,9 +48,11 @@
   }
   /* 표를 두 개로 분리: 위(head-table)=헤더+순매수+증감 고정, 아래(body-scroll)=시간 행 스크롤 */
   .head-table { border-bottom:2px solid #9aa0a8; box-shadow:0 3px 4px -2px rgba(0,0,0,.12); }
-  .body-scroll { max-height:200px; overflow-y:auto; overflow-x:hidden;
+  /* 시간별 데이터는 6행까지 표시하고, 과거 행은 스크롤로 조회 */
+  .body-scroll { max-height:175px; overflow-y:auto; overflow-x:hidden;
     -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain; }
   .head-table, .body-table { table-layout:fixed; }
+  .body-table { line-height:18px; }
   tr.moretip td { text-align:center; color:var(--muted); font-size:11px; padding:8px;
     background:#fafbfc; position:static; }
   .pos { color:var(--pos); } .neg { color:var(--neg); }
@@ -277,7 +279,7 @@
     <div id="prog-chart"></div>
   </div>
 </div>
-<div class="page-title"><span>종목 차트</span><select id="chart-tf" class="chart-sel"></select><button id="toggle-chart" class="view-btn" type="button">접기 ▾</button></div>
+<div class="page-title" id="stock-chart-title"><span>종목 차트</span><select id="chart-tf" class="chart-sel"></select><button id="toggle-chart" class="view-btn" type="button">접기 ▾</button></div>
 <div class="chart-wrap">
   <div class="chart-head">
     <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
@@ -779,13 +781,32 @@ document.getElementById('rank-host').addEventListener('click', e => {
   const it = (rankItems || []).find(x => x.code === code);
   setChartStock(code, it ? it.name : '');
   loadProgStock(code);
-  document.querySelector('.chart-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  scrollToStockChart();
 });
+
+// 목록에서 선택하면 접힌 차트도 펼치고 제목부터 보여준다.
+function scrollToStockChart() {
+  const box = document.querySelector('.chart-wrap');
+  if (box && box.hidden) document.getElementById('toggle-chart').click();
+  document.getElementById('stock-chart-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 // ── 종목 캔들 차트 (분/일/주/월봉) ──
 let chartCode = '', chartName = '', chartTf = 'D';
 try { chartTf = localStorage.getItem('stock_chart_tf') || 'D'; } catch (e) {}
 try { chartCode = localStorage.getItem('stock_chart_code') || ''; } catch (e) {}
+
+const CHART_MAS = [[5, '#ff00ff'], [10, '#0000ff'], [20, '#ffa500'], [60, '#ff0000'], [120, '#000000']];
+
+// 종가 기준 단순이동평균: 필요한 봉 수가 쌓인 지점부터 표시한다.
+function movingAverage(items, period) {
+  let sum = 0;
+  return items.map((item, i) => {
+    sum += item.c;
+    if (i >= period) sum -= items[i - period].c;
+    return i >= period - 1 ? sum / period : null;
+  });
+}
 
 const CHART_TFS = [['1m','1분'],['3m','3분'],['10m','10분'],['15m','15분'],['D','일'],['W','주'],['M','월']];
 
@@ -840,8 +861,17 @@ function drawCandles(items, tf) {
     body += `<rect x="${(x-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}"/>`;
   });
 
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
-    + grid + body + xlab + '</svg>';
+  const averages = CHART_MAS.map(([period, color]) => {
+    const values = movingAverage(items, period);
+    const points = values.flatMap((value, i) => value === null ? [] : [`${xc(i).toFixed(1)},${y(value).toFixed(1)}`]);
+    return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+  }).join('');
+  const legend = CHART_MAS.map(([period, color]) =>
+    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}이평</span>`
+  ).join('');
+  host.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px;padding:8px;font-size:12px" aria-label="종가 기준 이동평균선">${legend}</div>`
+    + `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:auto">`
+    + grid + body + averages + xlab + '</svg>';
 }
 
 async function loadCandles() {
@@ -1238,7 +1268,7 @@ function renderPuTable() {
     const it = puItems.find(x => x.code === code);
     setChartStock(code, it ? it.name : '');
     loadProgStock(code);
-    document.querySelector('.chart-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollToStockChart();
   }));
   if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = puItems.length > 10 ? '' : 'none'; }
 }
