@@ -1123,7 +1123,8 @@ function drawCandles(items, tf) {
   const changeLabel = closeChange === null ? '' : `${closeChange > 0 ? '+' : ''}${closeChange.toFixed(2)}%`;
   const changeFit = changeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
   const changeMarker = comparable
-    ? `<text class="last-close-change" x="${mL+iw+mR/2}" y="${(closeY+23).toFixed(1)}" font-size="11" fill="${closeBackground}" text-anchor="middle"${changeFit}>${changeLabel}</text>` : '';
+    ? `<g class="last-close-change-label"><rect x="${mL+iw+3}" y="${(closeY+12).toFixed(1)}" width="${mR-3}" height="16" fill="#ffffff"/>`
+      + `<text class="last-close-change" x="${mL+iw+mR/2}" y="${(closeY+23).toFixed(1)}" font-size="11" fill="${closeBackground}" text-anchor="middle"${changeFit}>${changeLabel}</text></g>` : '';
   const closeMarker = `<g class="last-close-label" data-close="${lastCandle.c}">`
     + `<title>마지막 표시 봉 종가 ${closeLabel}원${comparable ? ' · 전일 종가 ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
     + `<rect x="${mL+iw+3}" y="${(closeY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="${closeBackground}"/>`
