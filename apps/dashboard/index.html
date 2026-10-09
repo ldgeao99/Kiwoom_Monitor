@@ -756,7 +756,7 @@ function priceCell(price, psign) {
   const cls = (psign === '1' || psign === '2') ? 'pos' : (psign === '4' || psign === '5') ? 'neg' : 'zero';
   return `<td class="${cls}">${price.toLocaleString('ko-KR')}</td>`;
 }
-function syncAmountRankNameWidth() {
+function syncAmountRankColumnWidths() {
   const reference = document.querySelector('#rank-host .rank-tbl thead th:nth-child(2)');
   const table = document.querySelector('#amount-rank-host .rank-tbl');
   if (!reference || !table) return;
@@ -768,12 +768,14 @@ function syncAmountRankNameWidth() {
   }
   columns.children[0].style.width = '40px';
   columns.children[1].style.width = reference.getBoundingClientRect().width + 'px';
+  const lastColumn = document.querySelector('#rank-host .rank-tbl thead th:last-child');
+  columns.children[4].style.width = lastColumn.getBoundingClientRect().width + 'px';
 }
 
 function fitRankTableHeight() {
   const scroll = document.querySelector('#rank-host .rank-scroll');
   if (!scroll) return;
-  syncAmountRankNameWidth();
+  syncAmountRankColumnWidths();
   const table = scroll.querySelector('table');
   const rows = [...table.tBodies[0].rows].slice(0, 10);
   const height = table.tHead.getBoundingClientRect().height
@@ -824,7 +826,7 @@ document.getElementById('rank-host').addEventListener('click', e => {
 // 거래대금 순위: 10행 높이, 바닥 스크롤 시 다음 페이지 조회.
 let amountRankItems = [], amountRankCont = 'N', amountRankNext = '', amountRankLoading = false;
 function fitAmountRankHeight() {
-  syncAmountRankNameWidth();
+  syncAmountRankColumnWidths();
   const scroll = document.querySelector('#amount-rank-host .rank-scroll');
   if (!scroll) return;
   const table = scroll.querySelector('table');
