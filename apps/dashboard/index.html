@@ -722,7 +722,7 @@ function combinedIndexChart(markets) {
     const points = base > 0 ? source.map(point => {
       const parts = (point.t || '').split(':');
       return {minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
-    }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 930 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
+    }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 935 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
     return {key, color:index ? '#0000ff' : '#ff0000', points};
   });
   const values = series.flatMap(line => line.points.map(point => point.pct));
@@ -730,7 +730,7 @@ function combinedIndexChart(markets) {
   if (!values.length) return `<div class="combined-index-chart">${legend}<div class="empty">장중 데이터 수집 대기 중…</div></div>`;
   let lo = Math.min(0, ...values), hi = Math.max(0, ...values);
   const padding = Math.max(0.1, (hi - lo) * 0.08); lo -= padding; hi += padding;
-  const x = minute => left + (minute - 540) / 390 * iw;
+  const x = minute => left + (minute - 540) / 395 * iw;
   const y = pct => top + (hi - pct) / (hi - lo) * ih;
   let drawing = '';
   for (let i = 0; i <= 4; i++) {
@@ -738,7 +738,7 @@ function combinedIndexChart(markets) {
     drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text x="${left-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
   }
   drawing += `<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="#9ca3af"/>`;
-  for (const minute of [540,600,660,720,780,840,900,930]) {
+  for (const minute of [540,600,660,720,780,840,900,935]) {
     const xx = x(minute);
     drawing += `<text x="${xx}" y="${H-7}" text-anchor="middle" font-size="11" fill="#000000">${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}</text>`;
   }
