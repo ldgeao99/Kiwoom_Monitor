@@ -761,6 +761,44 @@ def get_nasdaq_future():
         return _nasdaq_cache['data']
 
 
+# 해외 현물 지수: Yahoo의 당일 고가/저가를 전일 종가 대비 등락률로 표시.
+_overseas_index_cache = {}
+
+
+def get_overseas_index_display(symbol):
+    now = time.time()
+    cached = _overseas_index_cache.get(symbol, {})
+    if cached.get('data') and now - cached.get('ts', 0) < 60:
+        return cached['data']
+    try:
+        response = requests.get(
+            'https://query1.finance.yahoo.com/v8/finance/chart/' + symbol,
+            headers={'User-Agent': 'Mozilla/5.0'},
+            params={'interval': '1d', 'range': '1d'}, timeout=10)
+        response.raise_for_status()
+        result = response.json()['chart']['result'][0]
+        meta = result['meta']
+        prev = meta.get('chartPreviousClose') or meta.get('previousClose')
+        if not prev or prev <= 0:
+            return cached.get('data')
+        quote = result.get('indicators', {}).get('quote', [{}])[0]
+        def extreme(field, aggregate):
+            value = meta.get('regularMarketDay' + field.capitalize())
+            values = [v for v in quote.get(field, []) if v is not None]
+            return value if value is not None else (aggregate(values) if values else None)
+        def pct(value):
+            return (value / prev - 1) * 100 if value is not None else None
+        data = {'cur': pct(meta.get('regularMarketPrice')),
+                'low': pct(extreme('low', min)), 'high': pct(extreme('high', max)),
+                'delay': meta.get('exchangeDataDelayedBy')}
+        if data['cur'] is not None:
+            _overseas_index_cache[symbol] = {'ts': now, 'data': data}
+        return data
+    except Exception as error:
+        print(f'[해외지수 {symbol}] 조회 실패: {error}')
+        return cached.get('data')
+
+
 # ── 나스닥100선물 극점 반전 알림 (07:00 KST 세션 리셋, ±0.5%) ──
 NASDAQ_REV_PCT = 0.5
 _nasdaq_rev_state = {}   # {'date','low','high','up_armed','down_armed'}
@@ -871,7 +909,9 @@ def build_summary():
             # 오늘 실제 시가(ka20001 open_pric) — 차트 시가선/색 기준. 당일에만.
             'open': (get_index_open(m, date_str) if date_str == now.strftime('%Y-%m-%d') else None),
         })
-    return {'markets': out, 'nasdaq': get_nasdaq_display()}
+    return {'markets': out, 'nasdaq': get_nasdaq_display(),
+            'nikkei': get_overseas_index_display('^N225'),
+            'taiwan': get_overseas_index_display('^TWII')}
 
 
 def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
