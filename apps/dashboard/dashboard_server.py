@@ -1142,6 +1142,11 @@ def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
                 'l': abs(to_number(r.get('low_pric'))),
                 'c': abs(to_number(r.get('cur_prc'))),
                 'v': abs(to_number(r.get('trde_qty'))),
+                # 일봉은 백만원, 주/월봉은 원 단위. 분봉은 종가×거래량으로 추정.
+                'amount_eok': (abs(to_number(r.get('cur_prc'))) * abs(to_number(r.get('trde_qty'))) / 100_000_000
+                               if is_min and r.get('cur_prc') not in (None, '') and r.get('trde_qty') not in (None, '')
+                               else (abs(to_number(r['trde_prica'])) / (100 if tf == 'D' else 100_000_000)
+                                     if not is_min and r.get('trde_prica') not in (None, '') else None)),
             })
         return out, session_open, cy, nk2
 

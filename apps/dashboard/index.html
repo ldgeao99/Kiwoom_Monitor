@@ -875,8 +875,8 @@ function drawCandles(items, tf) {
   const start = Math.max(0, end - (candleViewCount || items.length));
   const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
-  const W = 760, H = 300, mL = 8, mR = 64, mT = 10, mB = 22;
-  const iw = W - mL - mR, ih = H - mT - mB, n = items.length;
+  const W = 760, H = 430, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
+  const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
   fullAverages.forEach(values => values.slice(start, end).forEach(value => {
     if (value !== null) { lo = Math.min(lo, value); hi = Math.max(hi, value); }
@@ -901,7 +901,7 @@ function drawCandles(items, tf) {
   let xlab = ''; const step = Math.max(1, Math.ceil(n / 6));
   for (let i = 0; i < n; i += step) {
     const xx = xc(i);
-    xlab += `<text x="${xx.toFixed(1)}" y="${H-6}" font-size="10" fill="#9aa0a8" text-anchor="middle">${fmt(items[i].t)}</text>`;
+    xlab += `<text x="${xx.toFixed(1)}" y="${priceH-6}" font-size="10" fill="#9aa0a8" text-anchor="middle">${fmt(items[i].t)}</text>`;
   }
 
   let body = '';
@@ -921,6 +921,29 @@ function drawCandles(items, tf) {
   const legend = CHART_MAS.map(([period, color]) =>
     `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:16px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
+  const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
+  const hasAmounts = amounts.some(value => value !== null);
+  const amountTop = 338, amountBottom = H - 10, amountHeight = amountBottom - amountTop;
+  const amountMax = Math.max(1, ...amounts.filter(value => value !== null));
+  const amountY = value => amountBottom - value / amountMax * amountHeight;
+  const amountFmt = value => value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  let amountChart = '<g class="candle-amount" data-unit="억">'
+    + `<line x1="${mL}" y1="309" x2="${mL+iw}" y2="309" stroke="#d5d8dd"/>`
+    + `<text x="${mL}" y="328" font-size="12" fill="#6b7280">거래대금 (억${isMin ? ', 추정' : ''})${hasAmounts ? '' : ' · 미제공'}</text>`;
+  if (hasAmounts) {
+    for (let k = 0; k <= 2; k++) {
+      const value = amountMax * k / 2, yy = amountY(value);
+      amountChart += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`
+        + `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#9aa0a8">${amountFmt(value)}</text>`;
+    }
+    amounts.forEach((amount, i) => {
+      if (amount === null) return;
+      const color = items[i].c >= items[i].o ? 'var(--pos)' : 'var(--neg)';
+      amountChart += `<rect data-amount="${amount}" data-time="${items[i].t}" x="${(xc(i)-bw/2).toFixed(1)}" y="${amountY(amount).toFixed(1)}" width="${bw.toFixed(1)}" height="${(amount / amountMax * amountHeight).toFixed(1)}" fill="${color}"><title>${fmt(items[i].t)} 거래대금 ${amountFmt(amount)}억</title></rect>`;
+    });
+  }
+  amountChart += '</g>';
+
   // 터치 대상은 유지하고 SVG 내용만 갱신해 연속 핀치 동작이 끊기지 않게 한다.
   if (!host.querySelector('.candle-plot')) {
     host.innerHTML = '<div class="candle-legend" style="display:flex;flex-wrap:wrap;gap:12px;padding:8px;font-size:12px" aria-label="종가 기준 이동평균선"></div>'
@@ -929,7 +952,7 @@ function drawCandles(items, tf) {
   host.querySelector('.candle-legend').innerHTML = legend;
   const svg = host.querySelector('svg');
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + body + averages + xlab;
+  svg.innerHTML = grid + body + averages + xlab + amountChart;
 }
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
