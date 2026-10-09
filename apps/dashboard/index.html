@@ -162,7 +162,6 @@
   @media (max-width:560px) { .amount-rank-title { font-size:16px; gap:6px; } .amount-rank-filter { font-size:11px; } .amount-rank-title .view-btn { font-size:11px; padding:4px 8px; } }
   #amount-rank-host .rank-tbl { table-layout:fixed; }
   #amount-rank-host td.nm { overflow:hidden; text-overflow:ellipsis; }
-  #amount-rank-host .rank-tbl tbody td:nth-child(3) { text-align:right; }
   .rank-tbl tbody tr { cursor:pointer; }
   .rank-tbl tbody tr:hover td { background:#f2f6ff; }
   .rank-tbl .pos { color:var(--pos); } .rank-tbl .neg { color:var(--neg); } .rank-tbl .zero { color:var(--muted); }
@@ -774,7 +773,8 @@ function syncAmountRankColumnWidths() {
   const rankColumn = document.querySelector('#rank-host .rank-tbl thead th:first-child');
   columns.children[0].style.width = rankColumn.getBoundingClientRect().width + 'px';
   columns.children[1].style.width = reference.getBoundingClientRect().width + 'px';
-
+  const priceColumn = document.querySelector('#rank-host .rank-tbl thead th:nth-child(3)');
+  columns.children[2].style.width = priceColumn.getBoundingClientRect().width + 'px';
 }
 
 function fitRankTableHeight() {
