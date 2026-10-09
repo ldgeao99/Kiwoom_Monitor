@@ -148,6 +148,15 @@
   .pu-tbl td.rk { text-align:center; color:var(--muted); width:40px; }
   .pu-tbl td.mk, .pu-tbl thead th:first-child { overflow:hidden; text-overflow:ellipsis; }   /* 종목명 폭 축소 */
   .pu-tbl td.mk { text-align:left; font-weight:600; cursor:pointer; }
+  .pu-both { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
+  .pu-both > section { min-width:0; }
+  .pu-both h3 { margin:0; padding:8px; font-size:13px; text-align:center; }
+  .pu-both table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:13px; }
+  .pu-both th, .pu-both td { padding:7px 6px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
+  .pu-both th { position:sticky; top:0; background:var(--head); }
+  .pu-both th:first-child, .pu-both td:first-child { width:52%; text-align:left; overflow:hidden; text-overflow:ellipsis; }
+  .pu-both tbody tr { cursor:pointer; }
+  @media(max-width:560px) { .pu-both table { font-size:11px; } .pu-both th, .pu-both td { padding:7px 3px; } #pu-side label { padding:4px 10px; } }
   .pu-tbl tbody tr:hover { background:var(--head); }
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
@@ -1713,7 +1722,7 @@ async function resolveAndLoad(raw) {
 let puMarket = 'all';
 try { puMarket = localStorage.getItem('prm_upper_market') || 'all'; } catch (e) {}
 let puSide = '2';   // '2':순매수상위, '1':순매도상위
-try { puSide = localStorage.getItem('prm_upper_side') === '1' ? '1' : '2'; } catch (e) {}
+try { puSide = ['1', 'both'].includes(localStorage.getItem('prm_upper_side')) ? localStorage.getItem('prm_upper_side') : '2'; } catch (e) {}
 
 function renderPuMkt() {
   const host = document.getElementById('pu-mkt');
@@ -1730,7 +1739,7 @@ function renderPuMkt() {
 function renderPuSide() {
   const host = document.getElementById('pu-side');
   if (!host) return;
-  host.innerHTML = [['2', '순매수'], ['1', '순매도']].map(([k, n]) =>
+  host.innerHTML = [['2', '순매수'], ['1', '순매도'], ['both', '함께']].map(([k, n]) =>
     `<label class="${k === puSide ? 'on' : ''}"><input type="radio" name="puside" value="${k}" ${k === puSide ? 'checked' : ''}>${n}</label>`).join('');
   host.querySelectorAll('input[name="puside"]').forEach(r => r.addEventListener('change', () => {
     puSide = r.value;
@@ -1739,14 +1748,42 @@ function renderPuSide() {
   }));
 }
 
-let puItems = [];
+let puItems = [], puBuyItems = [], puSellItems = [];
+let puRequestGeneration = 0;
 let puExpanded = false;
 try { puExpanded = localStorage.getItem('prm_upper_expanded') === '1'; } catch (e) {}
+
+function renderPuBoth(host, btn) {
+  const scrollTops = [...host.querySelectorAll('.pu-scroll')].map(el => el.scrollTop);
+  const wrapper = document.createElement('div'); wrapper.className = 'pu-both';
+  [[puBuyItems, '순매수상위', '순매수금액'], [puSellItems, '순매도상위', '순매도금액']].forEach(([items, title, amountTitle], side) => {
+    const section = document.createElement('section');
+    const heading = document.createElement('h3'); heading.textContent = title; section.append(heading);
+    const scroll = document.createElement('div'); scroll.className = 'pu-scroll' + (puExpanded ? ' expanded' : '');
+    const table = document.createElement('table');
+    const header = table.createTHead().insertRow();
+    ['종목명', amountTitle].forEach(label => { const th = document.createElement('th'); th.textContent = label; header.append(th); });
+    const body = table.createTBody();
+    items.forEach(item => {
+      const row = body.insertRow(); row.dataset.code = item.code;
+      const name = row.insertCell(); name.textContent = item.name; name.title = item.name;
+      const amount = row.insertCell(); const eok = Math.round(item.net / 100);
+      amount.textContent = (eok > 0 ? '+' : '') + eok.toLocaleString('ko-KR') + '억'; amount.className = cls(item.net);
+      row.addEventListener('click', () => selectListedStock(item.code, item.name));
+    });
+    if (!items.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 2; cell.textContent = '데이터가 없습니다.'; }
+    scroll.append(table); section.append(scroll); wrapper.append(section);
+  });
+  host.replaceChildren(wrapper);
+  host.querySelectorAll('.pu-scroll').forEach((el, i) => { el.scrollTop = scrollTops[i] || 0; });
+  if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = Math.max(puBuyItems.length, puSellItems.length) > 10 ? '' : 'none'; }
+}
 
 function renderPuTable() {
   const host = document.getElementById('prm-upper');
   const btn = document.getElementById('pu-toggle');
   if (!host) return;
+  if (puSide === 'both') { renderPuBoth(host, btn); return; }
   if (!puItems.length) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; if (btn) btn.style.display = 'none'; return; }
   const amtLbl = puSide === '1' ? '순매도금액' : '순매수금액';
   let html = `<div class="pu-scroll${puExpanded ? ' expanded' : ''}"><table class="pu-tbl"><colgroup><col><col><col><col></colgroup><thead><tr>`
@@ -1776,10 +1813,18 @@ function renderPuTable() {
 }
 
 async function renderPrmUpper() {
+  const generation = ++puRequestGeneration;
+  const market = puMarket, side = puSide;
+  const load = async tp => {
+    const res = await fetch('/api/prm_upper?mrkt=' + encodeURIComponent(market) + '&tp=' + tp, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).items || [];
+  };
   try {
-    const res = await fetch('/api/prm_upper?mrkt=' + encodeURIComponent(puMarket) + '&tp=' + puSide, { cache: 'no-store' });
-    if (!res.ok) return;
-    puItems = (await res.json()).items || [];
+    const results = await Promise.all(side === 'both' ? [load('2'), load('1')] : [load(side)]);
+    if (generation !== puRequestGeneration) return;
+    if (side === 'both') [puBuyItems, puSellItems] = results;
+    else puItems = results[0];
     renderPuTable();
   } catch (e) {}
 }
