@@ -149,7 +149,7 @@
     color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:14px; }
   #toggle-chart { margin-left:0; }   /* 봉 주기 select 바로 옆(제목 우측 그룹) */
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
-  .rank-scroll { max-height:341px; overflow-y:auto; }   /* 프로그램 순매수 상위(.pu-scroll)와 동일 */
+  .rank-scroll { max-height:310px; overflow-y:auto; }   /* 실제 헤더 + 10행 높이는 렌더링 후 맞춤 */
   .rank-tbl { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
   .rank-tbl th, .rank-tbl td { padding:6px 6px; border-bottom:1px solid #eceef1; text-align:right; white-space:nowrap; }
   .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1;
@@ -747,6 +747,17 @@ function priceCell(price, psign) {
   const cls = (psign === '1' || psign === '2') ? 'pos' : (psign === '4' || psign === '5') ? 'neg' : 'zero';
   return `<td class="${cls}">${price.toLocaleString('ko-KR')}</td>`;
 }
+function fitRankTableHeight() {
+  const scroll = document.querySelector('#rank-host .rank-scroll');
+  if (!scroll) return;
+  const table = scroll.querySelector('table');
+  const rows = [...table.tBodies[0].rows].slice(0, 10);
+  const height = table.tHead.getBoundingClientRect().height
+    + rows.reduce((sum, row) => sum + row.getBoundingClientRect().height, 0) + 1;
+  scroll.style.maxHeight = height + 'px';
+}
+new ResizeObserver(fitRankTableHeight).observe(document.getElementById('rank-host'));
+
 function renderRankTable() {
   const host = document.getElementById('rank-host');
   const shown = rankItems.slice(0, 20);   // 항상 20개 렌더(스크롤), 접힘 상태는 높이로 10개만 노출
@@ -765,6 +776,7 @@ function renderRankTable() {
   const prev = host.querySelector('.rank-scroll');
   const prevTop = prev ? prev.scrollTop : 0;
   host.innerHTML = html;
+  fitRankTableHeight();
   host.querySelector('.rank-scroll').scrollTop = prevTop;   // 갱신 시 스크롤 위치 유지
 }
 async function renderRank() {
