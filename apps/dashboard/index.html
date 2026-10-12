@@ -796,14 +796,15 @@ function combinedIndexChart(markets) {
   }
   labels.forEach(({line, last, actualY, labelY}) => {
     const name = line.key === 'kospi' ? '코스피' : '코스닥';
+    const badgeColor = last.pct > 0 ? '#e5484d' : last.pct < 0 ? '#2563eb' : '#d1d5db';
     const percent = `${last.pct > 0 ? '+' : ''}${last.pct.toFixed(2)}%`;
     drawing += `<g class="combined-current-label" data-market="${line.key}" data-index="${last.idx}" data-percent="${last.pct}">`
       + `<path d="M${x(last.minute)},${actualY} L${W-right},${actualY} L${W-right+6},${labelY}" fill="none" stroke="${line.color}" stroke-width="1"/>`
       + `<title>${name} ${fmtIdx(last.idx)} · ${percent}</title>`
-      + `<rect class="combined-index-badge" x="${W-right+6}" y="${labelY-19}" width="${right-10}" height="20" rx="3" fill="${line.color}"/>`
+      + `<rect class="combined-index-badge" x="${W-right+6}" y="${labelY-19}" width="${right-10}" height="20" rx="3" fill="${badgeColor}"/>`
       + `<text x="${W-right+right/2+1}" y="${labelY-5}" text-anchor="middle" font-size="11" fill="#ffffff">${fmtIdx(last.idx)}</text>`
       + `<rect x="${W-right+6}" y="${labelY+3}" width="${right-10}" height="16" fill="#ffffff"/>`
-      + `<text x="${W-right+right/2+1}" y="${labelY+14}" text-anchor="middle" font-size="11" fill="${line.color}">${percent}</text></g>`;
+      + `<text x="${W-right+right/2+1}" y="${labelY+14}" text-anchor="middle" font-size="11" fill="${badgeColor}">${percent}</text></g>`;
   });
   return `<div class="combined-index-chart">${legend}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="코스피 코스닥 전일 대비 등락률 비교">${drawing}</svg></div>`;
 }
