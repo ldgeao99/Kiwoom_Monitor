@@ -735,7 +735,7 @@ function mktCard(m, strong) {
 
 // 두 시장을 같은 시간축과 전일 종가 대비 등락률 축으로 비교한다.
 function combinedIndexChart(markets) {
-  const W = 900, H = 360, left = 20, right = 80, top = 12, bottom = 28;
+  const W = 900, H = 540, left = 20, right = 80, top = 12, bottom = 28;
   const iw = W - left - right, ih = H - top - bottom;
   const series = ['kospi', 'kosdaq'].map((key, index) => {
     const market = markets.find(m => m.key === key);
