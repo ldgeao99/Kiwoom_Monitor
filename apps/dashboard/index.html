@@ -747,7 +747,7 @@ function combinedIndexChart(markets) {
     const points = base > 0 ? source.map(point => {
       const parts = (point.t || '').split(':');
       return {minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
-    }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 935 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
+    }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 940 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
     return {key, color:index ? '#0000ff' : '#ff0000', points};
   });
   const values = series.flatMap(line => line.points.map(point => point.pct));
