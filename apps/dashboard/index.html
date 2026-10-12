@@ -1858,7 +1858,6 @@ async function renderPrmUpper() {
 })();
 
 async function refresh() {
-  renderSummaryCards();   // 상단 카드도 함께 갱신
   renderRank();           // 조회수 상위 종목 갱신
   loadAmountRank();        // 거래대금 상위 종목 갱신
   renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
@@ -2046,6 +2045,8 @@ renderPuSide();     // 프로그램 상위: 순매수/순매도 선택 UI
 renderPuMkt();      // 프로그램 상위: 시장 선택 UI
 renderChartTf();    // 종목 차트: 봉 주기 선택 UI
 if (chartCode) setChartStock(chartCode, '');   // 마지막 조회 종목 복원
+renderSummaryCards(); // 지수현황 최초 즉시 조회
+setInterval(renderSummaryCards, 10000); // 지수현황은 10초마다 별도 갱신
 refresh();          // 최초 즉시 1회
 scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
 setInterval(renderPrmUpper, 5000);    // 프로그램 순매수 상위는 5초마다 별도 갱신
