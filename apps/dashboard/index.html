@@ -755,7 +755,11 @@ function combinedIndexChart(markets) {
   if (!values.length) return `<div class="combined-index-chart">${legend}<div class="empty">장중 데이터 수집 대기 중…</div></div>`;
   let lo = Math.min(0, ...values), hi = Math.max(0, ...values);
   const padding = Math.max(0.1, (hi - lo) * 0.08); lo -= padding; hi += padding;
-  const x = minute => left + (minute - 540) / 395 * iw;
+  // 미래 시간의 빈 구간 없이 최신 수집 시각까지 시간축을 확장한다.
+  const latestMinute = Math.max(...series.flatMap(line => line.points.map(point => point.minute)));
+  const endMinute = Math.max(541, latestMinute);
+  const span = endMinute - 540;
+  const x = minute => left + (minute - 540) / span * iw;
   const y = pct => top + (hi - pct) / (hi - lo) * ih;
   let drawing = '';
   for (let i = 0; i <= 4; i++) {
@@ -763,7 +767,13 @@ function combinedIndexChart(markets) {
     drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text x="${left-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
   }
   drawing += `<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="#9ca3af"/>`;
-  for (const minute of [540,600,660,720,780,840,900,935]) {
+  const tickStep = [1, 2, 5, 10, 15, 30, 60, 120].find(step => step >= span / 6);
+  const timeTicks = [540];
+  for (let minute = 540 + tickStep; minute < endMinute; minute += tickStep) {
+    if (endMinute - minute >= span * 0.08) timeTicks.push(minute);
+  }
+  timeTicks.push(endMinute);
+  for (const minute of timeTicks) {
     const xx = x(minute);
     drawing += `<text x="${xx}" y="${H-7}" text-anchor="middle" font-size="11" fill="#000000">${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}</text>`;
   }
