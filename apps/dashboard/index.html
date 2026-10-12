@@ -186,6 +186,8 @@
     white-space:normal; line-height:1.25; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:24px; padding-left:4px; padding-right:4px; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
+  #rank-host .rank-tbl { table-layout:fixed; }
+  #rank-host td.nm { overflow:hidden; text-overflow:ellipsis; }
   .amount-rank-title { flex-wrap:wrap; }
   .amount-rank-filter { display:flex; align-items:center; gap:4px; margin-left:auto; font-size:13px; font-weight:400; cursor:pointer; white-space:nowrap; }
   .amount-rank-title .view-btn { margin-left:0; }
@@ -923,7 +925,7 @@ function renderRankTable() {
   const host = document.getElementById('rank-host');
   const shown = rankItems.slice(0, 20);   // 항상 20개 렌더(스크롤), 접힘 상태는 높이로 10개만 노출
   if (!shown.length) { host.innerHTML = '<div class="empty">조회순위 데이터가 없습니다.</div>'; return; }
-  let html = `<div class="rank-scroll"><table class="rank-tbl"><thead><tr>`
+  let html = `<div class="rank-scroll"><table class="rank-tbl"><colgroup><col style="width:24px"><col style="width:26%"><col><col><col></colgroup><thead><tr>`
     + '<th class="rk"></th><th style="text-align:left">종목명</th>'
     + '<th>현재가</th><th>등락률</th><th>30초비</th></tr></thead><tbody>';
   shown.forEach(it => {
@@ -937,6 +939,7 @@ function renderRankTable() {
   const prev = host.querySelector('.rank-scroll');
   const prevTop = prev ? prev.scrollTop : 0;
   host.innerHTML = html;
+  host.querySelectorAll('td.nm').forEach((cell, i) => { cell.title = shown[i].name; });
   fitRankTableHeight();
   host.querySelector('.rank-scroll').scrollTop = prevTop;   // 갱신 시 스크롤 위치 유지
 }
