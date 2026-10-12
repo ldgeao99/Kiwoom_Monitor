@@ -735,7 +735,7 @@ function mktCard(m, strong) {
 
 // 두 시장을 같은 시간축과 전일 종가 대비 등락률 축으로 비교한다.
 function combinedIndexChart(markets) {
-  const W = 900, H = 360, left = 50, right = 16, top = 12, bottom = 28;
+  const W = 900, H = 360, left = 20, right = 112, top = 12, bottom = 28;
   const iw = W - left - right, ih = H - top - bottom;
   const series = ['kospi', 'kosdaq'].map((key, index) => {
     const market = markets.find(m => m.key === key);
@@ -746,7 +746,7 @@ function combinedIndexChart(markets) {
     const source = market.preopen ? [] : [...(market.open != null ? [{t:'09:00:00',idx:market.open}] : []), ...(market.series || [])];
     const points = base > 0 ? source.map(point => {
       const parts = (point.t || '').split(':');
-      return {minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
+      return {idx: point.idx, minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
     }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 940 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
     return {key, color:index ? '#0000ff' : '#ff0000', points};
   });
@@ -764,7 +764,7 @@ function combinedIndexChart(markets) {
   let drawing = '';
   for (let i = 0; i <= 4; i++) {
     const value = lo + (hi - lo) * i / 4, yy = y(value);
-    drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text x="${left-6}" y="${yy+4}" text-anchor="end" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
+    drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text class="combined-percent-tick" x="${W-right+6}" y="${yy+4}" text-anchor="start" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
   }
   drawing += `<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="#9ca3af"/>`;
   const tickStep = [1, 2, 5, 10, 15, 30, 60, 120].find(step => step >= span / 6);
@@ -783,6 +783,25 @@ function combinedIndexChart(markets) {
     drawing += `<polyline data-market="${line.key}" points="${points}" fill="none" stroke="${line.color}" stroke-width="2" stroke-linejoin="round"/>`;
     const last = line.points[line.points.length - 1];
     drawing += `<circle cx="${x(last.minute)}" cy="${y(last.pct)}" r="3" fill="${line.color}"/>`;
+  });
+  // 현재 지수/등락률 표시는 선 끝과 연결하며, 가까운 두 표시는 분리한다.
+  const labels = series.filter(line => line.points.length).map(line => {
+    const last = line.points[line.points.length - 1];
+    const actualY = y(last.pct);
+    return {line, last, actualY, labelY: Math.max(top + 20, Math.min(H-bottom-20, actualY))};
+  }).sort((a,b) => a.labelY - b.labelY);
+  if (labels.length === 2 && labels[1].labelY - labels[0].labelY < 44) {
+    const center = Math.max(top + 42, Math.min(H-bottom-42, (labels[0].labelY + labels[1].labelY) / 2));
+    labels[0].labelY = center - 22; labels[1].labelY = center + 22;
+  }
+  labels.forEach(({line, last, actualY, labelY}) => {
+    const name = line.key === 'kospi' ? '코스피' : '코스닥';
+    const percent = `${last.pct > 0 ? '+' : ''}${last.pct.toFixed(2)}%`;
+    drawing += `<g class="combined-current-label" data-market="${line.key}" data-index="${last.idx}" data-percent="${last.pct}">`
+      + `<path d="M${x(last.minute)},${actualY} L${W-right},${actualY} L${W-right+6},${labelY}" fill="none" stroke="${line.color}" stroke-width="1"/>`
+      + `<rect x="${W-right+6}" y="${labelY-19}" width="${right-10}" height="38" rx="3" fill="#ffffff" stroke="${line.color}"/>`
+      + `<text x="${W-right+11}" y="${labelY-3}" font-size="11" fill="${line.color}">${name} ${fmtIdx(last.idx)}</text>`
+      + `<text x="${W-right+11}" y="${labelY+12}" font-size="12" fill="${line.color}">${percent}</text></g>`;
   });
   return `<div class="combined-index-chart">${legend}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="코스피 코스닥 전일 대비 등락률 비교">${drawing}</svg></div>`;
 }
