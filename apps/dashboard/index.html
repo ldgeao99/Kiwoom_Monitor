@@ -1165,6 +1165,21 @@ function movingAverage(items, period) {
   });
 }
 
+// Wilder 평활 방식의 RSI: 14개 가격 변화로 시작한 뒤 평균을 누적한다.
+function relativeStrengthIndex(items, period = 14) {
+  let gain = 0, loss = 0;
+  return items.map((item, i) => {
+    if (!i) return null;
+    const change = item.c - items[i - 1].c;
+    const up = Math.max(0, change), down = Math.max(0, -change);
+    if (i <= period) { gain += up; loss += down; }
+    if (i < period) return null;
+    if (i === period) { gain /= period; loss /= period; }
+    else { gain = (gain * (period - 1) + up) / period; loss = (loss * (period - 1) + down) / period; }
+    return loss === 0 ? (gain === 0 ? 50 : 100) : 100 - 100 / (1 + gain / loss);
+  });
+}
+
 const CHART_TFS = [['1m','1분'],['3m','3분'],['10m','10분'],['15m','15분'],['D','일'],['W','주'],['M','월']];
 
 function renderChartTf() {
@@ -1193,7 +1208,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const start = Math.max(0, end - (viewCount || items.length));
   const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
-  const W = 760, H = 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
+  const W = 760, H = 580, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
   fullAverages.forEach(values => values.slice(start, end).forEach(value => {
@@ -1240,7 +1255,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
       const xx = (mL + cw * i).toFixed(1);
       const separatorClass = isMin ? 'candle-day-separator' : yearlyBoundaries ? 'candle-year-separator' : 'candle-month-separator';
       const label = isMin ? `${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}` : yearlyBoundaries ? date.slice(0,4) : `${date.slice(0,4)}-${date.slice(4,6)}`;
-      daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="${H-30}" stroke="#9ca3af" stroke-width="1"><title>${label}</title></line>`;
+      daySeparators += `<line class="${separatorClass}" data-date="${date}" x1="${xx}" x2="${xx}" y1="${mT}" y2="420" stroke="#9ca3af" stroke-width="1"><title>${label}</title></line>`;
     }
   }
 
@@ -1286,7 +1301,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const latestAmount = items[items.length - 1].amount_eok;
   const hasLatestAmount = Number.isFinite(latestAmount);
   const hasAmounts = amounts.some(value => value !== null);
-  const amountTop = 338, amountBottom = H - 30, amountHeight = amountBottom - amountTop;
+  const amountTop = 338, amountBottom = 420, amountHeight = amountBottom - amountTop;
   // 1·2·5 계열의 정수 간격으로 눈금을 맞춘다 (예: 500억, 1,000억).
   const rawAmountMax = Math.max(1, ...amounts.filter(value => value !== null), hasLatestAmount ? latestAmount : 0);
   const targetStep = Math.max(1, rawAmountMax / 2);
@@ -1342,6 +1357,22 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   });
   dateAxis += '</g>';
 
+  const rsiValues = relativeStrengthIndex(fullItems, 14).slice(start, end);
+  const rsiTop = 450, rsiBottom = H - 30;
+  const rsiY = value => rsiBottom - value / 100 * (rsiBottom - rsiTop);
+  const lastRsi = rsiValues[rsiValues.length - 1];
+  let rsiChart = `<g class="candle-rsi" data-period="14"><line x1="${mL}" x2="${mL+iw}" y1="432" y2="432" stroke="#d5d8dd"/>`
+    + `<text x="${mL}" y="447" font-size="11" fill="#f97316">RSI 14${lastRsi === null ? '' : ' · ' + lastRsi.toFixed(2)}</text>`;
+  [20, 30, 50, 70, 80].forEach(value => {
+    const yy = rsiY(value);
+    rsiChart += `<line x1="${mL}" x2="${mL+iw}" y1="${yy}" y2="${yy}" stroke="${value === 30 || value === 70 ? '#9ca3af' : '#eceef1'}"/>`
+      + `<text x="${mL+iw+6}" y="${yy+4}" font-size="10" fill="#000000">${value}</text>`;
+  });
+  const rsiPoints = rsiValues.flatMap((value,i) => value === null ? [] : [`${xc(i).toFixed(1)},${rsiY(value).toFixed(1)}`]);
+  if (rsiPoints.length) rsiChart += `<polyline class="rsi-line" points="${rsiPoints.join(' ')}" fill="none" stroke="#f97316" stroke-width="1.2"/>`;
+  else rsiChart += `<text x="${mL+iw/2}" y="${rsiTop+55}" text-anchor="middle" font-size="11" fill="#6b7280">RSI 계산에 15개 이상의 캔들이 필요합니다.</text>`;
+  rsiChart += '</g>';
+
   // 터치 대상은 유지하고 SVG 내용만 갱신해 연속 핀치 동작이 끊기지 않게 한다.
   if (!host.querySelector('.candle-plot')) {
     host.innerHTML = '<div class="candle-legend" style="display:flex;flex-wrap:wrap;gap:12px;padding:0 8px;font-size:12px;line-height:15px" aria-label="종가 기준 이동평균선"></div>'
@@ -1350,7 +1381,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   host.querySelector('.candle-legend').innerHTML = legend;
   const svg = host.querySelector('svg');
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart + dateAxis;
+  svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart + rsiChart + dateAxis;
 }
 
 let indexCandleViewCount = null, indexCandleViewOffset = 0;
