@@ -273,7 +273,7 @@
 <div id="taiwan-index" class="nasfut"></div>
 <div class="mkt-cards" id="mkt-cards"></div>
 <div id="index-candle-panel" hidden>
-  <div class="page-title"><span id="index-candle-name"></span><select id="index-candle-tf" class="chart-sel" aria-label="지수 차트 봉 주기"></select><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="index-rsi-visible" type="checkbox" checked>RSI</label><button id="index-candle-more" class="prog-go" type="button" disabled>추가조회</button></div>
+  <div class="page-title"><span id="index-candle-name"></span><label style="font-size:12px;font-weight:400;white-space:nowrap;margin-left:auto"><input id="index-rsi-visible" type="checkbox" checked>RSI</label><select id="index-candle-tf" class="chart-sel" style="margin-left:0" aria-label="지수 차트 봉 주기"></select><button id="index-candle-more" class="prog-go" type="button" disabled>추가조회</button></div>
   <div class="combined-index-chart" style="max-width:1200px;margin:0 auto 12px;box-sizing:border-box">
     <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div>
   </div>
@@ -347,7 +347,6 @@
   <div class="chart-head">
     <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
     <button id="chart-go" class="prog-go" type="button">조회</button>
-    <label style="font-size:12px;white-space:nowrap"><input id="stock-rsi-visible" type="checkbox" checked>RSI</label>
     <button id="chart-more" class="prog-go" type="button" style="margin-left:auto" disabled>추가조회</button>
     <span id="chart-name" class="chart-name"></span>
   </div>
@@ -1210,7 +1209,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const chartMovingAverages = isIndexChart ? CHART_MAS : CHART_MAS.filter(([period]) => period !== 200);
   const fullAverages = chartMovingAverages.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
-  const showRsi = document.getElementById(hostId === 'index-candle-chart' ? 'index-rsi-visible' : 'stock-rsi-visible').checked;
+  const showRsi = hostId === 'index-candle-chart' && document.getElementById('index-rsi-visible').checked;
   const W = 760, H = showRsi ? 580 : 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
@@ -2220,7 +2219,7 @@ applyIdxView();
   });
 })();
 
-[['stock-rsi-visible', 'stock_rsi_visible', 'stock-chart'], ['index-rsi-visible', 'index_rsi_visible', 'index-candle-chart']].forEach(([id, key, host]) => {
+[['index-rsi-visible', 'index_rsi_visible', 'index-candle-chart']].forEach(([id, key, host]) => {
   const checkbox = document.getElementById(id);
   try { checkbox.checked = localStorage.getItem(key) !== '0'; } catch (e) {}
   checkbox.addEventListener('change', () => {
