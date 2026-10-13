@@ -233,6 +233,7 @@
   /* 두 시장 비교: 더 강한 상승은 더 빨갛게, 더 약한(더 낮은) 하락은 더 파랗게 */
   .mkt-card.up.strong { background:#fadfd9; } .mkt-card.down.strong { background:#e1e9fb; }
   .mkt-card .top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .mkt-card[data-index-card] { cursor:pointer; }
   .mkt-card .nm button { font:inherit; color:inherit; padding:0; border:0; background:none; cursor:pointer; text-align:left; }
   .mkt-card .nm { font-size:16px; font-weight:700; color:#6b7078; }
   .mkt-card .px { font-size:19px; font-weight:800; line-height:1.1; margin-top:2px; }
@@ -718,7 +719,7 @@ function mktCard(m, strong) {
     const inv = [['개인', m.ind], ['외국인', m.frgnr], ['기관', m.orgn]]
       .map(([l, v]) => `<div><div class="l">${l}</div><div class="v ${cls(v)}">${fmtNet(v)}</div></div>`).join('');
     const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx : m.idx;
-    return `<div class="mkt-card flat"><div class="top"><div>`
+    return `<div class="mkt-card flat" data-index-card="${m.key}"><div class="top"><div>`
       + `<div class="nm"><button type="button" data-index-market="${m.key}" title="${m.name} 캔들 차트 보기">${m.name}</button></div>`
       + (m.idx != null
           ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(+0.00%)</div>`
@@ -734,7 +735,7 @@ function mktCard(m, strong) {
   // 전일종가: 어제 시계열의 마지막 값(없으면 오늘 지수-전일대비)
   const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx
                    : (m.idx != null && m.pred != null ? m.idx - m.pred : null);
-  return `<div class="mkt-card ${dc}${sc}"><div class="top"><div>`
+  return `<div class="mkt-card ${dc}${sc}" data-index-card="${m.key}"><div class="top"><div>`
     + `<div class="nm"><button type="button" data-index-market="${m.key}" title="${m.name} 캔들 차트 보기">${m.name}</button></div>`
     + (has ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(${fmtFlu(m.flu)})</div>`
            : `<div class="empty">데이터 수집 대기 중…</div>`)
@@ -876,10 +877,10 @@ async function renderSummaryCards() {
 }
 
 document.getElementById('mkt-cards').addEventListener('click', event => {
-  const button = event.target.closest('[data-index-market]');
+  const button = event.target.closest('[data-index-card]');
   if (!button) return;
   const panel = document.getElementById('index-candle-panel');
-  const market = button.dataset.indexMarket;
+  const market = button.dataset.indexCard;
   if (!['kospi','kosdaq'].includes(market)) return;
   if (!panel.hidden && indexCandleMarket === market) { panel.hidden = true; return; }
   indexCandleMarket = market;
@@ -1184,8 +1185,8 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   if (!host) return;
   if (!items || items.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
   const fullItems = items;
-  const offset = hostId === 'index-candle-chart' ? 0 : candleViewOffset;
-  const viewCount = hostId === 'index-candle-chart' ? null : candleViewCount;
+  const offset = hostId === 'index-candle-chart' ? indexCandleViewOffset : candleViewOffset;
+  const viewCount = hostId === 'index-candle-chart' ? indexCandleViewCount : candleViewCount;
   const end = Math.max(2, items.length - offset);
   const start = Math.max(0, end - (viewCount || items.length));
   const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
@@ -1350,6 +1351,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart + dateAxis;
 }
 
+let indexCandleViewCount = null, indexCandleViewOffset = 0;
 let indexCandleMarket = '', indexCandleTf = 'D', indexCandleItems = [], indexCandleHistory = [];
 let indexCandleNext = '', indexCandleCont = 'N', indexCandleGeneration = 0, indexCandleLoading = false;
 async function loadIndexCandles(more = false) {
@@ -1358,7 +1360,7 @@ async function loadIndexCandles(more = false) {
   const market = indexCandleMarket, tf = indexCandleTf;
   const status = document.getElementById('index-candle-status');
   const button = document.getElementById('index-candle-more');
-  if (!more) { indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N'; }
+  if (!more) { indexCandleViewCount = null; indexCandleViewOffset = 0; indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N'; }
   indexCandleLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
   try {
     let data;
@@ -1436,28 +1438,28 @@ async function loadCandles(more = false) {
   }
 }
 
-// 두 손가락은 확대/축소, 한 손가락 가로 움직임은 표시 기간 이동.
-(function () {
-  const host = document.getElementById('stock-chart');
+// 두 차트에 같은 터치 동작을 적용하며, 표시 범위는 따로 유지한다.
+function attachCandleGestures(hostId, state) {
+  const host = document.getElementById(hostId);
   let pinch = null, pan = null, frame = null;
   const distance = touches => Math.hypot(touches[0].clientX - touches[1].clientX,
                                         touches[0].clientY - touches[1].clientY);
   const redraw = () => {
     if (frame !== null) return;
-    const generation = candleGeneration;
+    const generation = state.generation;
     frame = requestAnimationFrame(() => {
       frame = null;
-      if (generation === candleGeneration) drawCandles(candleItems, chartTf);
+      if (generation === state.generation) drawCandles(state.items, state.tf, hostId);
     });
   };
   const beginPan = touch => {
     const rect = host.querySelector('svg').getBoundingClientRect();
-    pan = { x: touch.clientX, y: touch.clientY, offset: candleViewOffset,
-            count: candleViewCount || candleItems.length, width: rect.width * 688 / 760,
-            horizontal: false, generation: candleGeneration };
+    pan = { x: touch.clientX, y: touch.clientY, offset: state.offset,
+            count: state.count || state.items.length, width: rect.width * 688 / 760,
+            horizontal: false, generation: state.generation };
   };
   host.addEventListener('touchstart', event => {
-    if (candleItems.length < 2 || !event.target.closest('.candle-plot')) return;
+    if (state.items.length < 2 || !event.target.closest('.candle-plot')) return;
     if (event.touches.length === 1) { beginPan(event.touches[0]); return; }
     pan = null;
     if (event.touches.length !== 2) { pinch = null; return; }
@@ -1467,27 +1469,27 @@ async function loadCandles(more = false) {
     const rect = host.querySelector('svg').getBoundingClientRect();
     const center = (event.touches[0].clientX + event.touches[1].clientX) / 2;
     const fraction = Math.max(0, Math.min(1, ((center - rect.left) / rect.width * 760 - 8) / 688));
-    const count = Math.min(candleViewCount || candleItems.length, candleItems.length);
-    const end = candleItems.length - candleViewOffset;
-    pinch = { gap, count, fraction, anchor: end - count + count * fraction, generation: candleGeneration };
+    const count = Math.min(state.count || state.items.length, state.items.length);
+    const end = state.items.length - state.offset;
+    pinch = { gap, count, fraction, anchor: end - count + count * fraction, generation: state.generation };
   }, { passive: false });
   // 차트를 다시 그려도 터치 대상과 진행 중인 제스처는 유지한다.
   document.addEventListener('touchmove', event => {
     if (pinch) {
-      if (event.touches.length !== 2 || pinch.generation !== candleGeneration) { pinch = null; return; }
+      if (event.touches.length !== 2 || pinch.generation !== state.generation) { pinch = null; return; }
       event.preventDefault();
       const gap = distance(event.touches);
       if (gap < 1) return;
-      const total = candleItems.length;
+      const total = state.items.length;
       const count = Math.max(Math.min(10, total), Math.min(total, Math.round(pinch.count * pinch.gap / gap)));
       const end = Math.max(count, Math.min(total, Math.round(pinch.anchor + count * (1 - pinch.fraction))));
-      candleViewCount = count === total ? null : count;
-      candleViewOffset = total - end;
+      state.count = count === total ? null : count;
+      state.offset = total - end;
       redraw();
       return;
     }
     if (!pan) return;
-    if (event.touches.length !== 1 || pan.generation !== candleGeneration) { pan = null; return; }
+    if (event.touches.length !== 1 || pan.generation !== state.generation) { pan = null; return; }
     const dx = event.touches[0].clientX - pan.x, dy = event.touches[0].clientY - pan.y;
     if (!pan.horizontal) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
@@ -1495,17 +1497,27 @@ async function loadCandles(more = false) {
       pan.horizontal = true;
     }
     event.preventDefault();
-    candleViewOffset = Math.max(0, Math.min(candleItems.length - pan.count,
+    state.offset = Math.max(0, Math.min(state.items.length - pan.count,
       pan.offset + Math.round(dx / pan.width * pan.count)));
     redraw();
   }, { passive: false });
   document.addEventListener('touchend', event => {
     const active = pinch || pan;
     pinch = null; pan = null;
-    if (active && event.touches.length === 1 && candleItems.length >= 2) beginPan(event.touches[0]);
+    if (active && event.touches.length === 1 && state.items.length >= 2) beginPan(event.touches[0]);
   }, { passive: true });
   document.addEventListener('touchcancel', () => { pinch = null; pan = null; }, { passive: true });
-})();
+}
+attachCandleGestures('stock-chart', {
+  get items() { return candleItems; }, get generation() { return candleGeneration; }, get tf() { return chartTf; },
+  get count() { return candleViewCount; }, set count(value) { candleViewCount = value; },
+  get offset() { return candleViewOffset; }, set offset(value) { candleViewOffset = value; }
+});
+attachCandleGestures('index-candle-chart', {
+  get items() { return indexCandleItems; }, get generation() { return indexCandleGeneration; }, get tf() { return indexCandleTf; },
+  get count() { return indexCandleViewCount; }, set count(value) { indexCandleViewCount = value; },
+  get offset() { return indexCandleViewOffset; }, set offset(value) { indexCandleViewOffset = value; }
+});
 
 function setChartIndex(market) {
   if (!['kospi','kosdaq'].includes(market)) return;
