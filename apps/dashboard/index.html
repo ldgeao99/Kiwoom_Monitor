@@ -745,7 +745,9 @@ function combinedIndexChart(markets) {
     const prev = market.series_prev || [];
     const base = prev.length ? prev[prev.length - 1].idx
       : Number.isFinite(market.idx) && Number.isFinite(market.pred) ? market.idx - market.pred : null;
-    const source = market.preopen ? [] : [...(market.open != null ? [{t:'09:00:00',idx:market.open}] : []), ...(market.series || [])];
+    // 09:00 조회값은 전일 종가가 남아 있을 수 있어 실제 시가와 중복 연결하지 않는다.
+    const today = (market.series || []).filter(point => (point.t || '').slice(0, 5) >= '09:01');
+    const source = market.preopen ? [] : [...(market.open > 0 && today.length ? [{t:'09:00:00',idx:market.open}] : []), ...today];
     const points = base > 0 ? source.map(point => {
       const parts = (point.t || '').split(':');
       return {idx: point.idx, minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
