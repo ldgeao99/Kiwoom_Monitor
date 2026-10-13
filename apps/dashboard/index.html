@@ -1209,7 +1209,8 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const chartMovingAverages = isIndexChart ? CHART_MAS : CHART_MAS.filter(([period]) => period !== 200);
   const fullAverages = chartMovingAverages.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
-  const showRsi = hostId === 'index-candle-chart' && document.getElementById('index-rsi-visible').checked;
+  const showRsi = hostId === 'index-candle-chart' && tf === 'D' && document.getElementById('index-rsi-visible').checked;
+  if (hostId === 'index-candle-chart') document.getElementById('index-rsi-visible').parentElement.hidden = tf !== 'D';
   const W = 760, H = showRsi ? 580 : 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
@@ -1269,6 +1270,16 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     body += `<line x1="${x.toFixed(1)}" y1="${yH.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yL.toFixed(1)}" stroke="${col}" stroke-width="1"/>`;
     body += `<rect x="${(x-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}"/>`;
   });
+
+  let rsiSignals = '';
+  if (hostId === 'index-candle-chart' && tf === 'D') {
+    const signalValues = relativeStrengthIndex(fullItems, 14).slice(start, end);
+    signalValues.forEach((value, i) => {
+      if (!Number.isFinite(value) || value > 30) return;
+      const xx = xc(i), tip = Math.min(priceH - mB - 14, y(items[i].l) + 5);
+      rsiSignals += `<g class="rsi-oversold-arrow" data-time="${items[i].t}" data-rsi="${value}"><title>RSI ${value.toFixed(2)} · 30 이하</title><path d="M${xx},${tip} l-4,6 h2 v7 h4 v-7 h2 Z" fill="#a21caf"/></g>`;
+    });
+  }
 
   const averages = chartMovingAverages.map(([period, color], index) => {
     const values = fullAverages[index].slice(start, end);
@@ -1366,7 +1377,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     const rsiY = value => rsiBottom - value / 100 * (rsiBottom - rsiTop);
     const lastRsi = rsiValues[rsiValues.length - 1];
     rsiChart = `<g class="candle-rsi" data-period="14"><line x1="${mL}" x2="${mL+iw}" y1="432" y2="432" stroke="#d5d8dd"/>`
-      + `<text x="${mL}" y="447" font-size="11" fill="#f97316">RSI 14${lastRsi === null ? '' : ' · ' + lastRsi.toFixed(2)}</text>`;
+      + `<text x="${mL}" y="447" font-size="11" fill="#f97316">RSI 14</text>`;
     [20, 30, 50, 70, 80].forEach(value => {
       const yy = rsiY(value);
       rsiChart += `<line x1="${mL}" x2="${mL+iw}" y1="${yy}" y2="${yy}" stroke="${value === 30 || value === 70 ? '#9ca3af' : '#eceef1'}"/>`
@@ -1393,7 +1404,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const svg = host.querySelector('svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart + rsiChart + dateAxis;
+  svg.innerHTML = grid + daySeparators + body + averages + rsiSignals + xlab + closeMarker + amountChart + rsiChart + dateAxis;
 }
 
 let indexCandleViewCount = null, indexCandleViewOffset = 0;
