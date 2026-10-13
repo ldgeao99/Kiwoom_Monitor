@@ -275,7 +275,7 @@
 <div id="index-candle-panel" hidden>
   <div class="page-title"><span id="index-candle-name"></span><label style="font-size:12px;font-weight:400;white-space:nowrap;margin-left:auto"><input id="index-rsi-visible" type="checkbox" checked>RSI</label><select id="index-candle-tf" class="chart-sel" style="margin-left:0" aria-label="지수 차트 봉 주기"></select><button id="index-candle-more" class="prog-go" type="button" disabled>추가조회</button></div>
   <div class="combined-index-chart" style="max-width:1200px;margin:0 auto 12px;box-sizing:border-box">
-    <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div>
+    <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div><div id="index-rsi-forecast" style="padding:8px;font-size:12px;line-height:1.6" hidden></div>
   </div>
 </div>
 <div class="page-title"><span>종목등락현황</span>
@@ -1180,6 +1180,24 @@ function relativeStrengthIndex(items, period = 14) {
   });
 }
 
+// 다음 종가가 RSI 30이 되는 가격: Wilder 평균 상승/하락폭을 역산한다.
+function rsiThirtyThreshold(items, period = 14) {
+  if (items.length < period + 1) return null;
+  let gain = 0, loss = 0;
+  for (let i = 1; i < items.length; i++) {
+    const change = items[i].c - items[i - 1].c;
+    const up = Math.max(0, change), down = Math.max(0, -change);
+    if (i <= period) { gain += up; loss += down; }
+    if (i === period) { gain /= period; loss /= period; }
+    if (i > period) { gain = (gain * (period - 1) + up) / period; loss = (loss * (period - 1) + down) / period; }
+  }
+  const delta = gain <= 3 / 7 * loss
+    ? (period - 1) * (3 / 7 * loss - gain)
+    : (period - 1) * (loss - 7 / 3 * gain);
+  // 보합만 지속한 경우 RSI는 50이므로 같은 가격을 포함하지 않는다.
+  return {price:items[items.length - 1].c + delta, strict:gain === 0 && loss === 0};
+}
+
 const CHART_TFS = [['1m','1분'],['3m','3분'],['10m','10분'],['15m','15분'],['D','일'],['W','주'],['M','월']];
 
 function renderChartTf() {
@@ -1202,6 +1220,24 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   if (!host) return;
   if (!items || items.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
   const fullItems = items;
+  if (hostId === 'index-candle-chart') {
+    const forecast = document.getElementById('index-rsi-forecast');
+    forecast.hidden = tf !== 'D';
+    if (tf === 'D') {
+      const today = rsiThirtyThreshold(fullItems.slice(0, -1));
+      const tomorrow = rsiThirtyThreshold(fullItems);
+      const format = result => !result ? '계산에 필요한 데이터가 부족합니다.'
+        : result.price <= 0 ? '양수 지수 범위에서는 RSI 30 이하에 도달할 수 없습니다.'
+        : `${(Math.floor(result.price * 100) / 100).toLocaleString('ko-KR', {minimumFractionDigits:2,maximumFractionDigits:2})}포인트 ${result.strict ? '미만' : '이하'}`;
+      const latest = fullItems[fullItems.length - 1];
+      forecast.replaceChildren();
+      [`RSI 30 이하 종가 기준 · 최근 일봉 ${latest.t.slice(0,4)}/${latest.t.slice(4,6)}/${latest.t.slice(6,8)}`,
+       `오늘: ${format(today)}`, `내일: ${format(tomorrow)}`,
+       `내일 기준은 오늘 종가가 현재 ${fmtIdx(latest.c)}포인트로 확정된다고 가정합니다.`].forEach(text => {
+        const row = document.createElement('div'); row.textContent = text; forecast.append(row);
+      });
+    }
+  }
   const offset = hostId === 'index-candle-chart' ? indexCandleViewOffset : candleViewOffset;
   const viewCount = hostId === 'index-candle-chart' ? indexCandleViewCount : candleViewCount;
   const end = Math.max(2, items.length - offset);
@@ -1415,6 +1451,7 @@ async function loadIndexCandles(more = false, preserveView = false) {
   const button = document.getElementById('index-candle-more');
   if (!more) {
     if (!preserveView) { indexCandleViewCount = null; indexCandleViewOffset = 0; }
+    document.getElementById('index-rsi-forecast').hidden = true;
     indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N';
   }
   indexCandleLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
