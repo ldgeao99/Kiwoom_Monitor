@@ -1376,6 +1376,12 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     const rsiPoints = rsiValues.flatMap((value,i) => value === null ? [] : [`${xc(i).toFixed(1)},${rsiY(value).toFixed(1)}`]);
     if (rsiPoints.length) rsiChart += `<polyline class="rsi-line" points="${rsiPoints.join(' ')}" fill="none" stroke="#f97316" stroke-width="1.2"/>`;
     else rsiChart += `<text x="${mL+iw/2}" y="${rsiTop+55}" text-anchor="middle" font-size="11" fill="#6b7280">RSI 계산에 15개 이상의 캔들이 필요합니다.</text>`;
+    if (Number.isFinite(lastRsi)) {
+      const labelY = Math.max(rsiTop + 10, Math.min(rsiBottom - 10, rsiY(lastRsi)));
+      rsiChart += `<g class="current-rsi-label" data-rsi="${lastRsi}"><title>마지막 표시 봉 RSI ${lastRsi.toFixed(2)}</title>`
+        + `<rect x="${mL+iw+3}" y="${labelY-10}" width="${mR-3}" height="20" rx="3" fill="#d1d5db"/>`
+        + `<text x="${mL+iw+mR/2}" y="${labelY+4}" font-size="11" fill="#374151" text-anchor="middle">${lastRsi.toFixed(2)}</text></g>`;
+    }
     rsiChart += '</g>';
   }
 
