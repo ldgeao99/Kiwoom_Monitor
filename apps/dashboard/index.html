@@ -136,6 +136,8 @@
   .breadth-tbl .pct.low { color:#2563eb; font-weight:700; }   /* 상승비율 35% 미만 경고 */
   /* 프로그램 순매수 상위 종목 */
   .prm-wrap { max-width:1200px; margin:0 auto 24px; }
+  .program-rank-title { flex-wrap:wrap; }
+  #toggle-program-rank { margin-left:0; }
   .pu-mkt { display:flex; gap:8px; margin-bottom:8px; }
   .page-title .pu-mkt { margin-left:auto; margin-bottom:0; font-weight:400; }   /* 제목 우측에 순매수/순매도 토글 */
   .pu-mkt label { font-size:13px; padding:4px 12px; border:1px solid var(--line); border-radius:14px; cursor:pointer; color:var(--muted); }
@@ -303,8 +305,8 @@
     <div id="amount-rank-status" role="status" style="padding:8px 12px;font-size:12px;color:var(--muted)" hidden></div>
   </div>
 </div>
-<div class="page-title"><span>프로그램 상위 종목</span><div class="pu-mkt" id="pu-side"></div></div>
-<div class="prm-wrap">
+<div class="page-title program-rank-title"><button id="toggle-program-rank" class="view-btn" type="button" aria-controls="program-rank-content" aria-expanded="true">접기 ▾</button><span>프로그램 상위 종목</span><div class="pu-mkt" id="pu-side"></div></div>
+<div class="prm-wrap" id="program-rank-content">
   <div class="pu-mkt" id="pu-mkt"></div>
   <div class="panel">
     <div id="prm-upper"></div>
@@ -2022,6 +2024,25 @@ applyIdxView();
   btn.addEventListener('click', () => {
     collapsed = !collapsed;
     try { localStorage.setItem('breadth_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+    apply();
+  });
+})();
+
+// 프로그램 상위 종목 접기/펼치기 (상태 유지, 기본 펼침)
+(function () {
+  const btn = document.getElementById('toggle-program-rank');
+  const box = document.getElementById('program-rank-content');
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('program_rank_collapsed') === '1'; } catch (e) {}
+  const apply = () => {
+    box.hidden = collapsed;
+    btn.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  };
+  apply();
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem('program_rank_collapsed', collapsed ? '1' : '0'); } catch (e) {}
     apply();
   });
 })();
