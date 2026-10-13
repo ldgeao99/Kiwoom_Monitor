@@ -1207,7 +1207,8 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const viewCount = hostId === 'index-candle-chart' ? indexCandleViewCount : candleViewCount;
   const end = Math.max(2, items.length - offset);
   const start = Math.max(0, end - (viewCount || items.length));
-  const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
+  const chartMovingAverages = isIndexChart ? CHART_MAS : CHART_MAS.filter(([period]) => period !== 200);
+  const fullAverages = chartMovingAverages.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
   const showRsi = document.getElementById(hostId === 'index-candle-chart' ? 'index-rsi-visible' : 'stock-rsi-visible').checked;
   const W = 760, H = showRsi ? 580 : 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
@@ -1270,12 +1271,12 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     body += `<rect x="${(x-bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${col}"/>`;
   });
 
-  const averages = CHART_MAS.map(([period, color], index) => {
+  const averages = chartMovingAverages.map(([period, color], index) => {
     const values = fullAverages[index].slice(start, end);
     const points = values.flatMap((value, i) => value === null ? [] : [`${xc(i).toFixed(1)},${y(value).toFixed(1)}`]);
     return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="${period >= 20 ? 3 : 1.5}" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   }).join('');
-  const legend = CHART_MAS.map(([period, color]) =>
+  const legend = chartMovingAverages.map(([period, color]) =>
     `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;border-top:2px solid ${color}"></span>${period}</span>`
   ).join('');
   const lastCandle = items[items.length - 1];
