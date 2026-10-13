@@ -1364,7 +1364,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     if (xx < lastDateLabelEnd + 6) return;
     const labelWidth = label.length * 6;
     if (xx + labelWidth > mL + iw) return;
-    dateAxis += `<text x="${xx.toFixed(1)}" y="${H-8}" font-size="10" fill="#000000" data-date="${date}">${label}</text>`;
+    dateAxis += `<text x="${xx.toFixed(1)}" y="${isIndexChart ? amountBottom+18 : H-8}" font-size="10" fill="#000000" data-date="${date}">${label}</text>`;
     lastDateLabelEnd = xx + labelWidth;
     lastLabelYear = year;
   });
@@ -1373,11 +1373,11 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   let rsiChart = '';
   if (showRsi) {
     const rsiValues = relativeStrengthIndex(fullItems, 14).slice(start, end);
-    const rsiTop = 450, rsiBottom = H - 30;
+    const rsiTop = 470, rsiBottom = H - 30;
     const rsiY = value => rsiBottom - value / 100 * (rsiBottom - rsiTop);
     const lastRsi = rsiValues[rsiValues.length - 1];
-    rsiChart = `<g class="candle-rsi" data-period="14"><line x1="${mL}" x2="${mL+iw}" y1="432" y2="432" stroke="#d5d8dd"/>`
-      + `<text x="${mL}" y="447" font-size="11" fill="#f97316">RSI 14</text>`;
+    rsiChart = `<g class="candle-rsi" data-period="14"><line x1="${mL}" x2="${mL+iw}" y1="450" y2="450" stroke="#d5d8dd"/>`
+      + `<text x="${mL}" y="465" font-size="11" fill="#f97316">RSI 14</text>`;
     [20, 30, 50, 70, 80].forEach(value => {
       const yy = rsiY(value);
       rsiChart += `<line x1="${mL}" x2="${mL+iw}" y1="${yy}" y2="${yy}" stroke="${value === 30 || value === 70 ? '#9ca3af' : '#eceef1'}"/>`
