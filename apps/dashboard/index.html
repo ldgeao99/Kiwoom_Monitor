@@ -888,7 +888,7 @@ document.getElementById('mkt-cards').addEventListener('click', event => {
   if (!panel.hidden && indexCandleMarket === market) { panel.hidden = true; return; }
   indexCandleMarket = market;
   panel.hidden = false;
-  document.getElementById('index-candle-name').textContent = market === 'kospi' ? '코스피' : '코스닥';
+  document.getElementById('index-candle-name').textContent = market === 'kospi' ? 'KOSPI 차트' : 'KOSDAQ 차트';
   loadIndexCandles();
 });
 
