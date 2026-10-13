@@ -271,6 +271,10 @@
 <div id="nikkei-index" class="nasfut"></div>
 <div id="taiwan-index" class="nasfut"></div>
 <div class="mkt-cards" id="mkt-cards"></div>
+<div id="index-candle-panel" class="combined-index-chart" style="max-width:1200px;margin:0 auto 12px;box-sizing:border-box" hidden>
+  <div style="display:flex;align-items:center;gap:8px;padding:4px 8px"><b id="index-candle-name"></b><select id="index-candle-tf" aria-label="지수 차트 봉 주기"></select><button id="index-candle-more" class="prog-go" type="button" style="margin-left:auto" disabled>추가조회</button></div>
+  <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div>
+</div>
 <div class="page-title"><span>종목등락현황</span>
   <button id="toggle-breadth" class="view-btn" type="button">접기 ▾</button></div>
 <div class="breadth" id="breadth"></div>
@@ -874,9 +878,14 @@ async function renderSummaryCards() {
 document.getElementById('mkt-cards').addEventListener('click', event => {
   const button = event.target.closest('[data-index-market]');
   if (!button) return;
-  if (document.querySelector('.chart-wrap').hidden) document.getElementById('toggle-chart').click();
-  setChartIndex(button.dataset.indexMarket);
-  document.getElementById('stock-chart-title').scrollIntoView({behavior:'smooth', block:'start'});
+  const panel = document.getElementById('index-candle-panel');
+  const market = button.dataset.indexMarket;
+  if (!['kospi','kosdaq'].includes(market)) return;
+  if (!panel.hidden && indexCandleMarket === market) { panel.hidden = true; return; }
+  indexCandleMarket = market;
+  panel.hidden = false;
+  document.getElementById('index-candle-name').textContent = market === 'kospi' ? '코스피' : '코스닥';
+  loadIndexCandles();
 });
 
 // ── 조회수 상위 종목 (기본 10, 펼치기 20) ──
@@ -1169,13 +1178,16 @@ function renderChartTf() {
 
 let candleViewCount = null, candleViewOffset = 0;
 
-function drawCandles(items, tf) {
-  const host = document.getElementById('stock-chart');
+function drawCandles(items, tf, hostId = 'stock-chart') {
+  const host = document.getElementById(hostId);
+  const isIndexChart = hostId === 'index-candle-chart' || chartCode.startsWith('index:');
   if (!host) return;
   if (!items || items.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
   const fullItems = items;
-  const end = Math.max(2, items.length - candleViewOffset);
-  const start = Math.max(0, end - (candleViewCount || items.length));
+  const offset = hostId === 'index-candle-chart' ? 0 : candleViewOffset;
+  const viewCount = hostId === 'index-candle-chart' ? null : candleViewCount;
+  const end = Math.max(2, items.length - offset);
+  const start = Math.max(0, end - (viewCount || items.length));
   const fullAverages = CHART_MAS.map(([period]) => movingAverage(fullItems, period));
   items = fullItems.slice(start, end);
   const W = 760, H = 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
@@ -1191,7 +1203,7 @@ function drawCandles(items, tf) {
   const y = v => mT + ih * (1 - (v - lo) / (hi - lo));
 
   // 가격 범위에 맞는 1·2·5 계열의 원 단위 간격으로 눈금을 정렬한다.
-  const rawPriceStep = Math.max(chartCode.startsWith('index:') ? 0.01 : 1, (hi - lo) / 5);
+  const rawPriceStep = Math.max(isIndexChart ? 0.01 : 1, (hi - lo) / 5);
   const priceMagnitude = 10 ** Math.floor(Math.log10(rawPriceStep));
   const priceStep = [1, 2, 5, 10].find(mult => mult * priceMagnitude >= rawPriceStep) * priceMagnitude;
   let grid = '';
@@ -1199,7 +1211,7 @@ function drawCandles(items, tf) {
   for (let v = firstPriceTick; v <= hi; v += priceStep) {
     const yy = y(v);
     grid += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
-    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${chartCode.startsWith('index:') ? fmtIdx(v) : Math.round(v).toLocaleString()}</text>`;
+    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${isIndexChart ? fmtIdx(v) : Math.round(v).toLocaleString()}</text>`;
   }
 
   const isMin = tf.endsWith('m');
@@ -1254,7 +1266,7 @@ function drawCandles(items, tf) {
   const falling = comparable && lastCandle.c < previousClose;
   const closeBackground = rising ? '#e5484d' : falling ? '#2563eb' : '#d1d5db';
   const closeForeground = rising || falling ? '#ffffff' : '#374151';
-  const closeLabel = chartCode.startsWith('index:') ? fmtIdx(lastCandle.c) : lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+  const closeLabel = isIndexChart ? fmtIdx(lastCandle.c) : lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
   const closeFit = closeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
   const closeY = Math.max(mT + 10, Math.min(priceH - mB - 10, y(lastCandle.c)));
   const closeChange = comparable ? (lastCandle.c / previousClose - 1) * 100 : null;
@@ -1264,7 +1276,7 @@ function drawCandles(items, tf) {
     ? `<g class="last-close-change-label"><rect x="${mL+iw+3}" y="${(closeY+12).toFixed(1)}" width="${mR-3}" height="16" fill="#ffffff"/>`
       + `<text class="last-close-change" x="${mL+iw+mR/2}" y="${(closeY+23).toFixed(1)}" font-size="11" fill="${closeBackground}" text-anchor="middle"${changeFit}>${changeLabel}</text></g>` : '';
   const closeMarker = `<g class="last-close-label" data-close="${lastCandle.c}">`
-    + `<title>마지막 표시 봉 종가 ${closeLabel}${chartCode.startsWith('index:') ? '포인트' : '원'}${comparable ? ' · ' + comparisonLabel + ' ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
+    + `<title>마지막 표시 봉 종가 ${closeLabel}${isIndexChart ? '포인트' : '원'}${comparable ? ' · ' + comparisonLabel + ' ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
     + `<rect x="${mL+iw+3}" y="${(closeY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="${closeBackground}"/>`
     + `<text x="${mL+iw+mR/2}" y="${(closeY+4).toFixed(1)}" font-size="11" fill="${closeForeground}" text-anchor="middle"${closeFit}>${closeLabel}</text>` + changeMarker + '</g>';
   const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
@@ -1337,6 +1349,47 @@ function drawCandles(items, tf) {
   svg.dataset.visibleCandles = n;
   svg.innerHTML = grid + daySeparators + body + averages + xlab + closeMarker + amountChart + dateAxis;
 }
+
+let indexCandleMarket = '', indexCandleTf = 'D', indexCandleItems = [], indexCandleHistory = [];
+let indexCandleNext = '', indexCandleCont = 'N', indexCandleGeneration = 0, indexCandleLoading = false;
+async function loadIndexCandles(more = false) {
+  if (!indexCandleMarket || (more && indexCandleLoading)) return;
+  const generation = more ? indexCandleGeneration : ++indexCandleGeneration;
+  const market = indexCandleMarket, tf = indexCandleTf;
+  const status = document.getElementById('index-candle-status');
+  const button = document.getElementById('index-candle-more');
+  if (!more) { indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N'; }
+  indexCandleLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
+  try {
+    let data;
+    if (more && indexCandleHistory.length) data = {items:indexCandleHistory, cont:indexCandleCont, next:indexCandleNext};
+    else {
+      const url = '/api/candles?code=' + encodeURIComponent('index:' + market) + '&tf=' + tf
+        + (more ? '&cont=Y&next=' + encodeURIComponent(indexCandleNext) : '');
+      const response = await fetch(url, {cache:'no-store'});
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      data = await response.json();
+      if (data.error) throw new Error(data.error);
+    }
+    if (generation !== indexCandleGeneration) return;
+    const merged = new Map((more ? indexCandleItems : []).map(item => [item.t,item]));
+    (data.items || []).forEach(item => merged.set(item.t,item));
+    indexCandleItems = [...merged.values()].sort((a,b)=>a.t.localeCompare(b.t));
+    indexCandleHistory = data.history || []; indexCandleNext = data.next || ''; indexCandleCont = data.cont || 'N';
+    drawCandles(indexCandleItems, tf, 'index-candle-chart'); status.textContent = '';
+  } catch(error) {
+    if (generation === indexCandleGeneration) status.textContent = '조회 실패: ' + error.message;
+  } finally {
+    if (generation === indexCandleGeneration) {
+      indexCandleLoading = false;
+      button.disabled = !indexCandleHistory.length && !(indexCandleCont === 'Y' && indexCandleNext);
+    }
+  }
+}
+const indexTfSelect = document.getElementById('index-candle-tf');
+indexTfSelect.innerHTML = CHART_TFS.map(([key,name])=>`<option value="${key}" ${key==='D'?'selected':''}>${name}</option>`).join('');
+indexTfSelect.addEventListener('change',()=>{indexCandleTf=indexTfSelect.value;loadIndexCandles();});
+document.getElementById('index-candle-more').addEventListener('click',()=>loadIndexCandles(true));
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
 let candleGeneration = 0, candleLoading = false;
