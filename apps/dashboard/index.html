@@ -166,6 +166,7 @@
   .pu-both th { position:sticky; top:0; background:var(--head); }
   .pu-both th:first-child, .pu-both td:first-child { width:52%; text-align:left; overflow:hidden; text-overflow:ellipsis; }
   .pu-both tbody tr { cursor:pointer; }
+  .pu-both tbody tr.selected td { background:var(--sel); }
   @media(max-width:560px) { .pu-both table { font-size:11px; } .pu-both th, .pu-both td { padding:7px 3px; } #pu-side label { padding:4px 10px; } }
   .pu-tbl tbody tr:hover { background:var(--head); }
   /* 조회수 상위 종목 */
@@ -1971,6 +1972,7 @@ function renderPuSide() {
 }
 
 let puItems = [], puBuyItems = [], puSellItems = [];
+let puSelectedCode = '';
 let puRequestGeneration = 0;
 let puExpanded = false;
 try { puExpanded = localStorage.getItem('prm_upper_expanded') === '1'; } catch (e) {}
@@ -1988,10 +1990,15 @@ function renderPuBoth(host, btn) {
     const body = table.createTBody();
     items.forEach(item => {
       const row = body.insertRow(); row.dataset.code = item.code;
+      row.classList.toggle('selected', item.code === puSelectedCode);
       const name = row.insertCell(); name.textContent = item.name; name.title = item.name;
       const amount = row.insertCell(); const eok = Math.round(item.net / 100);
       amount.textContent = (eok > 0 ? '+' : '') + eok.toLocaleString('ko-KR') + '억'; amount.className = cls(item.net);
-      row.addEventListener('click', () => selectListedStock(item.code, item.name));
+      row.addEventListener('click', () => {
+        puSelectedCode = item.code;
+        host.querySelectorAll('tbody tr[data-code]').forEach(el => el.classList.toggle('selected', el.dataset.code === puSelectedCode));
+        selectListedStock(item.code, item.name);
+      });
     });
     if (!items.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 2; cell.textContent = '데이터가 없습니다.'; }
     scroll.append(table); section.append(scroll); wrapper.append(section);
