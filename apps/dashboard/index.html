@@ -888,7 +888,7 @@ document.getElementById('mkt-cards').addEventListener('click', event => {
   indexCandleMarket = market;
   panel.hidden = false;
   document.getElementById('index-candle-name').textContent = market === 'kospi' ? 'KOSPI 차트' : 'KOSDAQ 차트';
-  loadIndexCandles();
+  loadIndexCandles(false, true);
 });
 
 // ── 조회수 상위 종목 (기본 10, 펼치기 20) ──
@@ -1399,13 +1399,16 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
 let indexCandleViewCount = null, indexCandleViewOffset = 0;
 let indexCandleMarket = '', indexCandleTf = 'D', indexCandleItems = [], indexCandleHistory = [];
 let indexCandleNext = '', indexCandleCont = 'N', indexCandleGeneration = 0, indexCandleLoading = false;
-async function loadIndexCandles(more = false) {
+async function loadIndexCandles(more = false, preserveView = false) {
   if (!indexCandleMarket || (more && indexCandleLoading)) return;
   const generation = more ? indexCandleGeneration : ++indexCandleGeneration;
   const market = indexCandleMarket, tf = indexCandleTf;
   const status = document.getElementById('index-candle-status');
   const button = document.getElementById('index-candle-more');
-  if (!more) { indexCandleViewCount = null; indexCandleViewOffset = 0; indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N'; }
+  if (!more) {
+    if (!preserveView) { indexCandleViewCount = null; indexCandleViewOffset = 0; }
+    indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N';
+  }
   indexCandleLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
   try {
     let data;
@@ -1422,6 +1425,8 @@ async function loadIndexCandles(more = false) {
     const merged = new Map((more ? indexCandleItems : []).map(item => [item.t,item]));
     (data.items || []).forEach(item => merged.set(item.t,item));
     indexCandleItems = [...merged.values()].sort((a,b)=>a.t.localeCompare(b.t));
+    const visibleCount = Math.min(indexCandleViewCount || indexCandleItems.length, indexCandleItems.length);
+    indexCandleViewOffset = Math.max(0, Math.min(indexCandleViewOffset, indexCandleItems.length - visibleCount));
     indexCandleHistory = data.history || []; indexCandleNext = data.next || ''; indexCandleCont = data.cont || 'N';
     drawCandles(indexCandleItems, tf, 'index-candle-chart'); status.textContent = '';
   } catch(error) {
