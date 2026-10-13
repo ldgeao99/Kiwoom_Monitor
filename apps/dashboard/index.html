@@ -1329,8 +1329,8 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   if (hasAmounts) {
     for (let value = 0; value <= amountMax; value += amountStep) {
       const yy = amountY(value);
-      amountChart += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`
-        + `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
+      amountChart += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
+      if (!isIndexChart || value !== 0) amountChart += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
     }
     amounts.forEach((amount, i) => {
       if (amount === null) return;
@@ -1338,7 +1338,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
       amountChart += `<rect data-amount="${amount}" data-time="${items[i].t}" x="${(xc(i)-bw/2).toFixed(1)}" y="${amountY(amount).toFixed(1)}" width="${bw.toFixed(1)}" height="${(amount / amountMax * amountHeight).toFixed(1)}" fill="${color}"><title>${fmt(items[i].t)} 거래대금 ${amountFmt(amount)}억</title></rect>`;
     });
   }
-  if (hasLatestAmount) {
+  if (hasLatestAmount && (!isIndexChart || latestAmount !== 0)) {
     const labelY = amountY(latestAmount);
     const label = latestAmount.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
     const fit = label.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
