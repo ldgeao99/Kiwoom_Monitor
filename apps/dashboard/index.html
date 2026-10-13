@@ -233,6 +233,7 @@
   /* 두 시장 비교: 더 강한 상승은 더 빨갛게, 더 약한(더 낮은) 하락은 더 파랗게 */
   .mkt-card.up.strong { background:#fadfd9; } .mkt-card.down.strong { background:#e1e9fb; }
   .mkt-card .top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .mkt-card .nm button { font:inherit; color:inherit; padding:0; border:0; background:none; cursor:pointer; text-align:left; }
   .mkt-card .nm { font-size:16px; font-weight:700; color:#6b7078; }
   .mkt-card .px { font-size:19px; font-weight:800; line-height:1.1; margin-top:2px; }
   .mkt-card .fl { font-size:12px; font-weight:700; }
@@ -714,7 +715,7 @@ function mktCard(m, strong) {
       .map(([l, v]) => `<div><div class="l">${l}</div><div class="v ${cls(v)}">${fmtNet(v)}</div></div>`).join('');
     const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx : m.idx;
     return `<div class="mkt-card flat"><div class="top"><div>`
-      + `<div class="nm">${m.name}</div>`
+      + `<div class="nm"><button type="button" data-index-market="${m.key}" title="${m.name} 캔들 차트 보기">${m.name}</button></div>`
       + (m.idx != null
           ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(+0.00%)</div>`
           : `<div class="empty">장 시작 대기 중…</div>`)
@@ -730,7 +731,7 @@ function mktCard(m, strong) {
   const prevClose = (m.series_prev && m.series_prev.length) ? m.series_prev[m.series_prev.length - 1].idx
                    : (m.idx != null && m.pred != null ? m.idx - m.pred : null);
   return `<div class="mkt-card ${dc}${sc}"><div class="top"><div>`
-    + `<div class="nm">${m.name}</div>`
+    + `<div class="nm"><button type="button" data-index-market="${m.key}" title="${m.name} 캔들 차트 보기">${m.name}</button></div>`
     + (has ? `<div class="px">${fmtIdx(m.idx)}</div><div class="fl">(${fmtFlu(m.flu)})</div>`
            : `<div class="empty">데이터 수집 대기 중…</div>`)
     + `</div>${mktSpark(m.series_prev, m.series, prevClose, m.flu, SW, SH, m.open)}</div>`
@@ -869,6 +870,14 @@ async function renderSummaryCards() {
     });
   } catch (e) {}
 }
+
+document.getElementById('mkt-cards').addEventListener('click', event => {
+  const button = event.target.closest('[data-index-market]');
+  if (!button) return;
+  if (document.querySelector('.chart-wrap').hidden) document.getElementById('toggle-chart').click();
+  setChartIndex(button.dataset.indexMarket);
+  document.getElementById('stock-chart-title').scrollIntoView({behavior:'smooth', block:'start'});
+});
 
 // ── 조회수 상위 종목 (기본 10, 펼치기 20) ──
 let rankItems = [];
@@ -1182,7 +1191,7 @@ function drawCandles(items, tf) {
   const y = v => mT + ih * (1 - (v - lo) / (hi - lo));
 
   // 가격 범위에 맞는 1·2·5 계열의 원 단위 간격으로 눈금을 정렬한다.
-  const rawPriceStep = Math.max(1, (hi - lo) / 5);
+  const rawPriceStep = Math.max(chartCode.startsWith('index:') ? 0.01 : 1, (hi - lo) / 5);
   const priceMagnitude = 10 ** Math.floor(Math.log10(rawPriceStep));
   const priceStep = [1, 2, 5, 10].find(mult => mult * priceMagnitude >= rawPriceStep) * priceMagnitude;
   let grid = '';
@@ -1190,7 +1199,7 @@ function drawCandles(items, tf) {
   for (let v = firstPriceTick; v <= hi; v += priceStep) {
     const yy = y(v);
     grid += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
-    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${Math.round(v).toLocaleString()}</text>`;
+    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${chartCode.startsWith('index:') ? fmtIdx(v) : Math.round(v).toLocaleString()}</text>`;
   }
 
   const isMin = tf.endsWith('m');
@@ -1245,7 +1254,7 @@ function drawCandles(items, tf) {
   const falling = comparable && lastCandle.c < previousClose;
   const closeBackground = rising ? '#e5484d' : falling ? '#2563eb' : '#d1d5db';
   const closeForeground = rising || falling ? '#ffffff' : '#374151';
-  const closeLabel = lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+  const closeLabel = chartCode.startsWith('index:') ? fmtIdx(lastCandle.c) : lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
   const closeFit = closeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
   const closeY = Math.max(mT + 10, Math.min(priceH - mB - 10, y(lastCandle.c)));
   const closeChange = comparable ? (lastCandle.c / previousClose - 1) * 100 : null;
@@ -1255,7 +1264,7 @@ function drawCandles(items, tf) {
     ? `<g class="last-close-change-label"><rect x="${mL+iw+3}" y="${(closeY+12).toFixed(1)}" width="${mR-3}" height="16" fill="#ffffff"/>`
       + `<text class="last-close-change" x="${mL+iw+mR/2}" y="${(closeY+23).toFixed(1)}" font-size="11" fill="${closeBackground}" text-anchor="middle"${changeFit}>${changeLabel}</text></g>` : '';
   const closeMarker = `<g class="last-close-label" data-close="${lastCandle.c}">`
-    + `<title>마지막 표시 봉 종가 ${closeLabel}원${comparable ? ' · ' + comparisonLabel + ' ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
+    + `<title>마지막 표시 봉 종가 ${closeLabel}${chartCode.startsWith('index:') ? '포인트' : '원'}${comparable ? ' · ' + comparisonLabel + ' ' + previousClose.toLocaleString('ko-KR') + '원' : ''}</title>`
     + `<rect x="${mL+iw+3}" y="${(closeY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="${closeBackground}"/>`
     + `<text x="${mL+iw+mR/2}" y="${(closeY+4).toFixed(1)}" font-size="11" fill="${closeForeground}" text-anchor="middle"${closeFit}>${closeLabel}</text>` + changeMarker + '</g>';
   const amounts = items.map(item => Number.isFinite(item.amount_eok) ? item.amount_eok : null);
@@ -1445,6 +1454,16 @@ async function loadCandles(more = false) {
   document.addEventListener('touchcancel', () => { pinch = null; pan = null; }, { passive: true });
 })();
 
+function setChartIndex(market) {
+  if (!['kospi','kosdaq'].includes(market)) return;
+  chartCode = 'index:' + market;
+  chartName = market === 'kospi' ? '코스피' : '코스닥';
+  document.getElementById('chart-code').value = chartName;
+  try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
+  document.getElementById('chart-name').textContent = '';
+  return loadCandles();
+}
+
 function setChartStock(code, name) {
   chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
   chartName = name || '';
@@ -1457,6 +1476,7 @@ function setChartStock(code, name) {
 async function resolveChart(raw) {
   const v = (raw || '').trim();
   if (!v) return;
+  if (v === '코스피' || v === '코스닥') { setChartIndex(v === '코스피' ? 'kospi' : 'kosdaq'); return; }
   const digits = v.replace(/\D/g, '');
   if (digits.length === 6) { setChartStock(digits, ''); return; }
   try {
@@ -2092,7 +2112,8 @@ applyIdxView();
 renderPuSide();     // 프로그램 상위: 순매수/순매도 선택 UI
 renderPuMkt();      // 프로그램 상위: 시장 선택 UI
 renderChartTf();    // 종목 차트: 봉 주기 선택 UI
-if (chartCode) setChartStock(chartCode, '');   // 마지막 조회 종목 복원
+if (chartCode.startsWith('index:')) setChartIndex(chartCode.slice(6));
+else if (chartCode) setChartStock(chartCode, '');   // 마지막 조회 종목 복원
 renderSummaryCards(); // 지수현황 최초 즉시 조회
 setInterval(renderSummaryCards, 10000); // 지수현황은 10초마다 별도 갱신
 refresh();          // 최초 즉시 1회

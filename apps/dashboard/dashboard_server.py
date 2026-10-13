@@ -1192,6 +1192,13 @@ _CANDLE_TF = {
 def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
     """분/일/주/월봉 1페이지 조회. (행 리스트, 시간필드명, 응답 cont-yn, next-key) 반환."""
     api_id, list_key, tkey, extra = _CANDLE_TF[tf]
+    is_index = code.startswith('index:')
+    if is_index:
+        if code not in ('index:kospi', 'index:kosdaq'):
+            raise ValueError('지원하지 않는 지수')
+        api_id, list_key = ('ka20005', 'inds_min_pole_qry') if tf.endswith('m') else {
+            'D': ('ka20006', 'inds_dt_pole_qry'), 'W': ('ka20007', 'inds_stk_pole_qry'),
+            'M': ('ka20008', 'inds_mth_pole_qry')}[tf]
     url = 'https://api.kiwoom.com/api/dostk/chart'
     headers = {
         'Content-Type': 'application/json;charset=UTF-8',
@@ -1201,6 +1208,8 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
     # 거래소 접미사 없는 6자리는 통합(SOR/_AL, NXT+KRX 최우선)으로 조회
     stk_cd = code if '_' in code else f'{code}_AL'
     data = {'stk_cd': stk_cd, 'base_dt': now_kst().strftime('%Y%m%d'), 'upd_stkpc_tp': '1'}
+    if is_index:
+        data = {'inds_cd': '001' if code == 'index:kospi' else '101', 'base_dt': now_kst().strftime('%Y%m%d')}
     data.update(extra)
     resp = requests.post(url, headers=headers, json=data, timeout=15)
     resp.raise_for_status()
@@ -1209,7 +1218,14 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
         raise RuntimeError(f"차트 API 오류: {body.get('return_msg')}")
     cy = (resp.headers.get('cont-yn', '') or '').upper()
     nk = resp.headers.get('next-key', '') or ''
-    return body.get(list_key) or [], tkey, cy, nk
+    rows = body.get(list_key) or []
+    if is_index:
+        rows = [dict(row) for row in rows]
+        for row in rows:
+            for field in ('cur_prc', 'open_pric', 'high_pric', 'low_pric', 'pred_pre'):
+                if row.get(field) not in (None, ''):
+                    row[field] = to_number(row[field]) / 100
+    return rows, tkey, cy, nk
 
 
 def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
@@ -1263,7 +1279,7 @@ def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
                 'v': abs(to_number(r.get('trde_qty'))),
                 # 일봉은 백만원, 주/월봉은 원 단위. 분봉은 종가×거래량으로 추정.
                 'amount_eok': (abs(to_number(r.get('cur_prc'))) * abs(to_number(r.get('trde_qty'))) / 100_000_000
-                               if is_min and r.get('cur_prc') not in (None, '') and r.get('trde_qty') not in (None, '')
+                               if is_min and not code.startswith('index:') and r.get('cur_prc') not in (None, '') and r.get('trde_qty') not in (None, '')
                                else (abs(to_number(r['trde_prica'])) / (100 if tf == 'D' else 100_000_000)
                                      if not is_min and r.get('trde_prica') not in (None, '') else None)),
             })
@@ -1276,6 +1292,10 @@ def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
         items, session_open, cy, nk = run(cached_token())
     items = [it for it in items if it['t'] and it['h'] > 0]
     items.sort(key=lambda x: x['t'])
+    if code.startswith('index:') and tf == 'D':
+        for i, item in enumerate(items):
+            if item['previous_close'] is None and i:
+                item['previous_close'] = items[i - 1]['c']
     all_items = items
     if cont_yn == 'Y':
         pass
