@@ -275,7 +275,7 @@
 <div id="index-candle-panel" hidden>
   <div class="page-title"><span id="index-candle-name"></span><div style="display:flex;align-items:center;gap:8px;margin-left:auto"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="index-rsi-visible" type="checkbox" checked>RSI</label><select id="index-candle-tf" class="chart-sel" style="margin-left:0" aria-label="지수 차트 봉 주기"></select><button id="index-candle-more" class="prog-go" type="button" disabled>추가조회</button></div></div>
   <div class="combined-index-chart" style="max-width:1200px;margin:0 auto 12px;box-sizing:border-box">
-    <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div><div id="index-rsi-forecast" style="padding:8px;font-size:12px;line-height:1.6" hidden></div>
+    <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div><div id="index-rsi-forecast" style="padding:2px 8px;font-size:12px;line-height:1.3" hidden></div>
   </div>
 </div>
 <div class="page-title"><span>종목등락현황</span>
@@ -1240,7 +1240,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   items = fullItems.slice(start, end);
   const showRsi = hostId === 'index-candle-chart' && tf === 'D' && document.getElementById('index-rsi-visible').checked;
   if (hostId === 'index-candle-chart') document.getElementById('index-rsi-visible').parentElement.hidden = tf !== 'D';
-  const W = 760, H = showRsi ? 580 : 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
+  const W = 760, H = showRsi ? 560 : 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
   fullAverages.forEach(values => values.slice(start, end).forEach(value => {
@@ -1397,7 +1397,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   let rsiChart = '';
   if (showRsi) {
     const rsiValues = relativeStrengthIndex(fullItems, 14).slice(start, end);
-    const rsiTop = 470, rsiBottom = H - 30;
+    const rsiTop = 470, rsiBottom = H - 10;
     const rsiY = value => rsiBottom - value / 100 * (rsiBottom - rsiTop);
     const lastRsi = rsiValues[rsiValues.length - 1];
     rsiChart = `<g class="candle-rsi" data-period="14"><line x1="${mL}" x2="${mL+iw}" y1="450" y2="450" stroke="#d5d8dd"/>`
