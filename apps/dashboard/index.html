@@ -1151,7 +1151,7 @@ let chartCode = '', chartName = '', chartTf = 'D';
 try { chartTf = localStorage.getItem('stock_chart_tf') || 'D'; } catch (e) {}
 try { chartCode = localStorage.getItem('stock_chart_code') || ''; } catch (e) {}
 
-const CHART_MAS = [[5, '#ff00ff'], [10, '#0000ff'], [20, '#ffa500'], [60, '#84cc16'], [120, '#000000'], [200, '#9333ea']];
+const CHART_MAS = [[5, '#ff00ff'], [10, '#0000ff'], [20, '#ffa500'], [60, '#84cc16'], [120, '#000000'], [200, '#a52a2a']];
 
 // 종가 기준 단순이동평균: 필요한 봉 수가 쌓인 지점부터 표시한다.
 function movingAverage(items, period) {
@@ -1254,10 +1254,10 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const averages = CHART_MAS.map(([period, color], index) => {
     const values = fullAverages[index].slice(start, end);
     const points = values.flatMap((value, i) => value === null ? [] : [`${xc(i).toFixed(1)},${y(value).toFixed(1)}`]);
-    return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+    return points.length ? `<polyline data-ma="${period}" points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="${period >= 20 ? 3 : 1.5}" stroke-linejoin="round" stroke-linecap="round"/>` : '';
   }).join('');
   const legend = CHART_MAS.map(([period, color]) =>
-    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;border-top:2px solid ${color}"></span>${period}</span>`
+    `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:8px;border-top:${period >= 20 ? 4 : 2}px solid ${color}"></span>${period}</span>`
   ).join('');
   const lastCandle = items[items.length - 1];
   const previousClose = isMin ? fullItems[end - 2]?.c : lastCandle.previous_close;
