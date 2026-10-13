@@ -272,9 +272,11 @@
 <div id="nikkei-index" class="nasfut"></div>
 <div id="taiwan-index" class="nasfut"></div>
 <div class="mkt-cards" id="mkt-cards"></div>
-<div id="index-candle-panel" class="combined-index-chart" style="max-width:1200px;margin:0 auto 12px;box-sizing:border-box" hidden>
-  <div style="display:flex;align-items:center;gap:8px;padding:4px 8px"><b id="index-candle-name"></b><select id="index-candle-tf" aria-label="지수 차트 봉 주기"></select><button id="index-candle-more" class="prog-go" type="button" style="margin-left:auto" disabled>추가조회</button></div>
-  <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div>
+<div id="index-candle-panel" hidden>
+  <div class="page-title"><span id="index-candle-name"></span><select id="index-candle-tf" class="chart-sel" aria-label="지수 차트 봉 주기"></select><button id="index-candle-more" class="prog-go" type="button" disabled>추가조회</button></div>
+  <div class="combined-index-chart" style="max-width:1200px;margin:0 auto 12px;box-sizing:border-box">
+    <div id="index-candle-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="index-candle-chart"></div>
+  </div>
 </div>
 <div class="page-title"><span>종목등락현황</span>
   <button id="toggle-breadth" class="view-btn" type="button">접기 ▾</button></div>
