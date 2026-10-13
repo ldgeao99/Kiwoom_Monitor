@@ -137,6 +137,11 @@ def send_telegram_message(text):
         print(f'[텔레그램 에러] {e}')
 
 
+def notify_server_started():
+    timestamp = now_kst().strftime('%Y-%m-%d %H:%M:%S KST')
+    send_telegram_message(f'🚀 Monitor 서버가 (재)시작되었습니다.\n시각: {timestamp}')
+
+
 # ─────────────────────────── 데이터 수집 ───────────────────────────
 
 def snapshot_path(market_key, date_str):
@@ -1458,6 +1463,7 @@ def main():
     stock_items()    # 종목명 맵(ka10099) 예열 — 콘솔에 개수/에러 출력
 
     with ThreadingHTTPServer(('', port), Handler) as httpd:
+        threading.Thread(target=notify_server_started, daemon=True).start()
         print(f'>>> 추이 서버 실행: http://localhost:{port}  (JSONL 수집 {"ON" if collecting else "OFF"})')
         print('>>> 브라우저는 60초마다 /api/netprps 를 요청해 화면을 갱신합니다.')
         print('>>> 종료하려면 Ctrl+C')
