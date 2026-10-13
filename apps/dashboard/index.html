@@ -1239,11 +1239,6 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const fmt = t => isMin
     ? (t.length >= 12 ? t.slice(8,10)+':'+t.slice(10,12) : t)
     : (t.length >= 8 ? t.slice(4,6)+'/'+t.slice(6,8) : t);
-  let xlab = ''; const step = Math.max(1, Math.ceil(n / 6));
-  for (let i = 0; i < n; i += step) {
-    const xx = xc(i);
-    xlab += `<text x="${xx.toFixed(1)}" y="${priceH-6}" font-size="10" fill="#000000" text-anchor="middle">${fmt(items[i].t)}</text>`;
-  }
 
   // 분봉은 거래일, 일봉은 표시 봉 수에 따라 월/연 경계를 표시한다.
   let daySeparators = '';
@@ -1406,7 +1401,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const svg = host.querySelector('svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.dataset.visibleCandles = n;
-  svg.innerHTML = grid + daySeparators + body + averages + rsiSignals + xlab + closeMarker + amountChart + rsiChart + dateAxis;
+  svg.innerHTML = grid + daySeparators + body + averages + rsiSignals + closeMarker + amountChart + rsiChart + dateAxis;
 }
 
 let indexCandleViewCount = null, indexCandleViewOffset = 0;
