@@ -1450,14 +1450,14 @@ function updateCandleMore() {
   btn.disabled = candleLoading || (!candleHistory.length && !(candleCont === 'Y' && candleNext));
   btn.textContent = candleLoading ? '불러오는 중…' : '추가조회';
 }
-async function loadCandles(more = false) {
+async function loadCandles(more = false, preserveView = false) {
   if (more && (candleLoading || (!candleHistory.length && !(candleCont === 'Y' && candleNext)))) return;
   const generation = more ? candleGeneration : ++candleGeneration;
   const code = chartCode, tf = chartTf;
   const host = document.getElementById('stock-chart');
   if (!more) {
     candleItems = []; candleHistory = []; candleNext = ''; candleCont = 'N';
-    candleViewCount = null; candleViewOffset = 0;
+    if (!preserveView) { candleViewCount = null; candleViewOffset = 0; }
   }
   candleLoading = true; updateCandleMore();
   try {
@@ -1477,6 +1477,8 @@ async function loadCandles(more = false) {
     const merged = new Map((more ? candleItems : []).map(item => [item.t, item]));
     (data.items || []).forEach(item => merged.set(item.t, item));
     candleItems = [...merged.values()].sort((a, b) => a.t.localeCompare(b.t));
+    const visibleCount = Math.min(candleViewCount || candleItems.length, candleItems.length);
+    candleViewOffset = Math.max(0, Math.min(candleViewOffset, candleItems.length - visibleCount));
     candleHistory = data.history || [];
     candleCont = data.cont || 'N'; candleNext = data.next || '';
     document.getElementById('chart-name').textContent = '';
@@ -1576,7 +1578,7 @@ function setChartIndex(market) {
   document.getElementById('chart-code').value = chartName;
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
   document.getElementById('chart-name').textContent = '';
-  return loadCandles();
+  return loadCandles(false, true);
 }
 
 function setChartStock(code, name) {
@@ -1585,7 +1587,7 @@ function setChartStock(code, name) {
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
   restoreStockInput(chartCode, chartName, 'stock_chart_code', 'chart-code');
   const nm = document.getElementById('chart-name'); if (nm) nm.textContent = '';
-  return loadCandles();
+  return loadCandles(false, true);
 }
 
 async function resolveChart(raw) {
