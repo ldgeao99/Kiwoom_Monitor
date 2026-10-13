@@ -1228,7 +1228,7 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
     return rows, tkey, cy, nk
 
 
-def build_candles(code, tf, limit=140, cont_yn='N', next_key=''):
+def build_candles(code, tf, limit=240, cont_yn='N', next_key=''):
     """종목 캔들 차트(시간 오름차순 OHLCV).
     분봉(1/3/10/15분)은 '최신 거래일 세션'을 장시작(09:00)까지 자동 연속조회해서 보여준다.
     (오늘 데이터가 있으면 오늘 09:00~현재, 장 전/휴장이면 직전 거래일 09:00~마감).
