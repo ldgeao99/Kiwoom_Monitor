@@ -1277,7 +1277,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     signalValues.forEach((value, i) => {
       if (!Number.isFinite(value) || value > 30) return;
       const xx = xc(i), tip = Math.min(priceH - mB - 14, y(items[i].l) + 5);
-      rsiSignals += `<g class="rsi-oversold-arrow" data-time="${items[i].t}" data-rsi="${value}"><title>RSI ${value.toFixed(2)} · 30 이하</title><path d="M${xx},${tip} l-4,6 h2 v7 h4 v-7 h2 Z" fill="#a21caf"/></g>`;
+      rsiSignals += `<g class="rsi-oversold-arrow" data-time="${items[i].t}" data-rsi="${value}"><title>RSI ${value.toFixed(2)} · 30 이하</title><path d="M${xx},${tip} l-4,6 h2 v7 h4 v-7 h2 Z" fill="#ff00ff"/></g>`;
     });
   }
 
@@ -1388,9 +1388,11 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     else rsiChart += `<text x="${mL+iw/2}" y="${rsiTop+55}" text-anchor="middle" font-size="11" fill="#6b7280">RSI 계산에 15개 이상의 캔들이 필요합니다.</text>`;
     if (Number.isFinite(lastRsi)) {
       const labelY = Math.max(rsiTop + 10, Math.min(rsiBottom - 10, rsiY(lastRsi)));
+      const rsiBackground = lastRsi < 30 ? '#ff00ff' : '#d1d5db';
+      const rsiForeground = lastRsi < 30 ? '#ffffff' : '#374151';
       rsiChart += `<g class="current-rsi-label" data-rsi="${lastRsi}"><title>마지막 표시 봉 RSI ${lastRsi.toFixed(2)}</title>`
-        + `<rect x="${mL+iw+3}" y="${labelY-10}" width="${mR-3}" height="20" rx="3" fill="#d1d5db"/>`
-        + `<text x="${mL+iw+mR/2}" y="${labelY+4}" font-size="11" fill="#374151" text-anchor="middle">${lastRsi.toFixed(2)}</text></g>`;
+        + `<rect x="${mL+iw+3}" y="${labelY-10}" width="${mR-3}" height="20" rx="3" fill="${rsiBackground}"/>`
+        + `<text x="${mL+iw+mR/2}" y="${labelY+4}" font-size="11" fill="${rsiForeground}" text-anchor="middle">${lastRsi.toFixed(2)}</text></g>`;
     }
     rsiChart += '</g>';
   }
