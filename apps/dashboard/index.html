@@ -1226,16 +1226,9 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     if (tf === 'D') {
       const today = rsiThirtyThreshold(fullItems.slice(0, -1));
       const tomorrow = rsiThirtyThreshold(fullItems);
-      const format = result => !result ? '계산에 필요한 데이터가 부족합니다.'
-        : result.price <= 0 ? '양수 지수 범위에서는 RSI 30 이하에 도달할 수 없습니다.'
-        : `${(Math.floor(result.price * 100) / 100).toLocaleString('ko-KR', {minimumFractionDigits:2,maximumFractionDigits:2})}포인트 ${result.strict ? '미만' : '이하'}`;
-      const latest = fullItems[fullItems.length - 1];
-      forecast.replaceChildren();
-      [`RSI 30 이하 종가 기준 · 최근 일봉 ${latest.t.slice(0,4)}/${latest.t.slice(4,6)}/${latest.t.slice(6,8)}`,
-       `오늘: ${format(today)}`, `내일: ${format(tomorrow)}`,
-       `내일 기준은 오늘 종가가 현재 ${fmtIdx(latest.c)}포인트로 확정된다고 가정합니다.`].forEach(text => {
-        const row = document.createElement('div'); row.textContent = text; forecast.append(row);
-      });
+      const format = result => !result || result.price <= 0 || result.strict ? '-'
+        : result.price.toLocaleString('ko-KR', {minimumFractionDigits:2,maximumFractionDigits:2});
+      forecast.textContent = `RSI 값이 30인 지점(오늘 : ${format(today)}, 내일 : ${format(tomorrow)})`;
     }
   }
   const offset = hostId === 'index-candle-chart' ? indexCandleViewOffset : candleViewOffset;
