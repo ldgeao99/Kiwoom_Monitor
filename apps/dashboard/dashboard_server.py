@@ -1359,7 +1359,7 @@ def build_stock_investors(code, cont='N', next_key='', mode='1'):
         body = response.json()
         if body.get('return_code') not in (None, 0):
             raise RuntimeError(body.get('return_msg') or '투자자 수급 조회 실패')
-        fields = ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund']
+        fields = ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund','etc_corp']
         items = [{'date':str(row.get('dt', '')), **{field:to_number(row[field]) / (100 if mode == '1' else 1)
                  if row.get(field) not in (None, '') else None for field in fields}}
                  for row in body.get('stk_invsr_orgn', [])]

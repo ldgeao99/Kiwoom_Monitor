@@ -1644,11 +1644,11 @@ async function renderStockInvestors(more = false) {
     const top = host.scrollTop;
     const table = document.createElement('table'); table.className = 'prog-tbl';
     const header = table.createTHead().insertRow();
-    ['일자','개인','외국인','기관계','금융투자','투신','연기금','사모펀드'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+    ['일자','개인','외국인','기관계','금융투자','투신','연기금','사모펀드','기타법인'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
     const body = table.createTBody();
     investorItems.forEach(item=>{
       const row = body.insertRow(); row.insertCell().textContent = item.date.slice(0,4)+'/'+item.date.slice(4,6)+'/'+item.date.slice(6,8);
-      ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund'].forEach(key=>{
+      ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund','etc_corp'].forEach(key=>{
         const cell=row.insertCell(), value=item[key];cell.className=cls(value);
         cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:investorMode === '1' ? 2 : 0});
       });
