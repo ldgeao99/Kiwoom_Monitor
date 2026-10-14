@@ -592,7 +592,7 @@ function renderChart() {
   for (let k = 0; k <= ticks; k++) {
     const v = vmin + (vmax - vmin) * k / ticks, yy = y(v);
     grid += `<line x1="${mL}" y1="${yy}" x2="${mL+iw}" y2="${yy}" stroke="#eceef1"/>`;
-    grid += `<text class="chart-y-label" x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
+    grid += `<text class="chart-y-label" x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#000000">${Math.round(v).toLocaleString()}</text>`;
   }
   if (vmin < 0 && vmax > 0) {
     const y0 = y(0);
