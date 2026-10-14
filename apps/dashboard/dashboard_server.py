@@ -1345,6 +1345,32 @@ def build_credit_ratio(code):
     return data
 
 
+def build_stock_investors(code, cont='N', next_key=''):
+    if len(code) != 6 or not code.isdigit():
+        raise ValueError('종목코드는 6자리 숫자여야 합니다.')
+    def request(token):
+        response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
+            'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {token}',
+            'api-id':'ka10059', 'cont-yn':cont, 'next-key':next_key},
+            json={'stk_cd':code, 'dt':now_kst().strftime('%Y%m%d'), 'amt_qty_tp':'1',
+                  'trde_tp':'0', 'unit_tp':'1'}, timeout=15)
+        response.raise_for_status()
+        body = response.json()
+        if body.get('return_code') not in (None, 0):
+            raise RuntimeError(body.get('return_msg') or '투자자 수급 조회 실패')
+        fields = ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund']
+        items = [{'date':str(row.get('dt', '')), **{field:to_number(row[field]) / 100
+                 if row.get(field) not in (None, '') else None for field in fields}}
+                 for row in body.get('stk_invsr_orgn', [])]
+        return {'code':code, 'items':sorted(items,key=lambda item:item['date'],reverse=True),
+                'cont':response.headers.get('cont-yn','N'), 'next':response.headers.get('next-key',''), 'unit':'억'}
+    try:
+        return request(cached_token())
+    except Exception:
+        _token_cache['token'] = None
+        return request(cached_token())
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1421,6 +1447,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0])
                 except Exception as e:
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/stock_investors':
+            qs = parse_qs(parsed.query)
+            try:
+                payload = build_stock_investors(qs.get('code',[''])[0], qs.get('cont',['N'])[0], qs.get('next',[''])[0])
+            except Exception as error:
+                payload = {'items':[], 'error':str(error)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/credit_ratio':

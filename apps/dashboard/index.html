@@ -357,6 +357,11 @@
     <div id="stock-chart"></div>
   </div>
 </div>
+<div id="stock-investor-section">
+  <div class="page-title"><span>종목별 투자자 수급</span><small id="stock-investor-name" style="font-size:12px;font-weight:400"></small><button id="stock-investor-more" class="prog-go" style="margin-left:auto" type="button" disabled>추가조회</button></div>
+  <div class="prog-wrap panel" style="padding:8px;box-sizing:border-box"><div id="stock-investor-status" role="status" style="font-size:12px">종목을 선택하세요.</div><div id="stock-investor-table" style="max-height:204px;overflow:auto"></div></div>
+</div>
+
 <script>
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
 let selected = null;           // Set<key> — 표시할 투자자
@@ -1612,6 +1617,52 @@ attachCandleGestures('index-candle-chart', {
   get offset() { return indexCandleViewOffset; }, set offset(value) { indexCandleViewOffset = value; }
 });
 
+let investorGeneration = 0, investorItems = [], investorNext = '', investorCont = 'N', investorLoading = false;
+async function renderStockInvestors(more = false) {
+  if (more && (investorLoading || investorCont !== 'Y' || !investorNext)) return;
+  const generation = more ? investorGeneration : ++investorGeneration, code = chartCode;
+  const section = document.getElementById('stock-investor-section');
+  const host = document.getElementById('stock-investor-table'), status = document.getElementById('stock-investor-status');
+  const button = document.getElementById('stock-investor-more');
+  section.hidden = code.startsWith('index:');
+  if (!/^\d{6}$/.test(code)) { host.replaceChildren(); status.textContent = '종목을 선택하세요.'; button.disabled = true; return; }
+  document.getElementById('stock-investor-name').textContent = chartName || code;
+  if (!more) { investorItems = []; investorNext = ''; investorCont = 'N'; host.replaceChildren(); }
+  investorLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
+  try {
+    const url = '/api/stock_investors?code=' + encodeURIComponent(code)
+      + (more ? '&cont=Y&next=' + encodeURIComponent(investorNext) : '');
+    const response = await fetch(url, {cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (generation !== investorGeneration || code !== chartCode) return;
+    if (data.error) throw new Error(data.error);
+    const merged = new Map(investorItems.map(item=>[item.date,item]));
+    (data.items || []).forEach(item=>merged.set(item.date,item));
+    investorItems = [...merged.values()].sort((a,b)=>b.date.localeCompare(a.date));
+    investorCont = data.cont || 'N'; investorNext = data.next || '';
+    const top = host.scrollTop;
+    const table = document.createElement('table'); table.className = 'prog-tbl';
+    const header = table.createTHead().insertRow();
+    ['일자','개인','외국인','기관계','금융투자','투신','연기금','사모펀드'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+    const body = table.createTBody();
+    investorItems.forEach(item=>{
+      const row = body.insertRow(); row.insertCell().textContent = item.date.slice(0,4)+'/'+item.date.slice(4,6)+'/'+item.date.slice(6,8);
+      ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund'].forEach(key=>{
+        const cell=row.insertCell(), value=item[key];cell.className=cls(value);
+        cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:2});
+      });
+    });
+    host.replaceChildren(table); host.scrollTop=top;
+    status.textContent = investorItems.length ? '순매수금액 · 단위: 억원 · 기관계에는 기관 세부 항목이 포함됩니다.' : '제공된 수급 데이터가 없습니다.';
+  } catch(error) {
+    if (generation === investorGeneration && code === chartCode) status.textContent='수급 조회 실패: '+error.message;
+  } finally {
+    if (generation === investorGeneration) { investorLoading=false;button.disabled=!(investorCont==='Y'&&investorNext); }
+  }
+}
+document.getElementById('stock-investor-more').addEventListener('click',()=>renderStockInvestors(true));
+
 let creditRatioGeneration = 0;
 async function renderCreditRatio() {
   const generation = ++creditRatioGeneration, code = chartCode;
@@ -1635,6 +1686,7 @@ function setChartIndex(market) {
   if (!['kospi','kosdaq'].includes(market)) return;
   chartCode = 'index:' + market;
   renderCreditRatio();
+  renderStockInvestors();
   chartName = market === 'kospi' ? '코스피' : '코스닥';
   document.getElementById('chart-code').value = chartName;
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
@@ -1646,6 +1698,7 @@ function setChartStock(code, name) {
   chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
   chartName = name || '';
   renderCreditRatio();
+  renderStockInvestors();
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
   restoreStockInput(chartCode, chartName, 'stock_chart_code', 'chart-code');
   const nm = document.getElementById('chart-name'); if (nm) nm.textContent = '';
@@ -2093,6 +2146,7 @@ async function renderPrmUpper() {
 
 async function refresh() {
   renderCreditRatio();
+  renderStockInvestors();
   renderRank();           // 조회수 상위 종목 갱신
   loadAmountRank();        // 거래대금 상위 종목 갱신
   renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
