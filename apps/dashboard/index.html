@@ -359,7 +359,7 @@
 </div>
 <div id="stock-investor-section">
   <div class="page-title"><span>종목별 투자자 수급</span><button id="stock-investor-more" class="prog-go" style="margin-left:auto" type="button" disabled>추가조회</button></div>
-  <div class="prog-wrap panel" style="padding:8px;box-sizing:border-box"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px">종목을 선택하세요.</div><div id="stock-investor-table" style="max-height:204px;overflow:auto"></div></div>
+  <div class="prog-wrap panel" style="padding:8px;box-sizing:border-box"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액(억)</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px">종목을 선택하세요.</div><div id="stock-investor-table" style="max-height:204px;overflow:auto"></div></div>
 </div>
 
 <script>
@@ -1654,7 +1654,7 @@ async function renderStockInvestors(more = false) {
       });
     });
     host.replaceChildren(table); host.scrollTop=top;
-    status.textContent = investorItems.length ? `KRX·NXT 통합 · 순매수${investorMode === '1' ? '금액 · 단위: 억원' : '수량 · 단위: 주'} · 기관계에는 기관 세부 항목이 포함됩니다.` : '제공된 수급 데이터가 없습니다.';
+    status.textContent = investorItems.length ? '' : '제공된 수급 데이터가 없습니다.';
   } catch(error) {
     if (generation === investorGeneration && code === investorCode) status.textContent='수급 조회 실패: '+error.message;
   } finally {
