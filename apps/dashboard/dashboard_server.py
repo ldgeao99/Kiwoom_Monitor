@@ -577,7 +577,7 @@ def send_investor_digest(now, slot):
     금·목요일 데이터가 나온다(주말/공휴일 자동 건너뜀)."""
     today = now.strftime('%Y-%m-%d')
     dates = [today] + _prev_data_dates(today, 4)   # 오늘 + 직전 거래일 4개(총 5일)
-    lines = [f"🟩 {now.strftime('%H시%M분')} KOSPI 외국인, 기관 매매동향"]
+    lines = [f"🟩 {now.strftime('%H시%M분')} KOSPI 외국인, 기관, 합 매매동향"]
     for d in dates:
         dt = datetime.strptime(d, '%Y-%m-%d')
         lab = f"{dt.strftime('%m/%d')}({_WEEKDAYS[dt.weekday()]})"
@@ -588,7 +588,7 @@ def send_investor_digest(now, slot):
         else:
             f = int(rec.get('frgnr_netprps', 0))
             o = int(rec.get('orgn_netprps', 0))
-            lines.append(f"{lab} : {f:+,}억 / {o:+,}억{tail}")
+            lines.append(f"{lab} : {f:+,}억/{o:+,}억/{f + o:+,}억{tail}")
     send_telegram_message("\n".join(lines))
     print(f"  → 다이제스트 전송({slot})")
 
