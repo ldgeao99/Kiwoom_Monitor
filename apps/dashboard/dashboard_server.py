@@ -1353,7 +1353,7 @@ def build_stock_investors(code, cont='N', next_key='', mode='1'):
         response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
             'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {token}',
             'api-id':'ka10059', 'cont-yn':cont, 'next-key':next_key},
-            json={'stk_cd':code, 'dt':now_kst().strftime('%Y%m%d'), 'amt_qty_tp':mode,
+            json={'stk_cd':code + '_AL', 'dt':now_kst().strftime('%Y%m%d'), 'amt_qty_tp':mode,
                   'trde_tp':'0', 'unit_tp':'1'}, timeout=15)
         response.raise_for_status()
         body = response.json()

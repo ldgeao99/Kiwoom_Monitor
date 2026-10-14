@@ -1654,7 +1654,7 @@ async function renderStockInvestors(more = false) {
       });
     });
     host.replaceChildren(table); host.scrollTop=top;
-    status.textContent = investorItems.length ? `순매수${investorMode === '1' ? '금액 · 단위: 억원' : '수량 · 단위: 주'} · 기관계에는 기관 세부 항목이 포함됩니다.` : '제공된 수급 데이터가 없습니다.';
+    status.textContent = investorItems.length ? `KRX·NXT 통합 · 순매수${investorMode === '1' ? '금액 · 단위: 억원' : '수량 · 단위: 주'} · 기관계에는 기관 세부 항목이 포함됩니다.` : '제공된 수급 데이터가 없습니다.';
   } catch(error) {
     if (generation === investorGeneration && code === investorCode) status.textContent='수급 조회 실패: '+error.message;
   } finally {
