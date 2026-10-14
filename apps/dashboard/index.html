@@ -23,6 +23,7 @@
   @keyframes ptr-rot { to { transform:rotate(360deg); } }
   .wrap { display:grid; grid-template-columns:1fr; gap:14px; max-width:1200px; margin:0 auto; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .chart-y-label, .last-close-label text, .current-amount-label text, .current-rsi-label text, .combined-current-label text { font-size:16px; font-weight:600; }
   .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .title small { color:var(--muted); font-weight:400; }
@@ -570,7 +571,7 @@ function renderChart() {
   if (!cols.length) { host.innerHTML = '<div class="empty">위에서 투자자를 선택하세요.</div>'; return; }
   if (pts.length < 2) { host.innerHTML = '<div class="empty">차트를 그리려면 2개 이상의 스냅샷이 필요합니다.</div>'; return; }
 
-  const W = 760, H = 420, mL = 8, mR = 56, mT = 16, mB = 28;
+  const W = 760, H = 420, mL = 8, mR = 96, mT = 16, mB = 28;
   const iw = W - mL - mR, ih = H - mT - mB;
 
   let vmin = 0, vmax = 0;
@@ -591,7 +592,7 @@ function renderChart() {
   for (let k = 0; k <= ticks; k++) {
     const v = vmin + (vmax - vmin) * k / ticks, yy = y(v);
     grid += `<line x1="${mL}" y1="${yy}" x2="${mL+iw}" y2="${yy}" stroke="#eceef1"/>`;
-    grid += `<text x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
+    grid += `<text class="chart-y-label" x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#9aa0a8">${Math.round(v).toLocaleString()}</text>`;
   }
   if (vmin < 0 && vmax > 0) {
     const y0 = y(0);
@@ -748,7 +749,7 @@ function mktCard(m, strong) {
 
 // 두 시장을 같은 시간축과 전일 종가 대비 등락률 축으로 비교한다.
 function combinedIndexChart(markets) {
-  const W = 900, H = 540, left = 20, right = 80, top = 12, bottom = 28;
+  const W = 900, H = 540, left = 20, right = 112, top = 12, bottom = 28;
   const iw = W - left - right, ih = H - top - bottom;
   const series = ['kospi', 'kosdaq'].map((key, index) => {
     const market = markets.find(m => m.key === key);
@@ -779,7 +780,7 @@ function combinedIndexChart(markets) {
   let drawing = '';
   for (let i = 0; i <= 4; i++) {
     const value = lo + (hi - lo) * i / 4, yy = y(value);
-    drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text class="combined-percent-tick" x="${W-right+6}" y="${yy+4}" text-anchor="start" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
+    drawing += `<line x1="${left}" x2="${W-right}" y1="${yy}" y2="${yy}" stroke="#eceef1"/><text class="combined-percent-tick chart-y-label" x="${W-right+6}" y="${yy+4}" text-anchor="start" font-size="11" fill="#000000">${value.toFixed(2)}%</text>`;
   }
   drawing += `<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="#9ca3af"/>`;
   const tickStep = [1, 2, 5, 10, 15, 30, 60, 120].find(step => step >= span / 6);
@@ -1241,7 +1242,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   items = fullItems.slice(start, end);
   const showRsi = hostId === 'index-candle-chart' && tf === 'D' && document.getElementById('index-rsi-visible').checked;
   if (hostId === 'index-candle-chart') document.getElementById('index-rsi-visible').parentElement.hidden = tf !== 'D';
-  const W = 760, H = showRsi ? 560 : 450, priceH = 300, mL = 8, mR = 64, mT = 10, mB = 22;
+  const W = 760, H = showRsi ? 560 : 450, priceH = 300, mL = 8, mR = 96, mT = 10, mB = 22;
   const iw = W - mL - mR, ih = priceH - mT - mB, n = items.length;
   let lo = Math.min(...items.map(d => d.l)), hi = Math.max(...items.map(d => d.h));
   fullAverages.forEach(values => values.slice(start, end).forEach(value => {
@@ -1262,7 +1263,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   for (let v = firstPriceTick; v <= hi; v += priceStep) {
     const yy = y(v);
     grid += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
-    grid += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${isIndexChart ? fmtIdx(v) : Math.round(v).toLocaleString()}</text>`;
+    grid += `<text class="chart-y-label" x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${isIndexChart ? fmtIdx(v) : Math.round(v).toLocaleString()}</text>`;
   }
 
   const isMin = tf.endsWith('m');
@@ -1323,11 +1324,11 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   const closeBackground = rising ? '#e5484d' : falling ? '#2563eb' : '#d1d5db';
   const closeForeground = rising || falling ? '#ffffff' : '#374151';
   const closeLabel = isIndexChart ? fmtIdx(lastCandle.c) : lastCandle.c.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
-  const closeFit = closeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
+  const closeFit = closeLabel.length > 7 ? ' textLength="80" lengthAdjust="spacingAndGlyphs"' : '';
   const closeY = Math.max(mT + 10, Math.min(priceH - mB - 10, y(lastCandle.c)));
   const closeChange = comparable ? (lastCandle.c / previousClose - 1) * 100 : null;
   const changeLabel = closeChange === null ? '' : `${closeChange > 0 ? '+' : ''}${closeChange.toFixed(2)}%`;
-  const changeFit = changeLabel.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
+  const changeFit = changeLabel.length > 7 ? ' textLength="80" lengthAdjust="spacingAndGlyphs"' : '';
   const changeMarker = comparable
     ? `<g class="last-close-change-label"><rect x="${mL+iw+3}" y="${(closeY+12).toFixed(1)}" width="${mR-3}" height="16" fill="#ffffff"/>`
       + `<text class="last-close-change" x="${mL+iw+mR/2}" y="${(closeY+23).toFixed(1)}" font-size="11" fill="${closeBackground}" text-anchor="middle"${changeFit}>${changeLabel}</text></g>` : '';
@@ -1355,7 +1356,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     for (let value = 0; value <= amountMax; value += amountStep) {
       const yy = amountY(value);
       amountChart += `<line x1="${mL}" y1="${yy.toFixed(1)}" x2="${mL+iw}" y2="${yy.toFixed(1)}" stroke="#eceef1"/>`;
-      if (!isIndexChart || value !== 0) amountChart += `<text x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
+      if (!isIndexChart || value !== 0) amountChart += `<text class="chart-y-label" x="${mL+iw+6}" y="${(yy+4).toFixed(1)}" font-size="11" fill="#000000">${value.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</text>`;
     }
     amounts.forEach((amount, i) => {
       if (amount === null) return;
@@ -1366,7 +1367,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
   if (hasLatestAmount && (!isIndexChart || latestAmount !== 0)) {
     const labelY = amountY(latestAmount);
     const label = latestAmount.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
-    const fit = label.length > 7 ? ' textLength="50" lengthAdjust="spacingAndGlyphs"' : '';
+    const fit = label.length > 7 ? ' textLength="80" lengthAdjust="spacingAndGlyphs"' : '';
     amountChart += `<g class="current-amount-label" data-amount="${latestAmount}">`
       + `<title>마지막 표시 봉 거래대금 ${amountFmt(latestAmount)}억</title>`
       + `<rect x="${mL+iw+3}" y="${(labelY-10).toFixed(1)}" width="${mR-3}" height="20" rx="3" fill="#d1d5db"/>`
@@ -1406,7 +1407,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     [30, 70].forEach(value => {
       const yy = rsiY(value);
       rsiChart += `<line x1="${mL}" x2="${mL+iw}" y1="${yy}" y2="${yy}" stroke="${value === 30 || value === 70 ? '#9ca3af' : '#eceef1'}"/>`
-        + `<text x="${mL+iw+6}" y="${yy+4}" font-size="10" fill="#000000">${value}</text>`;
+        + `<text class="chart-y-label" x="${mL+iw+6}" y="${yy+4}" font-size="10" fill="#000000">${value}</text>`;
     });
     const rsiPoints = rsiValues.flatMap((value,i) => value === null ? [] : [`${xc(i).toFixed(1)},${rsiY(value).toFixed(1)}`]);
     if (rsiPoints.length) rsiChart += `<polyline class="rsi-line" points="${rsiPoints.join(' ')}" fill="none" stroke="#f97316" stroke-width="1.2"/>`;
@@ -1546,7 +1547,7 @@ function attachCandleGestures(hostId, state) {
   const beginPan = touch => {
     const rect = host.querySelector('svg').getBoundingClientRect();
     pan = { x: touch.clientX, y: touch.clientY, offset: state.offset,
-            count: state.count || state.items.length, width: rect.width * 688 / 760,
+            count: state.count || state.items.length, width: rect.width * 656 / 760,
             horizontal: false, generation: state.generation };
   };
   host.addEventListener('touchstart', event => {
@@ -1559,7 +1560,7 @@ function attachCandleGestures(hostId, state) {
     event.preventDefault();
     const rect = host.querySelector('svg').getBoundingClientRect();
     const center = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-    const fraction = Math.max(0, Math.min(1, ((center - rect.left) / rect.width * 760 - 8) / 688));
+    const fraction = Math.max(0, Math.min(1, ((center - rect.left) / rect.width * 760 - 8) / 656));
     const count = Math.min(state.count || state.items.length, state.items.length);
     const end = state.items.length - state.offset;
     pinch = { gap, count, fraction, anchor: end - count + count * fraction, generation: state.generation };
@@ -1660,7 +1661,7 @@ let progStk = (function () {
 function drawProgramChart(series) {
   const host = document.getElementById('prog-chart');
   if (!series || series.length < 2) { host.innerHTML = '<div class="empty">데이터가 없습니다(장중에 조회하세요).</div>'; return; }
-  const W = 760, H = 280, mL = 8, mR = 70, mT = 22, mB = 24;
+  const W = 760, H = 280, mL = 8, mR = 96, mT = 22, mB = 24;
   const iw = W - mL - mR, ih = H - mT - mB;
   const GREEN = '#16a34a';
 
@@ -1677,7 +1678,7 @@ function drawProgramChart(series) {
   for (let k = 0; k <= ticks; k++) {
     const v = vmin + (vmax - vmin) * k / ticks, yy = y(v);
     grid += `<line x1="${mL}" y1="${yy}" x2="${mL+iw}" y2="${yy}" stroke="#eceef1"/>`;
-    grid += `<text x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#000000">${Math.round(v).toLocaleString()}</text>`;
+    grid += `<text class="chart-y-label" x="${mL+iw+6}" y="${yy+4}" font-size="11" fill="#000000">${Math.round(v).toLocaleString()}</text>`;
   }
   if (vmin < 0 && vmax > 0) grid += `<line x1="${mL}" y1="${y(0).toFixed(1)}" x2="${mL+iw}" y2="${y(0).toFixed(1)}" stroke="#c7ccd2"/>`;
 
