@@ -1668,23 +1668,23 @@ async function renderCreditRatio() {
   const generation = ++creditRatioGeneration, code = chartCode;
   const host = document.getElementById('stock-credit-ratio');
   if (!/^\d{6}$/.test(code)) { host.textContent = ''; return; }
-  host.textContent = '신용잔고율 조회 중…';
+  host.textContent = '신용잔고 조회 중…';
   try {
     const response = await fetch('/api/credit_ratio?code=' + encodeURIComponent(code), {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     if (generation !== creditRatioGeneration || code !== chartCode) return;
     if (data.error) throw new Error(data.error);
-    if (data.ratio == null) host.textContent = '신용잔고율 미제공';
+    if (data.ratio == null) host.textContent = '신용잔고 미제공';
     else {
       const ratio = document.createElement('span');
       ratio.textContent = data.ratio.toFixed(2) + '%';
       if (data.ratio >= 4) ratio.className = 'pos';
       const date = data.date === data.today ? '' : ' (' + data.date.slice(4,6) + '/' + data.date.slice(6,8) + ')';
-      host.replaceChildren(document.createTextNode('신용잔고율 '), ratio, document.createTextNode(date));
+      host.replaceChildren(document.createTextNode('신용잔고 '), ratio, document.createTextNode(date));
     }
   } catch(error) {
-    if (generation === creditRatioGeneration && code === chartCode) host.textContent = '신용잔고율 조회 실패';
+    if (generation === creditRatioGeneration && code === chartCode) host.textContent = '신용잔고 조회 실패';
   }
 }
 
