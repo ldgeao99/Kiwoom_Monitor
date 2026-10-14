@@ -1311,6 +1311,40 @@ def build_candles(code, tf, limit=240, cont_yn='N', next_key=''):
     return {'code': code, 'tf': tf, 'items': items, 'history': history, 'cont': cy, 'next': nk}
 
 
+_credit_ratio_cache = {}
+
+
+def build_credit_ratio(code):
+    if len(code) != 6 or not code.isdigit():
+        raise ValueError('종목코드는 6자리 숫자여야 합니다.')
+    today = now_kst().strftime('%Y%m%d')
+    cached = _credit_ratio_cache.get((code, today))
+    if cached and time.time() - cached['ts'] < 60:
+        return cached['data']
+    def request(token):
+        response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
+            'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {token}',
+            'api-id':'ka10013', 'cont-yn':'N', 'next-key':''},
+            json={'stk_cd':code, 'dt':today, 'qry_tp':'1'}, timeout=15)
+        response.raise_for_status()
+        body = response.json()
+        if body.get('return_code') not in (None, 0):
+            raise RuntimeError(body.get('return_msg') or '신용잔고율 조회 실패')
+        return body.get('crd_trde_trend') or []
+    try:
+        rows = request(cached_token())
+    except Exception:
+        _token_cache['token'] = None
+        rows = request(cached_token())
+    valid = [row for row in rows if row.get('remn_rt') not in (None, '')
+             and len(str(row.get('dt', ''))) == 8 and str(row['dt']) <= today]
+    latest = max(valid, key=lambda row: str(row['dt']), default=None)
+    data = {'code':code, 'date':str(latest['dt']) if latest else '',
+            'ratio':to_number(latest['remn_rt']) if latest else None, 'today':today}
+    _credit_ratio_cache[(code, today)] = {'ts':time.time(), 'data':data}
+    return data
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1387,6 +1421,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0])
                 except Exception as e:
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/credit_ratio':
+            qs = parse_qs(parsed.query)
+            code = qs.get('code', [''])[0]
+            try:
+                payload = build_credit_ratio(code)
+            except Exception as error:
+                payload = {'code':code, 'ratio':None, 'error':str(error)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/stock':

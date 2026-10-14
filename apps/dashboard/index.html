@@ -181,6 +181,7 @@
   .candle-touch-layer { position:absolute; inset:0; touch-action:pan-y; }
   .chart-sel { margin-left:auto; font-size:13px; font-weight:400; padding:4px 26px 4px 12px; cursor:pointer;
     color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:14px; }
+  #stock-chart-title { flex-wrap:wrap; }
   #toggle-chart { margin-left:0; }   /* 봉 주기 select 바로 옆(제목 우측 그룹) */
   /* 접힘: 헤더+약 10행만 보이고 스크롤로 나머지 확인 / 펼침: 20행 모두 */
   .rank-scroll { max-height:310px; overflow-y:auto; }   /* 실제 헤더 + 10행 높이는 렌더링 후 맞춤 */
@@ -344,7 +345,7 @@
     <div id="prog-chart"></div>
   </div>
 </div>
-<div class="page-title" id="stock-chart-title"><span>종목 차트</span><select id="chart-tf" class="chart-sel"></select><button id="toggle-chart" class="view-btn" type="button">접기 ▾</button></div>
+<div class="page-title" id="stock-chart-title"><span>종목 차트</span><span id="stock-credit-ratio" style="font-size:12px;font-weight:400" role="status"></span><select id="chart-tf" class="chart-sel"></select><button id="toggle-chart" class="view-btn" type="button">접기 ▾</button></div>
 <div class="chart-wrap">
   <div class="chart-head">
     <input id="chart-code" class="prog-input" value="" placeholder="종목코드/종목명">
@@ -1611,9 +1612,29 @@ attachCandleGestures('index-candle-chart', {
   get offset() { return indexCandleViewOffset; }, set offset(value) { indexCandleViewOffset = value; }
 });
 
+let creditRatioGeneration = 0;
+async function renderCreditRatio() {
+  const generation = ++creditRatioGeneration, code = chartCode;
+  const host = document.getElementById('stock-credit-ratio');
+  if (!/^\d{6}$/.test(code)) { host.textContent = ''; return; }
+  host.textContent = '신용잔고율 조회 중…';
+  try {
+    const response = await fetch('/api/credit_ratio?code=' + encodeURIComponent(code), {cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (generation !== creditRatioGeneration || code !== chartCode) return;
+    if (data.error) throw new Error(data.error);
+    host.textContent = data.ratio == null ? '신용잔고율 미제공'
+      : `신용잔고율 ${data.ratio.toFixed(2)}%${data.date === data.today ? '' : ' (' + data.date.slice(4,6) + '/' + data.date.slice(6,8) + ' 기준)'}`;
+  } catch(error) {
+    if (generation === creditRatioGeneration && code === chartCode) host.textContent = '신용잔고율 조회 실패';
+  }
+}
+
 function setChartIndex(market) {
   if (!['kospi','kosdaq'].includes(market)) return;
   chartCode = 'index:' + market;
+  renderCreditRatio();
   chartName = market === 'kospi' ? '코스피' : '코스닥';
   document.getElementById('chart-code').value = chartName;
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
@@ -1624,6 +1645,7 @@ function setChartIndex(market) {
 function setChartStock(code, name) {
   chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
   chartName = name || '';
+  renderCreditRatio();
   try { localStorage.setItem('stock_chart_code', chartCode); } catch (e) {}
   restoreStockInput(chartCode, chartName, 'stock_chart_code', 'chart-code');
   const nm = document.getElementById('chart-name'); if (nm) nm.textContent = '';
@@ -2070,6 +2092,7 @@ async function renderPrmUpper() {
 })();
 
 async function refresh() {
+  renderCreditRatio();
   renderRank();           // 조회수 상위 종목 갱신
   loadAmountRank();        // 거래대금 상위 종목 갱신
   renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
