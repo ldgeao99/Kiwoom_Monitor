@@ -1650,7 +1650,7 @@ async function renderStockInvestors(more = false) {
       const row = body.insertRow(); row.insertCell().textContent = item.date.slice(0,4)+'/'+item.date.slice(4,6)+'/'+item.date.slice(6,8);
       ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund','etc_corp'].forEach(key=>{
         const cell=row.insertCell(), value=item[key];cell.className=cls(value);
-        cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:investorMode === '1' ? 2 : 0});
+        cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:0});
       });
     });
     host.replaceChildren(table); host.scrollTop=top;
