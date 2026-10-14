@@ -1675,8 +1675,14 @@ async function renderCreditRatio() {
     const data = await response.json();
     if (generation !== creditRatioGeneration || code !== chartCode) return;
     if (data.error) throw new Error(data.error);
-    host.textContent = data.ratio == null ? '신용잔고율 미제공'
-      : `신용잔고율 ${data.ratio.toFixed(2)}%${data.date === data.today ? '' : ' (' + data.date.slice(4,6) + '/' + data.date.slice(6,8) + ' 기준)'}`;
+    if (data.ratio == null) host.textContent = '신용잔고율 미제공';
+    else {
+      const ratio = document.createElement('span');
+      ratio.textContent = data.ratio.toFixed(2) + '%';
+      if (data.ratio >= 4) ratio.className = 'pos';
+      const date = data.date === data.today ? '' : ' (' + data.date.slice(4,6) + '/' + data.date.slice(6,8) + ')';
+      host.replaceChildren(document.createTextNode('신용잔고율 '), ratio, document.createTextNode(date));
+    }
   } catch(error) {
     if (generation === creditRatioGeneration && code === chartCode) host.textContent = '신용잔고율 조회 실패';
   }
