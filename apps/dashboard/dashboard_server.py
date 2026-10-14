@@ -1345,25 +1345,26 @@ def build_credit_ratio(code):
     return data
 
 
-def build_stock_investors(code, cont='N', next_key=''):
+def build_stock_investors(code, cont='N', next_key='', mode='1'):
     if len(code) != 6 or not code.isdigit():
         raise ValueError('종목코드는 6자리 숫자여야 합니다.')
+    mode = mode if mode in ('1', '2') else '1'
     def request(token):
         response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
             'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {token}',
             'api-id':'ka10059', 'cont-yn':cont, 'next-key':next_key},
-            json={'stk_cd':code, 'dt':now_kst().strftime('%Y%m%d'), 'amt_qty_tp':'1',
+            json={'stk_cd':code, 'dt':now_kst().strftime('%Y%m%d'), 'amt_qty_tp':mode,
                   'trde_tp':'0', 'unit_tp':'1'}, timeout=15)
         response.raise_for_status()
         body = response.json()
         if body.get('return_code') not in (None, 0):
             raise RuntimeError(body.get('return_msg') or '투자자 수급 조회 실패')
         fields = ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund']
-        items = [{'date':str(row.get('dt', '')), **{field:to_number(row[field]) / 100
+        items = [{'date':str(row.get('dt', '')), **{field:to_number(row[field]) / (100 if mode == '1' else 1)
                  if row.get(field) not in (None, '') else None for field in fields}}
                  for row in body.get('stk_invsr_orgn', [])]
         return {'code':code, 'items':sorted(items,key=lambda item:item['date'],reverse=True),
-                'cont':response.headers.get('cont-yn','N'), 'next':response.headers.get('next-key',''), 'unit':'억'}
+                'cont':response.headers.get('cont-yn','N'), 'next':response.headers.get('next-key',''), 'unit':'억' if mode == '1' else '주'}
     try:
         return request(cached_token())
     except Exception:
@@ -1452,7 +1453,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/stock_investors':
             qs = parse_qs(parsed.query)
             try:
-                payload = build_stock_investors(qs.get('code',[''])[0], qs.get('cont',['N'])[0], qs.get('next',[''])[0])
+                payload = build_stock_investors(qs.get('code',[''])[0], qs.get('cont',['N'])[0], qs.get('next',[''])[0], qs.get('mode',['1'])[0])
             except Exception as error:
                 payload = {'items':[], 'error':str(error)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')

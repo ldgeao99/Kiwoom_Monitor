@@ -359,7 +359,7 @@
 </div>
 <div id="stock-investor-section">
   <div class="page-title"><span>종목별 투자자 수급</span><small id="stock-investor-name" style="font-size:12px;font-weight:400"></small><button id="stock-investor-more" class="prog-go" style="margin-left:auto" type="button" disabled>추가조회</button></div>
-  <div class="prog-wrap panel" style="padding:8px;box-sizing:border-box"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button></div><div id="stock-investor-status" role="status" style="font-size:12px">종목을 선택하세요.</div><div id="stock-investor-table" style="max-height:204px;overflow:auto"></div></div>
+  <div class="prog-wrap panel" style="padding:8px;box-sizing:border-box"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px">종목을 선택하세요.</div><div id="stock-investor-table" style="max-height:204px;overflow:auto"></div></div>
 </div>
 
 <script>
@@ -1617,7 +1617,7 @@ attachCandleGestures('index-candle-chart', {
   get offset() { return indexCandleViewOffset; }, set offset(value) { indexCandleViewOffset = value; }
 });
 
-let investorCode = '', investorName = '';
+let investorCode = '', investorName = '', investorMode = '1';
 let investorGeneration = 0, investorItems = [], investorNext = '', investorCont = 'N', investorLoading = false;
 async function renderStockInvestors(more = false) {
   if (more && (investorLoading || investorCont !== 'Y' || !investorNext)) return;
@@ -1631,7 +1631,7 @@ async function renderStockInvestors(more = false) {
   if (!more) { investorItems = []; investorNext = ''; investorCont = 'N'; host.replaceChildren(); }
   investorLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
   try {
-    const url = '/api/stock_investors?code=' + encodeURIComponent(code)
+    const url = '/api/stock_investors?code=' + encodeURIComponent(code) + '&mode=' + investorMode
       + (more ? '&cont=Y&next=' + encodeURIComponent(investorNext) : '');
     const response = await fetch(url, {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -1651,11 +1651,11 @@ async function renderStockInvestors(more = false) {
       const row = body.insertRow(); row.insertCell().textContent = item.date.slice(0,4)+'/'+item.date.slice(4,6)+'/'+item.date.slice(6,8);
       ['ind_invsr','frgnr_invsr','orgn','fnnc_invt','invtrt','penfnd_etc','samo_fund'].forEach(key=>{
         const cell=row.insertCell(), value=item[key];cell.className=cls(value);
-        cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:2});
+        cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:investorMode === '1' ? 2 : 0});
       });
     });
     host.replaceChildren(table); host.scrollTop=top;
-    status.textContent = investorItems.length ? '순매수금액 · 단위: 억원 · 기관계에는 기관 세부 항목이 포함됩니다.' : '제공된 수급 데이터가 없습니다.';
+    status.textContent = investorItems.length ? `순매수${investorMode === '1' ? '금액 · 단위: 억원' : '수량 · 단위: 주'} · 기관계에는 기관 세부 항목이 포함됩니다.` : '제공된 수급 데이터가 없습니다.';
   } catch(error) {
     if (generation === investorGeneration && code === investorCode) status.textContent='수급 조회 실패: '+error.message;
   } finally {
@@ -1663,6 +1663,12 @@ async function renderStockInvestors(more = false) {
   }
 }
 document.getElementById('stock-investor-more').addEventListener('click',()=>renderStockInvestors(true));
+
+document.querySelectorAll('input[name="investor-mode"]').forEach(radio => radio.addEventListener('change', () => {
+  investorMode = radio.value;
+  document.querySelectorAll('#stock-investor-mode label').forEach(label => label.classList.toggle('on', label.querySelector('input').checked));
+  renderStockInvestors();
+}));
 
 function setInvestorStock(code, name = '') {
   investorCode = code; investorName = name;
