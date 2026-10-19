@@ -193,6 +193,8 @@
     white-space:normal; line-height:1.25; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:24px; padding-left:4px; padding-right:4px; }
   #etf-table table { table-layout:fixed; }
+  #etf-table tbody tr { cursor:pointer; }
+  #etf-table tbody tr:hover td { background:var(--head); }
   #etf-table th:first-child, #etf-table td:first-child { padding-left:4px; padding-right:4px; text-align:center; }
   #etf-table td:nth-child(2) { overflow:hidden; text-overflow:ellipsis; }
   #etf-table th:nth-child(2) { text-align:left; }
@@ -2243,6 +2245,15 @@ function renderEtfTable() {
   const body = table.createTBody();
   sorted.forEach((item,index)=>{
     const row=body.insertRow();
+    row.dataset.code=item.code;row.tabIndex=0;row.setAttribute('role','button');
+    row.setAttribute('aria-label',item.name+' 종목 차트 보기');
+    const openChart=()=>{
+      if(document.querySelector('.chart-wrap').hidden)document.getElementById('toggle-chart').click();
+      setChartStock(item.code,item.name);
+      document.getElementById('stock-chart-title').scrollIntoView({behavior:'smooth',block:'start'});
+    };
+    row.addEventListener('click',openChart);
+    row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openChart();}});
     [index+1,item.name,(item.flu>0?'+':'')+item.flu.toFixed(2)+'%'].forEach((text,column)=>{
       const cell=row.insertCell();cell.textContent=text;
       if(column===1){cell.style.textAlign='left';cell.title=item.name;}
