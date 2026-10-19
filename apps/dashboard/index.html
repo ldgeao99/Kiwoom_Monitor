@@ -371,7 +371,8 @@
   <div id="stock-investor-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box;position:relative"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액(억)</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px;position:absolute;right:8px;bottom:8px;background:var(--panel);z-index:2">종목을 선택하세요.</div><div id="stock-investor-table" style="min-height:204px;max-height:204px;overflow:auto"></div></div>
 </div>
 
-<div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><label style="margin-left:auto;font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label><select id="etf-sort" style="margin-left:0" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
+<div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><select id="etf-sort" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
+<div style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
 <div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
 
 <script>
@@ -1638,7 +1639,7 @@ async function renderStockInvestors(more = false) {
   const host = document.getElementById('stock-investor-table'), status = document.getElementById('stock-investor-status');
   const button = document.getElementById('stock-investor-more');
   section.hidden = false;
-  if (!/^\d{6}$/.test(code)) { host.replaceChildren(); status.textContent = '종목을 선택하세요.'; button.disabled = true; return; }
+  if (!/^[0-9A-Z]{6}$/.test(code)) { host.replaceChildren(); status.textContent = '종목을 선택하세요.'; button.disabled = true; return; }
   if (!more) { investorItems = []; investorNext = ''; investorCont = 'N'; }
   investorLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
   try {
@@ -1727,7 +1728,7 @@ async function renderStockMemo() {
   const generation = ++stockMemoGeneration, code = chartCode;
   const host = document.getElementById('stock-memo');
   host.hidden = true; host.textContent = '';
-  if (!/^\d{6}$/.test(code)) return;
+  if (!/^[0-9A-Z]{6}$/.test(code)) return;
   try {
     const response = await fetch('/api/stock_memo?code=' + encodeURIComponent(code), {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -1744,7 +1745,7 @@ let creditRatioGeneration = 0;
 async function renderCreditRatio() {
   const generation = ++creditRatioGeneration, code = chartCode;
   const host = document.getElementById('stock-credit-ratio');
-  if (!/^\d{6}$/.test(code)) { host.textContent = ''; return; }
+  if (!/^[0-9A-Z]{6}$/.test(code)) { host.textContent = ''; return; }
   host.textContent = '신용잔고 조회 중…';
   try {
     const response = await fetch('/api/credit_ratio?code=' + encodeURIComponent(code), {cache:'no-store'});
@@ -1779,7 +1780,7 @@ function setChartIndex(market) {
 }
 
 function setChartStock(code, name) {
-  chartCode = (code || '').split('_')[0].replace(/\D/g, '').slice(0, 6);
+  chartCode = (code || '').split('_')[0].trim().toUpperCase();
   chartName = name || '';
   renderCreditRatio();
   renderStockMemo();
@@ -1795,8 +1796,7 @@ async function resolveChart(raw) {
   const v = (raw || '').trim();
   if (!v) return;
   if (v === '코스피' || v === '코스닥') { setChartIndex(v === '코스피' ? 'kospi' : 'kosdaq'); return; }
-  const digits = v.replace(/\D/g, '');
-  if (digits.length === 6) { setChartStock(digits, ''); return; }
+  if (/^[0-9A-Z]{6}$/i.test(v)) { setChartStock(v.toUpperCase(), ''); return; }
   try {
     const res = await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
     if (!res.ok) return;

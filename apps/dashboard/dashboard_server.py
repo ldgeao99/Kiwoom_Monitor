@@ -1018,7 +1018,7 @@ def search_stock(q):
     q = (q or '').strip()
     if not q:
         return None
-    if len(q) == 6 and q.isdigit():
+    if len(q) == 6 and q.isascii() and q.isalnum():
         name = stock_name(q)
         return {'code': q, 'name': name} if name else None
     hit = _pick(stock_items(), q)
@@ -1315,8 +1315,8 @@ _credit_ratio_cache = {}
 
 
 def build_credit_ratio(code):
-    if len(code) != 6 or not code.isdigit():
-        raise ValueError('종목코드는 6자리 숫자여야 합니다.')
+    if len(code) != 6 or not code.isascii() or not code.isalnum():
+        raise ValueError('종목코드는 6자리 영문·숫자여야 합니다.')
     today = now_kst().strftime('%Y%m%d')
     cached = _credit_ratio_cache.get((code, today))
     if cached and time.time() - cached['ts'] < 60:
@@ -1346,8 +1346,8 @@ def build_credit_ratio(code):
 
 
 def build_stock_investors(code, cont='N', next_key='', mode='1'):
-    if len(code) != 6 or not code.isdigit():
-        raise ValueError('종목코드는 6자리 숫자여야 합니다.')
+    if len(code) != 6 or not code.isascii() or not code.isalnum():
+        raise ValueError('종목코드는 6자리 영문·숫자여야 합니다.')
     mode = mode if mode in ('1', '2') else '1'
     def request(token):
         response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
@@ -1373,8 +1373,8 @@ def build_stock_investors(code, cont='N', next_key='', mode='1'):
 
 
 def build_stock_memo(code):
-    if len(code) != 6 or not code.isdigit():
-        raise ValueError('종목코드는 6자리 숫자여야 합니다.')
+    if len(code) != 6 or not code.isascii() or not code.isalnum():
+        raise ValueError('종목코드는 6자리 영문·숫자여야 합니다.')
     def request(token):
         response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
             'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {token}',
