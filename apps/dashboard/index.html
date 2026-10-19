@@ -365,6 +365,9 @@
   <div id="stock-investor-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box;position:relative"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액(억)</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px;position:absolute;right:8px;bottom:8px;background:var(--panel);z-index:2">종목을 선택하세요.</div><div id="stock-investor-table" style="min-height:204px;max-height:204px;overflow:auto"></div></div>
 </div>
 
+<div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><select id="etf-sort" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
+<div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
+
 <script>
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
 let selected = null;           // Set<key> — 표시할 투자자
@@ -2221,7 +2224,48 @@ async function renderPrmUpper() {
   });
 })();
 
+let etfItems = [], etfLoading = false;
+function renderEtfTable() {
+  const host = document.getElementById('etf-table'), top = host.scrollTop;
+  const direction = document.getElementById('etf-sort').value === 'asc' ? 1 : -1;
+  const sorted = [...etfItems].sort((a,b)=>direction*(a.flu-b.flu)||a.code.localeCompare(b.code));
+  const table = document.createElement('table'); table.className = 'prog-tbl';
+  const header = table.createTHead().insertRow();
+  ['', '종목명','현재가','등락률','거래량'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+  const body = table.createTBody();
+  sorted.forEach((item,index)=>{
+    const row=body.insertRow();
+    [index+1,item.name,item.price.toLocaleString('ko-KR'),(item.flu>0?'+':'')+item.flu.toFixed(2)+'%',item.volume.toLocaleString('ko-KR')].forEach((text,column)=>{
+      const cell=row.insertCell();cell.textContent=text;
+      if(column===1){cell.style.textAlign='left';cell.title=item.name;}
+      if(column===2||column===3)cell.className=cls(item.flu);
+    });
+  });
+  host.replaceChildren(table);host.scrollTop=top;
+}
+async function loadEtfQuotes() {
+  if (etfLoading || document.getElementById('etf-content').hidden) return;
+  etfLoading=true;
+  const status=document.getElementById('etf-status');status.textContent='불러오는 중…';
+  try {
+    const response=await fetch('/api/etf_quotes',{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();if(data.error)throw new Error(data.error);
+    etfItems=data.items||[];renderEtfTable();
+    status.textContent=etfItems.length ? `전체 ${etfItems.length.toLocaleString('ko-KR')}개` : 'ETF 데이터가 없습니다.';
+  }catch(error){status.textContent='ETF 조회 실패: '+error.message;}
+  finally{etfLoading=false;}
+}
+document.getElementById('etf-sort').addEventListener('change',()=>{document.getElementById('etf-table').scrollTop=0;renderEtfTable();});
+(function(){
+  const button=document.getElementById('toggle-etf'),content=document.getElementById('etf-content');
+  let collapsed=false;try{collapsed=localStorage.getItem('etf_collapsed')==='1';}catch(e){}
+  const apply=()=>{content.hidden=collapsed;button.textContent=collapsed?'펼치기 ▸':'접기 ▾';button.setAttribute('aria-expanded',String(!collapsed));};apply();
+  button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('etf_collapsed',collapsed?'1':'0');}catch(e){}apply();if(!collapsed)loadEtfQuotes();});
+})();
+
 async function refresh() {
+  loadEtfQuotes();
   renderCreditRatio();
   renderStockMemo();
   renderStockInvestors();

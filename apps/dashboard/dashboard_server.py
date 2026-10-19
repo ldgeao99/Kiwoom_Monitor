@@ -1393,6 +1393,48 @@ def build_stock_memo(code):
         return request(cached_token())
 
 
+_etf_quotes_cache = {'ts':0, 'data':None}
+_etf_quotes_lock = threading.Lock()
+
+
+def build_etf_quotes():
+    with _etf_quotes_lock:
+        if _etf_quotes_cache['data'] is not None and time.time() - _etf_quotes_cache['ts'] < 60:
+            return _etf_quotes_cache['data']
+        def request_all(token):
+            items, cont, cursor, seen = {}, 'N', '', set()
+            while True:
+                response = requests.post('https://api.kiwoom.com/api/dostk/etf', headers={
+                    'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {token}',
+                    'api-id':'ka40004', 'cont-yn':cont, 'next-key':cursor},
+                    json={'txon_type':'0','navpre':'0','mngmcomp':'0000','txon_yn':'0','trace_idex':'0','stex_tp':'3'}, timeout=15)
+                response.raise_for_status()
+                body = response.json()
+                if body.get('return_code') not in (None, 0):
+                    raise RuntimeError(body.get('return_msg') or 'ETF 조회 실패')
+                for row in body.get('etfall_mrpr', []):
+                    code = str(row.get('stk_cd') or '').split('_')[0]
+                    if not code: continue
+                    items[code] = {'code':code, 'name':row.get('stk_nm',''),
+                                   'price':abs(to_number(row.get('close_pric'))),
+                                   'flu':to_number(row.get('pre_rt')), 'volume':abs(to_number(row.get('trde_qty')))}
+                cont = response.headers.get('cont-yn','N').upper()
+                cursor = response.headers.get('next-key','')
+                if cont != 'Y': break
+                if not cursor or cursor in seen or len(seen) >= 100:
+                    raise RuntimeError('ETF 연속조회가 완료되지 않았습니다. 다시 조회하세요.')
+                seen.add(cursor)
+                time.sleep(0.5)
+            return {'items':sorted(items.values(),key=lambda item:(-item['flu'],item['code']))}
+        try:
+            data = request_all(cached_token())
+        except Exception:
+            _token_cache['token'] = None
+            data = request_all(cached_token())
+        _etf_quotes_cache.update(ts=time.time(),data=data)
+        return data
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1469,6 +1511,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0])
                 except Exception as e:
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/etf_quotes':
+            try:
+                payload = build_etf_quotes()
+            except Exception as error:
+                payload = {'items':[], 'error':str(error)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/stock_memo':
