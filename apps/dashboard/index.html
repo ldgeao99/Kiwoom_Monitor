@@ -369,7 +369,7 @@
   <div id="stock-investor-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box;position:relative"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액(억)</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px;position:absolute;right:8px;bottom:8px;background:var(--panel);z-index:2">종목을 선택하세요.</div><div id="stock-investor-table" style="min-height:204px;max-height:204px;overflow:auto"></div></div>
 </div>
 
-<div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><select id="etf-sort" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
+<div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><label style="margin-left:auto;font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label><select id="etf-sort" style="margin-left:0" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
 <div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
 
 <script>
@@ -2232,7 +2232,9 @@ let etfItems = [], etfLoading = false;
 function renderEtfTable() {
   const host = document.getElementById('etf-table'), top = host.scrollTop;
   const direction = document.getElementById('etf-sort').value === 'asc' ? 1 : -1;
-  const sorted = [...etfItems].sort((a,b)=>direction*(a.flu-b.flu)||a.code.localeCompare(b.code));
+  const excludeLeverage = document.getElementById('etf-exclude-leverage').checked;
+  const sorted = etfItems.filter(item => !excludeLeverage || !/레버리지|2x/i.test(item.name || ''))
+    .sort((a,b)=>direction*(a.flu-b.flu)||a.code.localeCompare(b.code));
   const table = document.createElement('table'); table.className = 'prog-tbl';
   const columns=document.createElement('colgroup');
   [24,null,100].forEach(width=>{const col=document.createElement('col');if(width)col.style.width=width+'px';columns.append(col);});table.append(columns);
@@ -2248,6 +2250,7 @@ function renderEtfTable() {
     });
   });
   host.replaceChildren(table);host.scrollTop=top;
+  document.getElementById('etf-status').textContent = etfItems.length ? (excludeLeverage ? `${sorted.length.toLocaleString('ko-KR')}개 표시 / 전체 ${etfItems.length.toLocaleString('ko-KR')}개` : `전체 ${etfItems.length.toLocaleString('ko-KR')}개`) : 'ETF 데이터가 없습니다.';
 }
 async function loadEtfQuotes() {
   if (etfLoading || document.getElementById('etf-content').hidden) return;
@@ -2258,10 +2261,17 @@ async function loadEtfQuotes() {
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(data.error)throw new Error(data.error);
     etfItems=data.items||[];renderEtfTable();
-    status.textContent=etfItems.length ? `전체 ${etfItems.length.toLocaleString('ko-KR')}개` : 'ETF 데이터가 없습니다.';
   }catch(error){status.textContent='ETF 조회 실패: '+error.message;}
   finally{etfLoading=false;}
 }
+(function(){
+  const checkbox = document.getElementById('etf-exclude-leverage');
+  try { checkbox.checked = localStorage.getItem('etf_exclude_leverage') === '1'; } catch(e) {}
+  checkbox.addEventListener('change',()=>{
+    try { localStorage.setItem('etf_exclude_leverage',checkbox.checked?'1':'0'); } catch(e) {}
+    document.getElementById('etf-table').scrollTop=0;renderEtfTable();
+  });
+})();
 document.getElementById('etf-sort').addEventListener('change',()=>{document.getElementById('etf-table').scrollTop=0;renderEtfTable();});
 (function(){
   const button=document.getElementById('toggle-etf'),content=document.getElementById('etf-content');
