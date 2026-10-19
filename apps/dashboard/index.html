@@ -372,7 +372,7 @@
 </div>
 
 <div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><select id="etf-sort" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
-<div style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
+<div id="etf-filter-row" style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
 <div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
 
 <script>
@@ -2287,7 +2287,7 @@ document.getElementById('etf-sort').addEventListener('change',()=>{document.getE
 (function(){
   const button=document.getElementById('toggle-etf'),content=document.getElementById('etf-content');
   let collapsed=false;try{collapsed=localStorage.getItem('etf_collapsed')==='1';}catch(e){}
-  const apply=()=>{content.hidden=collapsed;button.textContent=collapsed?'펼치기 ▸':'접기 ▾';button.setAttribute('aria-expanded',String(!collapsed));};apply();
+  const apply=()=>{content.hidden=collapsed;document.getElementById('etf-filter-row').style.display=collapsed?'none':'flex';button.textContent=collapsed?'펼치기 ▸':'접기 ▾';button.setAttribute('aria-expanded',String(!collapsed));};apply();
   button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('etf_collapsed',collapsed?'1':'0');}catch(e){}apply();if(!collapsed)loadEtfQuotes();});
 })();
 
