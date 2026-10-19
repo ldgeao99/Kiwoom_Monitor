@@ -192,6 +192,9 @@
   .rank-tbl thead th { background:var(--head); color:var(--muted); font-weight:600; position:sticky; top:0; z-index:1;
     white-space:normal; line-height:1.25; }
   .rank-tbl td.rk { text-align:center; color:var(--muted); width:24px; padding-left:4px; padding-right:4px; }
+  #etf-table table { table-layout:fixed; }
+  #etf-table th:first-child, #etf-table td:first-child { padding-left:4px; padding-right:4px; text-align:center; }
+  #etf-table td:nth-child(2) { overflow:hidden; text-overflow:ellipsis; }
   .rank-tbl td.nm { text-align:left; font-weight:600; }
   #rank-host .rank-tbl { table-layout:fixed; }
   #rank-host td.nm { overflow:hidden; text-overflow:ellipsis; }
@@ -2230,15 +2233,17 @@ function renderEtfTable() {
   const direction = document.getElementById('etf-sort').value === 'asc' ? 1 : -1;
   const sorted = [...etfItems].sort((a,b)=>direction*(a.flu-b.flu)||a.code.localeCompare(b.code));
   const table = document.createElement('table'); table.className = 'prog-tbl';
+  const columns=document.createElement('colgroup');
+  [24,null,100].forEach(width=>{const col=document.createElement('col');if(width)col.style.width=width+'px';columns.append(col);});table.append(columns);
   const header = table.createTHead().insertRow();
-  ['', '종목명','현재가','등락률','거래량'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+  ['', '종목명','등락률'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
   const body = table.createTBody();
   sorted.forEach((item,index)=>{
     const row=body.insertRow();
-    [index+1,item.name,item.price.toLocaleString('ko-KR'),(item.flu>0?'+':'')+item.flu.toFixed(2)+'%',item.volume.toLocaleString('ko-KR')].forEach((text,column)=>{
+    [index+1,item.name,(item.flu>0?'+':'')+item.flu.toFixed(2)+'%'].forEach((text,column)=>{
       const cell=row.insertCell();cell.textContent=text;
       if(column===1){cell.style.textAlign='left';cell.title=item.name;}
-      if(column===2||column===3)cell.className=cls(item.flu);
+      if(column===2)cell.className=cls(item.flu);
     });
   });
   host.replaceChildren(table);host.scrollTop=top;
