@@ -1564,14 +1564,23 @@ def build_intraday_history(code, orgn, side):
         raise ValueError('올바른 종목·투자자·매매구분이 필요합니다.')
     day = now_kst().strftime('%Y-%m-%d')
     with _intraday_investor_lock:
-        records = [record for record in read_intraday_snapshots(day) if record.get('orgn')==orgn and record.get('side')==side]
-    items,previous = [],None
-    for index,record in enumerate(records):
-        found = next((item for item in record.get('items',[]) if item.get('code')==code),None)
-        value = found.get('net') if found else None
-        delta = value-previous if value is not None and previous is not None else None
-        items.append({'round':index+1,'time':record.get('observed_at',''),'net':value,'change':delta})
-        previous = value
+        records = [record for record in read_intraday_snapshots(day) if record.get('orgn') in ('9000','9999') and record.get('side')==side]
+    # 두 투자자의 변경 시각을 합치고, 다른 투자자의 값은 마지막 확인값을 유지한다.
+    events = {}
+    for record in records:
+        events.setdefault(record.get('observed_at',''), {})[record['orgn']] = record
+    items, latest = [], {'9000':None, '9999':None}
+    for stamp, updates in sorted(events.items()):
+        values = {}
+        for investor in ('9000','9999'):
+            previous = latest[investor]
+            if investor in updates:
+                found = next((item for item in updates[investor].get('items',[]) if item.get('code')==code),None)
+                latest[investor] = found.get('net') if found else None
+            value = latest[investor]
+            values[investor] = {'net':value, 'change':value-previous if value is not None and previous is not None else None}
+        items.append({'round':len(items)+1, 'time':stamp, 'foreign':values['9000'],
+                      'institution':values['9999'], **values[orgn]})
     return {'code':code,'orgn':orgn,'side':side,'date':day,'items':items}
 
 

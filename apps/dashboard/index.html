@@ -2612,12 +2612,15 @@ function renderIntradayHistory() {
   const view=document.querySelector('input[name="intraday-history-view"]:checked').value;
   const table=document.createElement('table');table.className='prog-tbl';
   const header=table.createTHead().insertRow();
-  ['차수','변경 확인시각',view==='change'?'증감금액':'누적금액'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+  ['차수','변경 확인시각','외국인','기관'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
   const body=table.createTBody();
   intradayHistoryItems.forEach(item=>{
     const row=body.insertRow();row.insertCell().textContent=item.round+'차';row.insertCell().textContent=item.time.slice(11,19);
-    const value=view==='change'?item.change:item.net,cell=row.insertCell();cell.className=cls(value);
-    cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:view==='net'?0:2})+'억';
+    ['foreign','institution'].forEach(investor=>{
+      const value=item[investor]?.[view==='change'?'change':'net'],cell=row.insertCell();cell.className=cls(value);
+      const rounded=value==null?null:Math.round(value);
+      cell.textContent=rounded==null?'-':(rounded>0?'+':'')+rounded.toLocaleString('ko-KR')+'억';
+    });
   });host.replaceChildren(table);
 }
 async function loadIntradayHistory() {
@@ -2626,7 +2629,7 @@ async function loadIntradayHistory() {
   const side=document.querySelector('input[name="intraday-side"]:checked').value;
   const box=document.getElementById('intraday-investor-history'),status=document.getElementById('intraday-history-status');
   box.hidden=false;
-  document.getElementById('intraday-history-title').textContent=selection.name+'('+selection.code+') · '+(selection.orgn==='9000'?'외국인':'기관계')+' · '+(side==='1'?'순매수':'순매도');
+  document.getElementById('intraday-history-title').textContent=selection.name+'('+selection.code+') · '+(side==='1'?'순매수':'순매도');
   status.textContent='불러오는 중…';
   try{
     const response=await fetch('/api/intraday_investor_history?code='+encodeURIComponent(selection.code)+'&orgn='+selection.orgn+'&side='+side,{cache:'no-store'});
