@@ -2594,7 +2594,7 @@ function renderIntradayHistory() {
   intradayHistoryItems.forEach(item=>{
     const row=body.insertRow();row.insertCell().textContent=item.round+'차';row.insertCell().textContent=item.time.slice(11,19);
     const value=view==='change'?item.change:item.net,cell=row.insertCell();cell.className=cls(value);
-    cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:2})+'억';
+    cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:view==='net'?0:2})+'억';
   });host.replaceChildren(table);
 }
 async function loadIntradayHistory() {
