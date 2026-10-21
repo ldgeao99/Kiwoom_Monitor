@@ -343,6 +343,7 @@
 <div id="intraday-investors-content" class="prog-wrap">
   <div class="prog-row" style="padding:4px 0 8px">
     <span class="market-sel"><label><input type="radio" name="intraday-side" value="1" checked>순매수</label><label><input type="radio" name="intraday-side" value="2">순매도</label></span>
+    <small id="intraday-latest-time" style="margin-left:auto;font-size:11px">최종집계(변경확인) : -</small>
   </div>
   <div class="panel" style="padding:8px;box-sizing:border-box">
     <div id="intraday-investors-status" role="status" style="font-size:12px"></div>
@@ -2549,14 +2550,14 @@ async function loadIntradayInvestors(force=false) {
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(generation!==intradayInvestorGeneration)return;
     if(data.error)throw new Error(data.error);
+    const latest=Object.values(data.updated_at||{}).filter(Boolean).sort().at(-1);
+    document.getElementById('intraday-latest-time').textContent='최종집계(변경확인) : '+(latest?latest.slice(11,19):'-');
     const host=document.getElementById('intraday-investors-tables');
     const positions=[...host.querySelectorAll('.pu-scroll')].map(el=>({top:el.scrollTop,left:el.scrollLeft}));
     const sections=[];
     [['9000','외국인'],['9999','기관계']].forEach(([key,name])=>{
       const section=document.createElement('section');
       const title=document.createElement('h3');title.textContent=name;section.append(title);
-      const stamp=document.createElement('div');stamp.style.cssText='font-size:11px;text-align:center;margin-bottom:6px';
-      stamp.textContent='최종집계(변경 확인): '+(data.updated_at?.[key]?.replace(' KST','')||'-');section.append(stamp);
       const scroll=document.createElement('div');scroll.className='pu-scroll';
       const table=document.createElement('table'),header=table.createTHead().insertRow();
       ['종목명',(side==='1'?'순매수':'순매도')+'금액'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
@@ -2570,9 +2571,7 @@ async function loadIntradayInvestors(force=false) {
           intradaySelection={code:item.code,name:item.name,orgn:key};
           host.querySelectorAll('tbody tr').forEach(el=>el.classList.remove('selected'));row.classList.add('selected');
           loadIntradayHistory();
-          if(document.querySelector('.chart-wrap').hidden)document.getElementById('toggle-chart').click();
           setChartStock(item.code,item.name);
-          document.getElementById('stock-chart-title').scrollIntoView({behavior:'smooth',block:'start'});
         });
       });
       if(!items.length){const cell=body.insertRow().insertCell();cell.colSpan=2;cell.textContent='제공된 데이터가 없습니다.';}
@@ -2612,7 +2611,7 @@ async function loadIntradayHistory() {
     const data=await response.json();if(generation!==intradayHistoryGeneration)return;
     if(data.error)throw new Error(data.error);
     intradayHistoryItems=data.items||[];renderIntradayHistory();
-    status.textContent=intradayHistoryItems.length?'서버 변경 확인시각(KST) 기준 · 첫 회차 및 상위목록 미포함 구간의 증감은 -로 표시합니다.':'오늘 기록된 집계가 없습니다.';
+    status.textContent=intradayHistoryItems.length?'':'오늘 기록된 집계가 없습니다.';
   }catch(error){if(generation===intradayHistoryGeneration)status.textContent='집계 내역 조회 실패: '+error.message;}
 }
 document.querySelectorAll('input[name="intraday-history-view"]').forEach(input=>input.addEventListener('change',renderIntradayHistory));
