@@ -228,6 +228,7 @@
   #price-alert-add { width:100%; padding:5px 8px; }
   #price-alert-add { background:#2563eb; border-color:#2563eb; color:#ffffff; }
   #price-alert-add:hover { background:#1d4ed8; }
+  #price-alert-list th:first-child { text-align:left; }
   .prog-title { flex-direction:column; align-items:stretch; gap:8px; }
   .prog-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
@@ -374,7 +375,7 @@
   <div id="stock-memo" class="panel" style="margin-top:8px;padding:10px 14px;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5" hidden></div>
 </div>
 <div id="stock-investor-section">
-  <div class="page-title"><span>종목별 투자자 수급</span><button id="stock-investor-more" class="prog-go" style="margin-left:auto" type="button" disabled>추가조회</button><button id="toggle-stock-investor" class="view-btn" style="margin-left:0" type="button" aria-controls="stock-investor-content" aria-expanded="true">접기 ▾</button></div>
+  <div class="page-title"><span>종목별 투자자 수급</span><button id="toggle-stock-investor" class="view-btn" type="button" aria-controls="stock-investor-content" aria-expanded="true">접기 ▾</button></div>
   <div id="stock-investor-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box;position:relative"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액(억)</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px;position:absolute;right:8px;bottom:8px;background:var(--panel);z-index:2">종목을 선택하세요.</div><div id="stock-investor-table" style="min-height:204px;max-height:204px;overflow:auto"></div></div>
 </div>
 
@@ -382,15 +383,15 @@
 <div id="etf-filter-row" style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
 <div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
 
-<div class="page-title"><span>종목 가격알림</span></div>
-<div class="prog-wrap panel" style="padding:12px;box-sizing:border-box">
+<div class="page-title" style="flex-wrap:wrap"><span>종목 가격알림</span><div style="display:flex;align-items:center;gap:8px;margin-left:auto"><label style="font-size:13px;font-weight:400;white-space:nowrap"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><button id="toggle-price-alert" class="view-btn" style="margin-left:0" type="button" aria-controls="price-alert-content" aria-expanded="true">접기 ▾</button></div></div>
+<div id="price-alert-content" class="prog-wrap panel" style="padding:12px;box-sizing:border-box">
   <form id="price-alert-form" class="prog-row">
     <input id="price-alert-stock" class="prog-input" aria-label="알림 종목" placeholder="종목명/종목코드" required>
     <input id="price-alert-target" class="prog-input" aria-label="알림 주가" placeholder="알림 주가(원)" type="number" min="1" step="1" required>
     <select id="price-alert-condition" class="chart-sel" style="margin-left:0" aria-label="알림 조건"><option value="above">이상</option><option value="below">이하</option></select>
     <button id="price-alert-add" class="prog-go" type="submit">추가</button>
   </form>
-  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
+  <small id="price-alert-sound-status" role="status"></small>
   <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
   <div id="price-alert-list" style="overflow:auto"></div>
 </div>
@@ -1662,11 +1663,10 @@ async function renderStockInvestors(more = false) {
   const generation = more ? investorGeneration : ++investorGeneration, code = investorCode;
   const section = document.getElementById('stock-investor-section');
   const host = document.getElementById('stock-investor-table'), status = document.getElementById('stock-investor-status');
-  const button = document.getElementById('stock-investor-more');
   section.hidden = false;
-  if (!/^[0-9A-Z]{6}$/.test(code)) { host.replaceChildren(); status.textContent = '종목을 선택하세요.'; button.disabled = true; return; }
+  if (!/^[0-9A-Z]{6}$/.test(code)) { host.replaceChildren(); status.textContent = '종목을 선택하세요.'; return; }
   if (!more) { investorItems = []; investorNext = ''; investorCont = 'N'; }
-  investorLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
+  investorLoading = true; status.textContent = '불러오는 중…';
   try {
     const url = '/api/stock_investors?code=' + encodeURIComponent(code) + '&mode=' + investorMode
       + (more ? '&cont=Y&next=' + encodeURIComponent(investorNext) : '');
@@ -1678,7 +1678,9 @@ async function renderStockInvestors(more = false) {
     const merged = new Map(investorItems.map(item=>[item.date,item]));
     (data.items || []).forEach(item=>merged.set(item.date,item));
     investorItems = [...merged.values()].sort((a,b)=>b.date.localeCompare(a.date));
-    investorCont = data.cont || 'N'; investorNext = data.next || '';
+    const previousCursor = investorNext;
+    investorNext = data.next || '';
+    investorCont = more && investorNext === previousCursor ? 'N' : data.cont || 'N';
     const top = host.scrollTop, left = host.scrollLeft;
     const table = document.createElement('table'); table.className = 'prog-tbl';
     const header = table.createTHead().insertRow();
@@ -1696,10 +1698,13 @@ async function renderStockInvestors(more = false) {
   } catch(error) {
     if (generation === investorGeneration && code === investorCode) status.textContent='수급 조회 실패: '+error.message;
   } finally {
-    if (generation === investorGeneration) { investorLoading=false;button.disabled=!(investorCont==='Y'&&investorNext); }
+    if (generation === investorGeneration) { investorLoading=false; }
   }
 }
-document.getElementById('stock-investor-more').addEventListener('click',()=>renderStockInvestors(true));
+document.getElementById('stock-investor-table').addEventListener('scroll', event => {
+  const host = event.currentTarget;
+  if (host.scrollTop > 0 && host.scrollTop + host.clientHeight >= host.scrollHeight - 24) renderStockInvestors(true);
+});
 
 document.querySelectorAll('input[name="investor-mode"]').forEach(radio => radio.addEventListener('change', () => {
   investorMode = radio.value;
@@ -2334,7 +2339,7 @@ async function preparePriceAlertSound() {
     if (!Audio) throw new Error('이 브라우저는 알림음을 지원하지 않습니다.');
     if (!priceAlertAudio || priceAlertAudio.state === 'closed') priceAlertAudio = new Audio();
     if (priceAlertAudio.state !== 'running') await priceAlertAudio.resume();
-    if (priceAlertAudio.state !== 'running') throw new Error('소리 테스트를 눌러 알림음을 활성화하세요.');
+    if (priceAlertAudio.state !== 'running') throw new Error('브라우저에서 소리 재생이 차단되었습니다.');
     status.textContent = '';
     return true;
   } catch(error) { status.textContent = error.message; return false; }
@@ -2396,7 +2401,7 @@ function renderPriceAlerts() {
   const body=table.createTBody();
   priceAlerts.forEach(item=>{
     const row=body.insertRow(),quote=priceAlertQuotes.get(item.code);
-    [item.name||item.code,item.target.toLocaleString('ko-KR')+'원',item.condition==='above'?'이상':'이하',quote?quote.price.toLocaleString('ko-KR')+'원':'-'].forEach(text=>{row.insertCell().textContent=text;});
+    [item.name||item.code,item.target.toLocaleString('ko-KR'),item.condition==='above'?'이상':'이하',quote?quote.price.toLocaleString('ko-KR'):'-'].forEach(text=>{row.insertCell().textContent=text;});
     const actions=row.insertCell();
     if(!item.enabled){const rearm=document.createElement('button');rearm.className='prog-go';rearm.textContent='재설정';rearm.type='button';rearm.addEventListener('click',()=>{
       if(priceAlerts.filter(alert=>alert.enabled).length>=10){document.getElementById('price-alert-status').textContent='활성 알림은 최대 10개입니다.';return;}
@@ -2405,6 +2410,13 @@ function renderPriceAlerts() {
     const remove=document.createElement('button');remove.className='prog-go';remove.textContent='삭제';remove.type='button';remove.addEventListener('click',()=>{priceAlerts=priceAlerts.filter(alert=>alert.id!==item.id);savePriceAlerts();renderPriceAlerts();});actions.append(remove);
   });host.append(table);
 }
+(function(){
+  const button=document.getElementById('toggle-price-alert'), content=document.getElementById('price-alert-content');
+  let collapsed=false;try{collapsed=localStorage.getItem('price_alert_collapsed')==='1';}catch(error){}
+  const apply=()=>{content.hidden=collapsed;button.textContent=collapsed?'펼치기 ▸':'접기 ▾';button.setAttribute('aria-expanded',String(!collapsed));};apply();
+  button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('price_alert_collapsed',collapsed?'1':'0');}catch(error){}apply();});
+})();
+
 async function checkPriceAlerts() {
   if(priceAlertPolling)return;
   const codes=[...new Set(priceAlerts.filter(item=>item.enabled).map(item=>item.code))].slice(0,10);
