@@ -391,7 +391,7 @@
     <button id="price-alert-add" class="prog-go" type="submit">추가</button>
   </form>
   <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려있는 동안만 10초 갱신, 종목간 0.5초 갱신</div>
-  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><select id="price-alert-sound-preview" class="chart-sel" style="margin-left:0" aria-label="미리 들을 알림음"><option value="melody">현재 멜로디</option><option value="bell">부드러운 벨</option><option value="warning">또렷한 경고음</option></select><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
+  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><select id="price-alert-sound-preview" class="chart-sel" style="margin-left:0" aria-label="미리 들을 알림음"><option value="metal">1. 금속 타종 벨</option><option value="retro">2. 레트로 전화벨</option><option value="double">3. 이중 경보 벨</option><option value="urgent">4. 긴급 경종</option><option value="buzzer">5. 전자 버저 벨</option></select><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
   <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
   <div id="price-alert-list" style="overflow:auto"></div>
 </div>
@@ -2336,29 +2336,47 @@ async function preparePriceAlertSound() {
     if (!priceAlertAudio || priceAlertAudio.state === 'closed') priceAlertAudio = new Audio();
     if (priceAlertAudio.state !== 'running') await priceAlertAudio.resume();
     if (priceAlertAudio.state !== 'running') throw new Error('소리 테스트를 눌러 알림음을 활성화하세요.');
-    status.textContent = '알림음 사용 준비 완료';
+    status.textContent = '';
     return true;
   } catch(error) { status.textContent = error.message; return false; }
 }
-async function playPriceAlertSound(sample = 'melody') {
+const priceAlertSoundSelect = document.getElementById('price-alert-sound-preview');
+try {
+  const saved = localStorage.getItem('stock_price_alert_tone');
+  if (['metal','retro','double','urgent','buzzer'].includes(saved)) priceAlertSoundSelect.value = saved;
+} catch(error) {}
+priceAlertSoundSelect.addEventListener('change', () => {
+  try { localStorage.setItem('stock_price_alert_tone', priceAlertSoundSelect.value); } catch(error) {}
+});
+const activeAlertOscillators = new Set();
+async function playPriceAlertSound(sample = priceAlertSoundSelect.value) {
   if (!await preparePriceAlertSound()) return;
   if (!alertSoundCheckbox.checked) return;
   const audio = priceAlertAudio, now = audio.currentTime;
-  const melody = [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25];
-  const notes = sample === 'bell' ? [659.25, 880, 1046.5]
-    : sample === 'warning' ? [880,1174.66,880,1174.66,880,1174.66,880,1174.66] : [...melody,...melody];
-  const spacing = sample === 'bell' ? 0.5 : sample === 'warning' ? 0.35 : 0.4;
-  const duration = sample === 'bell' ? 0.8 : sample === 'warning' ? 0.28 : 0.55;
-  notes.forEach((frequency,index) => {
-    const delay = index * spacing;
-    const oscillator = audio.createOscillator(), gain = audio.createGain();
-    oscillator.type = sample === 'melody' ? 'triangle' : 'sine'; oscillator.frequency.value = frequency;
-    gain.gain.setValueAtTime(0, now + delay);
-    gain.gain.linearRampToValueAtTime(0.18, now + delay + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + duration - 0.025);
-    oscillator.connect(gain); gain.connect(audio.destination);
-    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
-    oscillator.start(now + delay); oscillator.stop(now + delay + duration);
+  // 샘플을 바꿔 재생하면 이전 소리를 멈춰 겹치지 않게 한다.
+  activeAlertOscillators.forEach(oscillator => { try { oscillator.stop(); } catch(error) {} });
+  activeAlertOscillators.clear();
+  const presets = {
+    metal: {type:'sine',notes:[660,660,784,660,660,784,660,660],spacing:.6,duration:.7,partials:[1,2.76,4.07],gain:.12},
+    retro: {type:'square',notes:[660,880,660,880,660,880,660,880,660,880,660,880],spacing:.4,duration:.32,partials:[1],gain:.1},
+    double: {type:'triangle',notes:[740,988,740,988,740,988,740,988,740,988],spacing:.5,duration:.45,partials:[1,1.5],gain:.13},
+    urgent: {type:'sawtooth',notes:[523,1046,523,1046,523,1046,523,1046,523,1046],spacing:.5,duration:.45,partials:[1],gain:.1},
+    buzzer: {type:'square',notes:Array.from({length:20},(_,i)=>i%2?587:440),spacing:.25,duration:.18,partials:[1],gain:.1}
+  };
+  const preset = presets[sample] || presets.metal;
+  preset.notes.forEach((frequency,index) => {
+    const delay = index * preset.spacing;
+    preset.partials.forEach((partial,harmonic) => {
+      const oscillator = audio.createOscillator(), gain = audio.createGain();
+      oscillator.type = preset.type; oscillator.frequency.value = frequency * partial;
+      gain.gain.setValueAtTime(0, now + delay);
+      gain.gain.linearRampToValueAtTime(preset.gain / (harmonic+1), now + delay + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + preset.duration - 0.02);
+      oscillator.connect(gain); gain.connect(audio.destination);
+      activeAlertOscillators.add(oscillator);
+      oscillator.onended = () => { activeAlertOscillators.delete(oscillator);oscillator.disconnect();gain.disconnect(); };
+      oscillator.start(now + delay); oscillator.stop(now + delay + preset.duration);
+    });
   });
 }
 alertSoundCheckbox.addEventListener('change', () => {
@@ -2383,11 +2401,11 @@ function renderPriceAlerts() {
   if(!priceAlerts.length){host.textContent='등록된 가격알림이 없습니다.';return;}
   const table=document.createElement('table');table.className='prog-tbl';
   const header=table.createTHead().insertRow();
-  ['종목명','알림 주가','조건','현재가','상태',''].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+  ['종목명','알림 주가','조건','현재가',''].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
   const body=table.createTBody();
   priceAlerts.forEach(item=>{
     const row=body.insertRow(),quote=priceAlertQuotes.get(item.code);
-    [item.name||item.code,item.target.toLocaleString('ko-KR')+'원',item.condition==='above'?'이상':'이하',quote?quote.price.toLocaleString('ko-KR')+'원':'-',item.enabled?'감시 중':'알림 완료'].forEach(text=>{row.insertCell().textContent=text;});
+    [item.name||item.code,item.target.toLocaleString('ko-KR')+'원',item.condition==='above'?'이상':'이하',quote?quote.price.toLocaleString('ko-KR')+'원':'-'].forEach(text=>{row.insertCell().textContent=text;});
     const actions=row.insertCell();
     if(!item.enabled){const rearm=document.createElement('button');rearm.className='prog-go';rearm.textContent='재설정';rearm.type='button';rearm.addEventListener('click',()=>{
       if(priceAlerts.filter(alert=>alert.enabled).length>=10){document.getElementById('price-alert-status').textContent='활성 알림은 최대 10개입니다.';return;}
