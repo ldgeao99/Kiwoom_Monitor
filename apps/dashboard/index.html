@@ -2570,6 +2570,9 @@ async function loadIntradayInvestors(force=false) {
           intradaySelection={code:item.code,name:item.name,orgn:key};
           host.querySelectorAll('tbody tr').forEach(el=>el.classList.remove('selected'));row.classList.add('selected');
           loadIntradayHistory();
+          if(document.querySelector('.chart-wrap').hidden)document.getElementById('toggle-chart').click();
+          setChartStock(item.code,item.name);
+          document.getElementById('stock-chart-title').scrollIntoView({behavior:'smooth',block:'start'});
         });
       });
       if(!items.length){const cell=body.insertRow().insertCell();cell.colSpan=2;cell.textContent='제공된 데이터가 없습니다.';}
