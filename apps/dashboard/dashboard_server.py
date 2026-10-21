@@ -627,6 +627,7 @@ def run_loop(interval=60, start_h=8, end_h=20):
                     except Exception as e:
                         print(f"  {market['name']} 조회 실패: {e}")
                         token = None  # 토큰 만료 등 대비해 재발급
+                collect_intraday_investors()       # 실제 변경된 잠정 수급만 일자별 기록
                 maybe_send_digest(now_kst())       # 08:10 / 09:10 다이제스트
                 prune_old_snapshots()              # 새 날짜 파일 생성 대비 정리
                 sleep_to_next_boundary(interval)   # 다음 :00 까지 대기(드리프트 없음)
@@ -1509,10 +1510,68 @@ _intraday_investor_cache = {}
 _intraday_investor_lock = threading.Lock()
 
 
+def intraday_snapshot_path(day):
+    return os.path.join(DATA_DIR, f'intraday_investors_{day}.jsonl')
+
+
+def read_intraday_snapshots(day):
+    path = intraday_snapshot_path(day)
+    if not os.path.exists(path): return []
+    records = []
+    with open(path, encoding='utf-8') as source:
+        for line in source:
+            try:
+                record = json.loads(line)
+                if isinstance(record,dict): records.append(record)
+            except (ValueError,TypeError): continue
+    return records
+
+
+def record_intraday_groups(groups, side):
+    now = now_kst()
+    day = now.strftime('%Y-%m-%d')
+    records = read_intraday_snapshots(day)
+    latest = {record['orgn']:record for record in records if record.get('side')==side and record.get('orgn') in ('9000','9999')}
+    times = {}
+    for orgn,items in groups.items():
+        previous = latest.get(orgn)
+        before = {item['code']:item['net'] for item in previous.get('items',[])} if previous else None
+        current = {item['code']:item['net'] for item in items}
+        if items and current != before:
+            record = {'side':side,'orgn':orgn,'observed_at':now.strftime('%Y-%m-%d %H:%M:%S KST'),'items':items}
+            with open(intraday_snapshot_path(day),'a',encoding='utf-8') as target:
+                target.write(json.dumps(record,ensure_ascii=False)+'\n')
+            previous = record
+        times[orgn] = previous.get('observed_at','') if previous else ''
+    return times
+
+
+def build_intraday_history(code, orgn, side):
+    if len(code)!=6 or not code.isascii() or not code.isalnum() or orgn not in ('9000','9999') or side not in ('1','2'):
+        raise ValueError('올바른 종목·투자자·매매구분이 필요합니다.')
+    day = now_kst().strftime('%Y-%m-%d')
+    with _intraday_investor_lock:
+        records = [record for record in read_intraday_snapshots(day) if record.get('orgn')==orgn and record.get('side')==side]
+    items,previous = [],None
+    for index,record in enumerate(records):
+        found = next((item for item in record.get('items',[]) if item.get('code')==code),None)
+        value = found.get('net') if found else None
+        delta = value-previous if value is not None and previous is not None else None
+        items.append({'round':index+1,'time':record.get('observed_at',''),'net':value,'change':delta})
+        previous = value
+    return {'code':code,'orgn':orgn,'side':side,'date':day,'items':items}
+
+
+def collect_intraday_investors():
+    for side in ('1','2'):
+        try: build_intraday_investors(side,'1')
+        except Exception as error: print(f'[잠정 수급 수집 실패] {error}')
+
+
 def build_intraday_investors(side='1', mode='2'):
     side = side if side in ('1','2') else '1'
     mode = mode if mode in ('1','2') else '2'
-    key = (side,mode)
+    key = (side,mode,now_kst().strftime('%Y-%m-%d'))
     with _intraday_investor_lock:
         cached = _intraday_investor_cache.get(key)
         if cached and time.time()-cached['ts'] < 60:
@@ -1550,6 +1609,7 @@ def build_intraday_investors(side='1', mode='2'):
         except Exception:
             _token_cache['token'] = None
             data = request_all(cached_token())
+        if mode == '1': data['updated_at'] = record_intraday_groups(data['groups'],side)
         _intraday_investor_cache[key] = {'ts':time.time(),'data':data}
         return data
 
@@ -1632,6 +1692,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/intraday_investor_history':
+            qs = parse_qs(parsed.query)
+            try:
+                payload = build_intraday_history(qs.get('code',[''])[0],qs.get('orgn',['9000'])[0],qs.get('side',['1'])[0])
+            except Exception as error:
+                payload = {'items':[],'error':str(error)}
+            body = json.dumps(payload,ensure_ascii=False).encode('utf-8')
+            self._send(body,'application/json; charset=utf-8')
         elif path == '/api/intraday_investors':
             qs = parse_qs(parsed.query)
             try:

@@ -340,13 +340,18 @@
   </div>
 </div>
 <div class="page-title" style="flex-wrap:wrap"><span>장중투자자별 매매상위(잠정)</span><button id="toggle-intraday-investors" class="view-btn" type="button" aria-controls="intraday-investors-content" aria-expanded="true">접기 ▾</button></div>
-<div id="intraday-investors-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box">
+<div id="intraday-investors-content" class="prog-wrap">
   <div class="prog-row" style="padding:4px 0 8px">
     <span class="market-sel"><label><input type="radio" name="intraday-side" value="1" checked>순매수</label><label><input type="radio" name="intraday-side" value="2">순매도</label></span>
-    <span class="market-sel"><label><input type="radio" name="intraday-mode" value="1" checked>금액(억)</label><label><input type="radio" name="intraday-mode" value="2">수량</label></span>
   </div>
-  <div id="intraday-investors-status" role="status" style="font-size:12px"></div>
-  <div class="pu-both" id="intraday-investors-tables"></div>
+  <div class="panel" style="padding:8px;box-sizing:border-box">
+    <div id="intraday-investors-status" role="status" style="font-size:12px"></div>
+    <div class="pu-both" id="intraday-investors-tables"></div>
+    <div id="intraday-investor-history" style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px" hidden>
+      <div class="prog-row"><b id="intraday-history-title" style="font-size:13px"></b><span class="market-sel" style="margin-left:auto"><label><input type="radio" name="intraday-history-view" value="change" checked>증감</label><label><input type="radio" name="intraday-history-view" value="net">누적</label></span></div>
+      <small id="intraday-history-status" role="status"></small><div id="intraday-history-table" style="max-height:204px;overflow:auto;margin-top:4px"></div>
+    </div>
+  </div>
 </div>
 <div class="page-title"><span>종목별 프로그램 순매수</span><button id="toggle-program" class="view-btn" type="button" aria-controls="program-content" aria-expanded="true">접기 ▾</button></div>
 <div class="prog-wrap" id="program-content">
@@ -2531,11 +2536,12 @@ document.getElementById('price-alert-dismiss').addEventListener('click',()=>docu
 renderPriceAlerts();checkPriceAlerts();setInterval(checkPriceAlerts,10000);
 
 let intradayInvestorGeneration=0, intradayInvestorLoading=false;
+let intradaySelection=null, intradayHistoryItems=[], intradayHistoryGeneration=0;
 async function loadIntradayInvestors(force=false) {
   if(document.getElementById('intraday-investors-content').hidden || (intradayInvestorLoading&&!force))return;
   const generation=++intradayInvestorGeneration;
   const side=document.querySelector('input[name="intraday-side"]:checked').value;
-  const mode=document.querySelector('input[name="intraday-mode"]:checked').value;
+  const mode='1';
   const status=document.getElementById('intraday-investors-status');
   intradayInvestorLoading=true;status.textContent='불러오는 중…';
   try{
@@ -2549,26 +2555,69 @@ async function loadIntradayInvestors(force=false) {
     [['9000','외국인'],['9999','기관계']].forEach(([key,name])=>{
       const section=document.createElement('section');
       const title=document.createElement('h3');title.textContent=name;section.append(title);
+      const stamp=document.createElement('div');stamp.style.cssText='font-size:11px;text-align:center;margin-bottom:6px';
+      stamp.textContent='최종집계(변경 확인): '+(data.updated_at?.[key]?.replace(' KST','')||'-');section.append(stamp);
       const scroll=document.createElement('div');scroll.className='pu-scroll';
       const table=document.createElement('table'),header=table.createTHead().insertRow();
-      ['종목명',(side==='1'?'순매수':'순매도')+(mode==='1'?'금액(억)':'수량')].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+      ['종목명',(side==='1'?'순매수':'순매도')+'금액'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
       const body=table.createTBody(),items=data.groups?.[key]||[];
       items.forEach(item=>{
         const row=body.insertRow();row.dataset.code=item.code;
         const nameCell=row.insertCell();nameCell.textContent=item.name;nameCell.title=item.name;
-        const amount=row.insertCell();amount.className=cls(item.net);amount.textContent=(item.net>0?'+':'')+item.net.toLocaleString('ko-KR',{maximumFractionDigits:0});
-        row.addEventListener('click',()=>selectListedStock(item.code,item.name));
+        const amount=row.insertCell();amount.className=cls(item.net);amount.textContent=(item.net>0?'+':'')+item.net.toLocaleString('ko-KR',{maximumFractionDigits:0})+'억';
+        row.classList.toggle('selected',intradaySelection?.code===item.code&&intradaySelection?.orgn===key);
+        row.addEventListener('click',()=>{
+          intradaySelection={code:item.code,name:item.name,orgn:key};
+          host.querySelectorAll('tbody tr').forEach(el=>el.classList.remove('selected'));row.classList.add('selected');
+          loadIntradayHistory();
+        });
       });
       if(!items.length){const cell=body.insertRow().insertCell();cell.colSpan=2;cell.textContent='제공된 데이터가 없습니다.';}
       scroll.append(table);section.append(scroll);sections.push(section);
     });
     host.replaceChildren(...sections);
     host.querySelectorAll('.pu-scroll').forEach((el,i)=>{el.scrollTop=positions[i]?.top||0;el.scrollLeft=positions[i]?.left||0;});
-    status.textContent=data.note||'';
+    status.textContent='';
+    if(intradaySelection)loadIntradayHistory();
   }catch(error){if(generation===intradayInvestorGeneration)status.textContent='잠정 수급 조회 실패: '+error.message;}
   finally{if(generation===intradayInvestorGeneration)intradayInvestorLoading=false;}
 }
-document.querySelectorAll('input[name="intraday-side"],input[name="intraday-mode"]').forEach(input=>input.addEventListener('change',()=>loadIntradayInvestors(true)));
+function renderIntradayHistory() {
+  const host=document.getElementById('intraday-history-table');
+  const view=document.querySelector('input[name="intraday-history-view"]:checked').value;
+  const table=document.createElement('table');table.className='prog-tbl';
+  const header=table.createTHead().insertRow();
+  ['차수','변경 확인시각',view==='change'?'증감금액':'누적금액'].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+  const body=table.createTBody();
+  intradayHistoryItems.forEach(item=>{
+    const row=body.insertRow();row.insertCell().textContent=item.round+'차';row.insertCell().textContent=item.time.slice(11,19);
+    const value=view==='change'?item.change:item.net,cell=row.insertCell();cell.className=cls(value);
+    cell.textContent=value==null?'-':(value>0?'+':'')+value.toLocaleString('ko-KR',{maximumFractionDigits:2})+'억';
+  });host.replaceChildren(table);
+}
+async function loadIntradayHistory() {
+  if(!intradaySelection)return;
+  const selection={...intradaySelection},generation=++intradayHistoryGeneration;
+  const side=document.querySelector('input[name="intraday-side"]:checked').value;
+  const box=document.getElementById('intraday-investor-history'),status=document.getElementById('intraday-history-status');
+  box.hidden=false;
+  document.getElementById('intraday-history-title').textContent=selection.name+'('+selection.code+') · '+(selection.orgn==='9000'?'외국인':'기관계')+' · '+(side==='1'?'순매수':'순매도');
+  status.textContent='불러오는 중…';
+  try{
+    const response=await fetch('/api/intraday_investor_history?code='+encodeURIComponent(selection.code)+'&orgn='+selection.orgn+'&side='+side,{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();if(generation!==intradayHistoryGeneration)return;
+    if(data.error)throw new Error(data.error);
+    intradayHistoryItems=data.items||[];renderIntradayHistory();
+    status.textContent=intradayHistoryItems.length?'서버 변경 확인시각(KST) 기준 · 첫 회차 및 상위목록 미포함 구간의 증감은 -로 표시합니다.':'오늘 기록된 집계가 없습니다.';
+  }catch(error){if(generation===intradayHistoryGeneration)status.textContent='집계 내역 조회 실패: '+error.message;}
+}
+document.querySelectorAll('input[name="intraday-history-view"]').forEach(input=>input.addEventListener('change',renderIntradayHistory));
+document.querySelectorAll('input[name="intraday-side"]').forEach(input=>input.addEventListener('change',()=>{
+  ++intradayHistoryGeneration;
+  if(intradaySelection)loadIntradayHistory();
+  loadIntradayInvestors(true);
+}));
 (function(){
   const button=document.getElementById('toggle-intraday-investors'),content=document.getElementById('intraday-investors-content');
   let collapsed=false;try{collapsed=localStorage.getItem('intraday_investors_collapsed')==='1';}catch(error){}
