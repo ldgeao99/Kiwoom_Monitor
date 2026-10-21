@@ -222,7 +222,11 @@
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
   .prog-go:disabled { opacity:.4; cursor:default; }
-  #price-alert-target { width:112px; box-sizing:border-box; }
+  #price-alert-form { flex-wrap:nowrap; gap:4px; }
+  #price-alert-stock { width:110px; max-width:110px; min-width:60px; flex:1 1 110px; box-sizing:border-box; padding:4px 6px; }
+  #price-alert-target { width:96px; min-width:84px; flex:0 1 96px; box-sizing:border-box; padding:4px 6px; }
+  #price-alert-condition { width:52px; flex:0 0 52px; box-sizing:border-box; padding:4px 2px; font-size:12px; }
+  #price-alert-add { flex:none; padding:5px 8px; }
   #price-alert-add { background:#2563eb; border-color:#2563eb; color:#ffffff; }
   #price-alert-add:hover { background:#1d4ed8; }
   .prog-title { flex-direction:column; align-items:stretch; gap:8px; }
@@ -368,8 +372,8 @@
   <div class="panel">
     <div id="stock-chart"></div>
   </div>
+  <div id="stock-memo" class="panel" style="margin-top:8px;padding:10px 14px;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5" hidden></div>
 </div>
-<div id="stock-memo" class="prog-wrap panel" style="padding:10px 14px;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5" hidden></div>
 <div id="stock-investor-section">
   <div class="page-title"><span>종목별 투자자 수급</span><button id="stock-investor-more" class="prog-go" style="margin-left:auto" type="button" disabled>추가조회</button><button id="toggle-stock-investor" class="view-btn" style="margin-left:0" type="button" aria-controls="stock-investor-content" aria-expanded="true">접기 ▾</button></div>
   <div id="stock-investor-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box;position:relative"><div class="prog-row" style="margin-bottom:8px"><input id="stock-investor-search" class="prog-input" placeholder="종목코드/종목명" aria-label="투자자 수급 종목 검색"><button id="stock-investor-go" class="prog-go" type="button">조회</button><span class="market-sel" id="stock-investor-mode"><label class="on"><input type="radio" name="investor-mode" value="1" checked>금액(억)</label><label><input type="radio" name="investor-mode" value="2">수량</label></span></div><div id="stock-investor-status" role="status" style="font-size:12px;position:absolute;right:8px;bottom:8px;background:var(--panel);z-index:2">종목을 선택하세요.</div><div id="stock-investor-table" style="min-height:204px;max-height:204px;overflow:auto"></div></div>
@@ -385,7 +389,7 @@
     <input id="price-alert-stock" class="prog-input" aria-label="알림 종목" placeholder="종목명/종목코드" required>
     <input id="price-alert-target" class="prog-input" aria-label="알림 주가" placeholder="알림 주가(원)" type="number" min="1" step="1" required>
     <select id="price-alert-condition" class="chart-sel" style="margin-left:0" aria-label="알림 조건"><option value="above">이상</option><option value="below">이하</option></select>
-    <button id="price-alert-add" class="prog-go" type="submit">알림 추가</button>
+    <button id="price-alert-add" class="prog-go" type="submit">추가</button>
   </form>
   <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려있는 동안만 10초 갱신, 종목간 0.5초 갱신</div>
   <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
