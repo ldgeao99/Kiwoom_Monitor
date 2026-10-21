@@ -840,9 +840,10 @@ function combinedIndexChart(markets) {
       const parts = (point.t || '').split(':');
       return {idx: point.idx, minute: Number(parts[0]) * 60 + Number(parts[1]), pct: (point.idx / base - 1) * 100};
     }).filter(point => Number.isFinite(point.minute) && point.minute >= 540 && point.minute <= 940 && Number.isFinite(point.pct)).sort((a,b) => a.minute - b.minute) : [];
-    return {key, color:index ? '#0000ff' : '#ff0000', points};
+    const openPct = !market.preopen && base > 0 && market.open > 0 ? (market.open / base - 1) * 100 : null;
+    return {key, color:index ? '#0000ff' : '#ff0000', points, openPct};
   });
-  const values = series.flatMap(line => line.points.map(point => point.pct));
+  const values = series.flatMap(line => [...line.points.map(point => point.pct), ...(line.points.length && Number.isFinite(line.openPct) ? [line.openPct] : [])]);
   const legend = '<div class="combined-index-legend"><span style="color:#ff0000">━ 코스피</span><span style="color:#0000ff">━ 코스닥</span><span>전일 대비 (%)</span></div>';
   if (!values.length) return `<div class="combined-index-chart">${legend}<div class="empty">장중 데이터 수집 대기 중…</div></div>`;
   let lo = Math.min(0, ...values), hi = Math.max(0, ...values);
@@ -869,6 +870,11 @@ function combinedIndexChart(markets) {
     const xx = x(minute);
     drawing += `<text x="${xx}" y="${H-7}" text-anchor="middle" font-size="11" fill="#000000">${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}</text>`;
   }
+  series.forEach(line => {
+    if (!line.points.length || !Number.isFinite(line.openPct)) return;
+    const name = line.key === 'kospi' ? '코스피' : '코스닥';
+    drawing += `<line class="combined-open-line" data-market="${line.key}" data-percent="${line.openPct}" x1="${left}" x2="${W-right}" y1="${y(line.openPct)}" y2="${y(line.openPct)}" stroke="${line.color}" stroke-width="1"><title>${name} 시초가</title></line>`;
+  });
   series.forEach(line => {
     if (!line.points.length) return;
     const points = line.points.map(point => `${x(point.minute).toFixed(2)},${y(point.pct).toFixed(2)}`).join(' ');
