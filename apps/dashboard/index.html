@@ -389,7 +389,7 @@
 </div>
 
 <div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><select id="etf-sort" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
-<div id="etf-filter-row" style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
+<div id="etf-filter-row" style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-single-leverage" type="checkbox" checked>단일종목레버리지 제외</label><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
 <div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
 
 <div class="page-title" style="flex-wrap:wrap"><span>종목 가격알림</span><div style="display:flex;align-items:center;gap:8px;margin-left:auto"><label style="font-size:13px;font-weight:400;white-space:nowrap"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><button id="toggle-price-alert" class="view-btn" style="margin-left:0" type="button" aria-controls="price-alert-content" aria-expanded="true">접기 ▾</button></div></div>
@@ -2285,7 +2285,8 @@ function renderEtfTable() {
   const host = document.getElementById('etf-table'), top = host.scrollTop;
   const direction = document.getElementById('etf-sort').value === 'asc' ? 1 : -1;
   const excludeLeverage = document.getElementById('etf-exclude-leverage').checked;
-  const sorted = etfItems.filter(item => !excludeLeverage || !/레버리지|2x/i.test(item.name || ''))
+  const excludeSingleLeverage = document.getElementById('etf-exclude-single-leverage').checked;
+  const sorted = etfItems.filter(item => (!excludeLeverage || !/레버리지|2x/i.test(item.name || '')) && (!excludeSingleLeverage || !item.single_stock_leverage))
     .sort((a,b)=>direction*(a.flu-b.flu)||a.code.localeCompare(b.code));
   const table = document.createElement('table'); table.className = 'prog-tbl';
   const columns=document.createElement('colgroup');
@@ -2311,7 +2312,7 @@ function renderEtfTable() {
     });
   });
   host.replaceChildren(table);host.scrollTop=top;
-  document.getElementById('etf-status').textContent = etfItems.length ? (excludeLeverage ? `${sorted.length.toLocaleString('ko-KR')}개 표시 / 전체 ${etfItems.length.toLocaleString('ko-KR')}개` : `전체 ${etfItems.length.toLocaleString('ko-KR')}개`) : 'ETF 데이터가 없습니다.';
+  document.getElementById('etf-status').textContent = etfItems.length ? ((excludeLeverage || excludeSingleLeverage) ? `${sorted.length.toLocaleString('ko-KR')}개 표시 / 전체 ${etfItems.length.toLocaleString('ko-KR')}개` : `전체 ${etfItems.length.toLocaleString('ko-KR')}개`) : 'ETF 데이터가 없습니다.';
 }
 async function loadEtfQuotes() {
   if (etfLoading || document.getElementById('etf-content').hidden) return;
@@ -2325,14 +2326,14 @@ async function loadEtfQuotes() {
   }catch(error){status.textContent='ETF 조회 실패: '+error.message;}
   finally{etfLoading=false;}
 }
-(function(){
-  const checkbox = document.getElementById('etf-exclude-leverage');
-  try { checkbox.checked = localStorage.getItem('etf_exclude_leverage') === '1'; } catch(e) {}
-  checkbox.addEventListener('change',()=>{
-    try { localStorage.setItem('etf_exclude_leverage',checkbox.checked?'1':'0'); } catch(e) {}
+// 페이지를 열면 단일종목 제외만 기본 선택한다.
+document.getElementById('etf-exclude-single-leverage').checked=true;
+document.getElementById('etf-exclude-leverage').checked=false;
+['etf-exclude-single-leverage','etf-exclude-leverage'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',()=>{
     document.getElementById('etf-table').scrollTop=0;renderEtfTable();
   });
-})();
+});
 document.getElementById('etf-sort').addEventListener('change',()=>{document.getElementById('etf-table').scrollTop=0;renderEtfTable();});
 (function(){
   const button=document.getElementById('toggle-etf'),content=document.getElementById('etf-content');

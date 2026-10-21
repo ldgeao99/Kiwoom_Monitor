@@ -39,6 +39,7 @@ import sys
 import threading
 import time
 import requests
+import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, parse_qs
 
@@ -1399,6 +1400,25 @@ _etf_quotes_cache = {'ts':0, 'data':None}
 _etf_quotes_lock = threading.Lock()
 
 
+def is_single_stock_leverage(name, tracking_name, stock_names):
+    if not re.search(r'레버리지|2X|2배', name, re.I):
+        return False
+    if '단일종목' in name.replace(' ', ''):
+        return True
+    # 종목명/추적지수에서 운용사와 레버리지 표기를 제거한 뒤 기초종목명과 비교한다.
+    def normalize(text):
+        text = re.sub(r'^(KODEX|TIGER|KIWOOM|KOSEF|KINDEX|ACE|RISE|KBSTAR|SOL|PLUS|ARIRANG|HANARO|TIMEFOLIO|WON|BNK|1Q|FOCUS|TRUSTON|UNICORN|KOACT)\s*', '', text.upper())
+        text = re.sub(r'\([^)]*\)', '', text)
+        text = re.sub(r'레버리지|2X|2배|DAILY|일간|합성|액티브|환헤지', '', text)
+        text = re.sub(r'^(미국|한국)', '', text.strip())
+        return re.sub(r'[^0-9A-Z가-힣]', '', text)
+    known = stock_names
+    known.update({'삼성전자','SK하이닉스','테슬라','TESLA','엔비디아','NVIDIA','애플','APPLE','아마존','AMAZON',
+                  '마이크로소프트','MICROSOFT','구글','알파벳','ALPHABET','메타','META','브로드컴','BROADCOM',
+                  '팔란티어','PALANTIR','코인베이스','COINBASE','AMD','넷플릭스','NETFLIX'})
+    return normalize(name) in known or bool(tracking_name and normalize(tracking_name) in known)
+
+
 def build_etf_quotes():
     with _etf_quotes_lock:
         if _etf_quotes_cache['data'] is not None and time.time() - _etf_quotes_cache['ts'] < 60:
@@ -1418,6 +1438,7 @@ def build_etf_quotes():
                     code = str(row.get('stk_cd') or '').split('_')[0]
                     if not code: continue
                     items[code] = {'code':code, 'name':row.get('stk_nm',''),
+                                   'tracking_name':row.get('trace_idex_nm',''),
                                    'price':abs(to_number(row.get('close_pric'))),
                                    'flu':to_number(row.get('pre_rt')), 'volume':abs(to_number(row.get('trde_qty')))}
                 cont = response.headers.get('cont-yn','N').upper()
@@ -1427,6 +1448,9 @@ def build_etf_quotes():
                     raise RuntimeError('ETF 연속조회가 완료되지 않았습니다. 다시 조회하세요.')
                 seen.add(cursor)
                 time.sleep(0.5)
+            stock_names = {re.sub(r'[^0-9A-Z가-힣]', '', name.upper()) for code,name in (_stock_items.get('items') or [])}
+            for item in items.values():
+                item['single_stock_leverage'] = is_single_stock_leverage(item['name'], item.pop('tracking_name'), stock_names)
             return {'items':sorted(items.values(),key=lambda item:(-item['flu'],item['code']))}
         try:
             data = request_all(cached_token())
