@@ -222,6 +222,9 @@
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
   .prog-go:disabled { opacity:.4; cursor:default; }
+  #price-alert-target { width:112px; box-sizing:border-box; }
+  #price-alert-add { background:#2563eb; border-color:#2563eb; color:#ffffff; }
+  #price-alert-add:hover { background:#1d4ed8; }
   .prog-title { flex-direction:column; align-items:stretch; gap:8px; }
   .prog-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .prog-name { font-size:14px; font-weight:700; color:var(--text); }
@@ -384,7 +387,7 @@
     <select id="price-alert-condition" class="chart-sel" style="margin-left:0" aria-label="알림 조건"><option value="above">이상</option><option value="below">이하</option></select>
     <button id="price-alert-add" class="prog-go" type="submit">알림 추가</button>
   </form>
-  <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려 있는 동안 약 10초마다 확인합니다. 설정은 이 브라우저에 저장되며, 알림은 조건 충족 시 1회 표시됩니다. 활성 알림은 최대 10개입니다.</div>
+  <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려있는 동안만 10초 갱신, 종목간 0.5초 갱신</div>
   <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
   <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
   <div id="price-alert-list" style="overflow:auto"></div>
