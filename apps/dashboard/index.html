@@ -873,7 +873,7 @@ function combinedIndexChart(markets) {
   series.forEach(line => {
     if (!line.points.length || !Number.isFinite(line.openPct)) return;
     const name = line.key === 'kospi' ? '코스피' : '코스닥';
-    drawing += `<line class="combined-open-line" data-market="${line.key}" data-percent="${line.openPct}" x1="${left}" x2="${W-right}" y1="${y(line.openPct)}" y2="${y(line.openPct)}" stroke="${line.color}" stroke-width="1"><title>${name} 시초가</title></line>`;
+    drawing += `<line class="combined-open-line" data-market="${line.key}" data-percent="${line.openPct}" x1="${left}" x2="${W-right}" y1="${y(line.openPct)}" y2="${y(line.openPct)}" stroke="${line.color}" stroke-width="2"><title>${name} 시초가</title></line>`;
   });
   series.forEach(line => {
     if (!line.points.length) return;
