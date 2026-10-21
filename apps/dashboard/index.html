@@ -402,7 +402,7 @@
 </dialog>
 
 <dialog id="price-alert-edit-dialog" aria-labelledby="price-alert-edit-title" style="width:min(340px,88vw);box-sizing:border-box;border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel);color:var(--text)">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h2 id="price-alert-edit-title" style="font-size:18px;margin:0">가격알림 수정</h2><button id="price-alert-edit-close" class="prog-go" type="button" aria-label="수정 창 닫기">닫기</button></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h2 id="price-alert-edit-title" tabindex="-1" autofocus style="font-size:18px;margin:0">가격알림 수정</h2></div>
   <p id="price-alert-edit-stock" style="overflow-wrap:anywhere"></p>
   <form id="price-alert-edit-form">
     <label style="display:block;font-size:14px;margin-bottom:12px">조건<select id="price-alert-edit-condition" class="chart-sel" style="display:block;width:100%;box-sizing:border-box;margin:6px 0 0" required><option value="above">이상</option><option value="below">이하</option></select></label>
@@ -2412,9 +2412,14 @@ function openPriceAlertEditor(id) {
   document.getElementById('price-alert-edit-target').value=item.target;
   document.getElementById('price-alert-edit-error').textContent='';
   document.getElementById('price-alert-edit-dialog').showModal();
-  document.getElementById('price-alert-edit-target').focus();
+  document.getElementById('price-alert-edit-title').focus({preventScroll:true});
 }
-document.getElementById('price-alert-edit-close').addEventListener('click',()=>document.getElementById('price-alert-edit-dialog').close());
+document.getElementById('price-alert-edit-dialog').addEventListener('click', event => {
+  const dialog=event.currentTarget;
+  if(event.target!==dialog)return;
+  const rect=dialog.getBoundingClientRect();
+  if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)dialog.close();
+});
 document.getElementById('price-alert-edit-form').addEventListener('submit',event=>{
   event.preventDefault();
   const item=priceAlerts.find(alert=>alert.id===editingPriceAlertId),error=document.getElementById('price-alert-edit-error');
