@@ -24,6 +24,7 @@
   .wrap { display:grid; grid-template-columns:1fr; gap:14px; max-width:1200px; margin:0 auto; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .chart-y-label, .last-close-label text, .current-amount-label text, .current-rsi-label text, .combined-current-label text { font-size:18px; font-weight:400; }
+  #price-alert-dialog::backdrop { background:rgba(0,0,0,.65); }
   .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .title small { color:var(--muted); font-weight:400; }
@@ -374,6 +375,24 @@
 <div class="page-title" style="flex-wrap:wrap"><span>ETF 전체 등락률</span><select id="etf-sort" class="chart-sel" aria-label="ETF 정렬"><option value="desc">상승률순</option><option value="asc">하락률순</option></select><button id="toggle-etf" class="view-btn" style="margin-left:0" type="button" aria-controls="etf-content" aria-expanded="true">접기 ▾</button></div>
 <div id="etf-filter-row" style="max-width:1200px;margin:0 auto 6px;display:flex;justify-content:flex-end"><label style="font-size:12px;font-weight:400;white-space:nowrap"><input id="etf-exclude-leverage" type="checkbox">레버리지 제외</label></div>
 <div id="etf-content" class="prog-wrap panel"><div id="etf-status" role="status" style="padding:4px 8px;font-size:12px"></div><div id="etf-table" style="max-height:320px;overflow:auto"></div></div>
+
+<div class="page-title"><span>종목 가격알림</span></div>
+<div class="prog-wrap panel" style="padding:12px;box-sizing:border-box">
+  <form id="price-alert-form" class="prog-row">
+    <input id="price-alert-stock" class="prog-input" aria-label="알림 종목" placeholder="종목명/종목코드" required>
+    <input id="price-alert-target" class="prog-input" aria-label="알림 주가" placeholder="알림 주가(원)" type="number" min="1" step="1" required>
+    <select id="price-alert-condition" class="chart-sel" style="margin-left:0" aria-label="알림 조건"><option value="above">이상</option><option value="below">이하</option></select>
+    <button id="price-alert-add" class="prog-go" type="submit">알림 추가</button>
+  </form>
+  <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려 있는 동안 약 10초마다 확인합니다. 설정은 이 브라우저에 저장되며, 알림은 조건 충족 시 1회 표시됩니다. 활성 알림은 최대 10개입니다.</div>
+  <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
+  <div id="price-alert-list" style="overflow:auto"></div>
+</div>
+<dialog id="price-alert-dialog" aria-labelledby="price-alert-dialog-title" style="width:min(900px,90vw);min-height:40vh;max-height:85vh;overflow:auto;box-sizing:border-box;border:3px solid #e5484d;border-radius:16px;padding:24px;background:white;color:#111">
+  <h2 id="price-alert-dialog-title" style="font-size:28px;margin:0 0 18px">🔔 종목 가격알림</h2>
+  <div id="price-alert-messages" style="font-size:22px;line-height:1.6;overflow-wrap:anywhere"></div>
+  <button id="price-alert-dismiss" class="prog-go" type="button" style="font-size:18px;padding:10px 30px;margin-top:24px">확인</button>
+</dialog>
 
 <script>
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
@@ -2290,6 +2309,85 @@ document.getElementById('etf-sort').addEventListener('change',()=>{document.getE
   const apply=()=>{content.hidden=collapsed;document.getElementById('etf-filter-row').style.display=collapsed?'none':'flex';button.textContent=collapsed?'펼치기 ▸':'접기 ▾';button.setAttribute('aria-expanded',String(!collapsed));};apply();
   button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('etf_collapsed',collapsed?'1':'0');}catch(e){}apply();if(!collapsed)loadEtfQuotes();});
 })();
+
+let priceAlerts = [];
+try {
+  const saved = JSON.parse(localStorage.getItem('stock_price_alerts') || '[]');
+  if (Array.isArray(saved)) priceAlerts = saved.filter(item => item && typeof item.id === 'string' && /^[0-9A-Z]{6}$/.test(item.code) && Number.isFinite(item.target) && item.target > 0 && ['above','below'].includes(item.condition)).slice(0,100);
+} catch(error) {}
+let priceAlertPolling = false, priceAlertAdding = false;
+const priceAlertQuotes = new Map();
+function savePriceAlerts() {
+  try { localStorage.setItem('stock_price_alerts',JSON.stringify(priceAlerts)); }
+  catch(error) { document.getElementById('price-alert-status').textContent='설정을 저장하지 못했습니다. 브라우저 저장 공간을 확인하세요.'; }
+}
+function renderPriceAlerts() {
+  const host=document.getElementById('price-alert-list');host.replaceChildren();
+  if(!priceAlerts.length){host.textContent='등록된 가격알림이 없습니다.';return;}
+  const table=document.createElement('table');table.className='prog-tbl';
+  const header=table.createTHead().insertRow();
+  ['종목명','알림 주가','조건','현재가','상태',''].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+  const body=table.createTBody();
+  priceAlerts.forEach(item=>{
+    const row=body.insertRow(),quote=priceAlertQuotes.get(item.code);
+    [item.name||item.code,item.target.toLocaleString('ko-KR')+'원',item.condition==='above'?'이상':'이하',quote?quote.price.toLocaleString('ko-KR')+'원':'-',item.enabled?'감시 중':'알림 완료'].forEach(text=>{row.insertCell().textContent=text;});
+    const actions=row.insertCell();
+    if(!item.enabled){const rearm=document.createElement('button');rearm.className='prog-go';rearm.textContent='재설정';rearm.type='button';rearm.addEventListener('click',()=>{
+      if(priceAlerts.filter(alert=>alert.enabled).length>=10){document.getElementById('price-alert-status').textContent='활성 알림은 최대 10개입니다.';return;}
+      item.enabled=true;savePriceAlerts();renderPriceAlerts();checkPriceAlerts();
+    });actions.append(rearm);}
+    const remove=document.createElement('button');remove.className='prog-go';remove.textContent='삭제';remove.type='button';remove.addEventListener('click',()=>{priceAlerts=priceAlerts.filter(alert=>alert.id!==item.id);savePriceAlerts();renderPriceAlerts();});actions.append(remove);
+  });host.append(table);
+}
+async function checkPriceAlerts() {
+  if(priceAlertPolling)return;
+  const codes=[...new Set(priceAlerts.filter(item=>item.enabled).map(item=>item.code))].slice(0,10);
+  if(!codes.length)return;
+  priceAlertPolling=true;
+  const status=document.getElementById('price-alert-status');
+  try{
+    const response=await fetch('/api/alert_prices?codes='+encodeURIComponent(codes.join(',')),{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();if(data.error)throw new Error(data.error);
+    const quotes=new Map((data.items||[]).filter(item=>Number.isFinite(item.price)&&item.price>0).map(item=>[item.code,item]));
+    quotes.forEach((quote,code)=>priceAlertQuotes.set(code,quote));
+    const triggered=[];
+    priceAlerts.forEach(item=>{
+      const quote=quotes.get(item.code);
+      if(!item.enabled||!quote)return;
+      if(item.condition==='above'?quote.price>=item.target:quote.price<=item.target){item.enabled=false;triggered.push({item,quote});}
+    });
+    if(triggered.length){
+      savePriceAlerts();const dialog=document.getElementById('price-alert-dialog'),messages=document.getElementById('price-alert-messages');
+      if(!dialog.open)messages.replaceChildren();
+      triggered.forEach(({item,quote})=>{const message=document.createElement('div');message.style.marginBottom='18px';message.textContent=`${item.name||item.code} · 현재 ${quote.price.toLocaleString('ko-KR')}원 / 설정 ${item.target.toLocaleString('ko-KR')}원 ${item.condition==='above'?'이상':'이하'} 조건 충족`;messages.append(message);});
+      if(!dialog.open)dialog.showModal();
+    }
+    status.textContent=(data.errors||[]).length?'일부 종목 현재가 조회 실패 · 다음 주기에 다시 확인합니다.':'마지막 확인: '+(data.items?.[0]?.checked_at||'-');
+    renderPriceAlerts();
+  }catch(error){status.textContent='가격알림 조회 실패: '+error.message;}
+  finally{priceAlertPolling=false;}
+}
+document.getElementById('price-alert-form').addEventListener('submit',async event=>{
+  event.preventDefault();if(priceAlertAdding)return;
+  const input=document.getElementById('price-alert-stock'),raw=input.value.trim(),target=Number(document.getElementById('price-alert-target').value),condition=document.getElementById('price-alert-condition').value;
+  const status=document.getElementById('price-alert-status');
+  if(!raw||!Number.isSafeInteger(target)||target<=0){status.textContent='종목과 올바른 알림 주가를 입력하세요.';return;}
+  if(priceAlerts.filter(item=>item.enabled).length>=10){status.textContent='활성 알림은 최대 10개입니다.';return;}
+  priceAlertAdding=true;document.getElementById('price-alert-add').disabled=true;
+  try{
+    const response=await fetch('/api/stock?q='+encodeURIComponent(raw),{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const stock=await response.json();
+    if(!/^[0-9A-Z]{6}$/.test(stock.code)||!stock.name)throw new Error('종목을 찾을 수 없습니다. 종목명 또는 코드를 확인하세요.');
+    if(priceAlerts.some(item=>item.enabled&&item.code===stock.code&&item.target===target&&item.condition===condition))throw new Error('같은 알림이 이미 등록되어 있습니다.');
+    priceAlerts.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2),code:stock.code,name:stock.name,target,condition,enabled:true});
+    input.value=stock.name;status.textContent='알림을 등록했습니다.';savePriceAlerts();renderPriceAlerts();checkPriceAlerts();
+  }catch(error){status.textContent=error.message;}
+  finally{priceAlertAdding=false;document.getElementById('price-alert-add').disabled=false;}
+});
+document.getElementById('price-alert-dismiss').addEventListener('click',()=>document.getElementById('price-alert-dialog').close());
+renderPriceAlerts();checkPriceAlerts();setInterval(checkPriceAlerts,10000);
 
 async function refresh() {
   loadEtfQuotes();

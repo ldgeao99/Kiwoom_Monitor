@@ -1437,6 +1437,41 @@ def build_etf_quotes():
         return data
 
 
+_alert_price_cache = {}
+_alert_price_lock = threading.Lock()
+
+
+def build_alert_prices(codes):
+    codes = list(dict.fromkeys(codes))
+    if len(codes) > 10 or any(len(code) != 6 or not code.isascii() or not code.isalnum() for code in codes):
+        raise ValueError('최대 10개의 유효한 종목코드만 조회할 수 있습니다.')
+    items, errors = [], []
+    with _alert_price_lock:
+        for code in codes:
+            cached = _alert_price_cache.get(code)
+            if cached and time.time() - cached['ts'] < 5:
+                items.append(cached['data']); continue
+            try:
+                response = requests.post('https://api.kiwoom.com/api/dostk/stkinfo', headers={
+                    'Content-Type':'application/json;charset=UTF-8', 'authorization':f'Bearer {cached_token()}',
+                    'api-id':'ka10001', 'cont-yn':'N', 'next-key':''},
+                    json={'stk_cd':code + '_AL'}, timeout=15)
+                response.raise_for_status()
+                body = response.json()
+                if body.get('return_code') not in (None, 0):
+                    raise RuntimeError(body.get('return_msg') or '현재가 조회 실패')
+                raw = str(body.get('cur_prc') or '').strip()
+                price = abs(to_number(raw))
+                if not raw or price <= 0:
+                    raise RuntimeError('유효한 현재가가 없습니다.')
+                data = {'code':code, 'price':price, 'checked_at':now_kst().strftime('%Y-%m-%d %H:%M:%S KST')}
+                _alert_price_cache[code] = {'ts':time.time(), 'data':data}; items.append(data)
+            except Exception as error:
+                errors.append({'code':code, 'error':str(error)})
+            if code != codes[-1]: time.sleep(0.5)
+    return {'items':items, 'errors':errors}
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1513,6 +1548,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0])
                 except Exception as e:
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/alert_prices':
+            qs = parse_qs(parsed.query)
+            try:
+                payload = build_alert_prices([code.upper() for code in qs.get('codes',[''])[0].split(',') if code])
+            except Exception as error:
+                payload = {'items':[], 'error':str(error)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/etf_quotes':
