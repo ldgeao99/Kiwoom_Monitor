@@ -24,7 +24,7 @@
   .wrap { display:grid; grid-template-columns:1fr; gap:14px; max-width:1200px; margin:0 auto; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .chart-y-label, .last-close-label text, .current-amount-label text, .current-rsi-label text, .combined-current-label text { font-size:18px; font-weight:400; }
-  #price-alert-dialog::backdrop { background:rgba(0,0,0,.65); }
+  #price-alert-dialog::backdrop, #price-alert-edit-dialog::backdrop { background:rgba(0,0,0,.65); }
   .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .title small { color:var(--muted); font-weight:400; }
@@ -399,6 +399,16 @@
   <h2 id="price-alert-dialog-title" style="font-size:28px;margin:0 0 18px">🔔 종목 가격알림</h2>
   <div id="price-alert-messages" style="font-size:22px;line-height:1.6;overflow-wrap:anywhere"></div>
   <button id="price-alert-dismiss" class="prog-go" type="button" style="font-size:18px;padding:10px 30px;margin-top:24px">확인</button>
+</dialog>
+
+<dialog id="price-alert-edit-dialog" aria-labelledby="price-alert-edit-title" style="width:min(420px,92vw);box-sizing:border-box;border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--panel);color:var(--text)">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h2 id="price-alert-edit-title" style="font-size:18px;margin:0">가격알림 수정</h2><button id="price-alert-edit-close" class="prog-go" type="button" aria-label="수정 창 닫기">닫기</button></div>
+  <p id="price-alert-edit-stock" style="overflow-wrap:anywhere"></p>
+  <form id="price-alert-edit-form">
+    <label style="display:block;font-size:14px">알림 주가(원)<input id="price-alert-edit-target" class="prog-input" style="display:block;width:100%;box-sizing:border-box;margin-top:6px" type="number" min="1" step="1" required></label>
+    <div id="price-alert-edit-error" role="alert" style="font-size:12px;color:#dc2626;margin-top:8px"></div>
+    <div style="display:flex;justify-content:space-between;margin-top:20px;gap:12px"><button id="price-alert-edit-delete" class="prog-go" type="button" style="background:#dc2626;border-color:#dc2626;color:white;padding:8px 20px">삭제</button><button class="prog-go" type="submit" style="background:#2563eb;border-color:#2563eb;color:white;padding:8px 20px">저장</button></div>
+  </form>
 </dialog>
 
 <script>
@@ -2392,6 +2402,32 @@ function savePriceAlerts() {
   try { localStorage.setItem('stock_price_alerts',JSON.stringify(priceAlerts)); }
   catch(error) { document.getElementById('price-alert-status').textContent='설정을 저장하지 못했습니다. 브라우저 저장 공간을 확인하세요.'; }
 }
+let editingPriceAlertId = null;
+function openPriceAlertEditor(id) {
+  const item=priceAlerts.find(alert=>alert.id===id);if(!item)return;
+  editingPriceAlertId=id;
+  document.getElementById('price-alert-edit-stock').textContent=(item.name||item.code)+' · '+(item.condition==='above'?'이상':'이하');
+  document.getElementById('price-alert-edit-target').value=item.target;
+  document.getElementById('price-alert-edit-error').textContent='';
+  document.getElementById('price-alert-edit-dialog').showModal();
+  document.getElementById('price-alert-edit-target').focus();
+}
+document.getElementById('price-alert-edit-close').addEventListener('click',()=>document.getElementById('price-alert-edit-dialog').close());
+document.getElementById('price-alert-edit-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  const item=priceAlerts.find(alert=>alert.id===editingPriceAlertId),error=document.getElementById('price-alert-edit-error');
+  if(!item){error.textContent='해당 알림을 찾을 수 없습니다.';return;}
+  const target=Number(document.getElementById('price-alert-edit-target').value);
+  if(!Number.isSafeInteger(target)||target<=0){error.textContent='올바른 알림 주가를 입력하세요.';return;}
+  if(item.enabled&&priceAlerts.some(alert=>alert.id!==item.id&&alert.enabled&&alert.code===item.code&&alert.target===target&&alert.condition===item.condition)){error.textContent='같은 알림이 이미 등록되어 있습니다.';return;}
+  item.target=target;savePriceAlerts();renderPriceAlerts();
+  document.getElementById('price-alert-edit-dialog').close();checkPriceAlerts();
+});
+document.getElementById('price-alert-edit-delete').addEventListener('click',()=>{
+  priceAlerts=priceAlerts.filter(alert=>alert.id!==editingPriceAlertId);savePriceAlerts();renderPriceAlerts();
+  document.getElementById('price-alert-edit-dialog').close();
+});
+document.getElementById('price-alert-edit-dialog').addEventListener('close',()=>{editingPriceAlertId=null;});
 function renderPriceAlerts() {
   const host=document.getElementById('price-alert-list');host.replaceChildren();
   if(!priceAlerts.length){host.textContent='등록된 가격알림이 없습니다.';return;}
@@ -2407,7 +2443,7 @@ function renderPriceAlerts() {
       if(priceAlerts.filter(alert=>alert.enabled).length>=10){document.getElementById('price-alert-status').textContent='활성 알림은 최대 10개입니다.';return;}
       item.enabled=true;savePriceAlerts();renderPriceAlerts();checkPriceAlerts();
     });actions.append(rearm);}
-    const remove=document.createElement('button');remove.className='prog-go';remove.textContent='삭제';remove.type='button';remove.addEventListener('click',()=>{priceAlerts=priceAlerts.filter(alert=>alert.id!==item.id);savePriceAlerts();renderPriceAlerts();});actions.append(remove);
+    const edit=document.createElement('button');edit.className='prog-go';edit.textContent='수정';edit.type='button';edit.addEventListener('click',()=>openPriceAlertEditor(item.id));actions.append(edit);
   });host.append(table);
 }
 (function(){
