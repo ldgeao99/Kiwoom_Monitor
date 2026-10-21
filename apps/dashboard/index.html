@@ -2453,8 +2453,13 @@ function renderPriceAlerts() {
   button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('price_alert_collapsed',collapsed?'1':'0');}catch(error){}apply();});
 })();
 
+function priceAlertTimeActive(now = new Date()) {
+  const hour = (now.getUTCHours() + 9) % 24;
+  return hour >= 8 && hour < 20;
+}
 async function checkPriceAlerts() {
   if(priceAlertPolling)return;
+  if(!priceAlertTimeActive()) { document.getElementById('price-alert-status').textContent='조회 대기 · 한국시간 08:00~20:00'; return; }
   const codes=[...new Set(priceAlerts.filter(item=>item.enabled).map(item=>item.code))].slice(0,10);
   if(!codes.length)return;
   priceAlertPolling=true;
@@ -2463,6 +2468,7 @@ async function checkPriceAlerts() {
     const response=await fetch('/api/alert_prices?codes='+encodeURIComponent(codes.join(',')),{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(data.error)throw new Error(data.error);
+    if(data.outside_hours || !priceAlertTimeActive()){status.textContent='조회 대기 · 한국시간 08:00~20:00';return;}
     const quotes=new Map((data.items||[]).filter(item=>Number.isFinite(item.price)&&item.price>0).map(item=>[item.code,item]));
     quotes.forEach((quote,code)=>priceAlertQuotes.set(code,quote));
     const triggered=[];

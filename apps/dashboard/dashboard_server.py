@@ -1442,12 +1442,16 @@ _alert_price_lock = threading.Lock()
 
 
 def build_alert_prices(codes):
+    if not 8 <= now_kst().hour < 20:
+        return {'items':[], 'errors':[], 'outside_hours':True}
     codes = list(dict.fromkeys(codes))
     if len(codes) > 10 or any(len(code) != 6 or not code.isascii() or not code.isalnum() for code in codes):
         raise ValueError('최대 10개의 유효한 종목코드만 조회할 수 있습니다.')
     items, errors = [], []
     with _alert_price_lock:
         for code in codes:
+            if not 8 <= now_kst().hour < 20:
+                return {'items':[], 'errors':[], 'outside_hours':True}
             cached = _alert_price_cache.get(code)
             if cached and time.time() - cached['ts'] < 5:
                 items.append(cached['data']); continue
