@@ -222,11 +222,10 @@
   .prog-go { font-size:12px; padding:5px 12px; border:1px solid var(--line); border-radius:12px;
     background:var(--head); cursor:pointer; }
   .prog-go:disabled { opacity:.4; cursor:default; }
-  #price-alert-form { flex-wrap:nowrap; gap:4px; }
-  #price-alert-stock { width:110px; max-width:110px; min-width:60px; flex:1 1 110px; box-sizing:border-box; padding:4px 6px; }
-  #price-alert-target { width:96px; min-width:84px; flex:0 1 96px; box-sizing:border-box; padding:4px 6px; }
-  #price-alert-condition { width:52px; flex:0 0 52px; box-sizing:border-box; padding:4px 2px; font-size:12px; }
-  #price-alert-add { flex:none; padding:5px 8px; }
+  #price-alert-form { display:grid; width:100%; grid-template-columns:minmax(0,1.3fr) minmax(84px,1fr) minmax(64px,.7fr) minmax(42px,.45fr); gap:4px; }
+  #price-alert-stock, #price-alert-target { width:100%; min-width:0; max-width:none; box-sizing:border-box; padding:4px 6px; }
+  #price-alert-condition { width:100%; min-width:0; box-sizing:border-box; padding:4px 4px; font-size:12px; }
+  #price-alert-add { width:100%; padding:5px 8px; }
   #price-alert-add { background:#2563eb; border-color:#2563eb; color:#ffffff; }
   #price-alert-add:hover { background:#1d4ed8; }
   .prog-title { flex-direction:column; align-items:stretch; gap:8px; }
@@ -2345,15 +2344,18 @@ async function playPriceAlertSound() {
   if (!await preparePriceAlertSound()) return;
   if (!alertSoundCheckbox.checked) return;
   const audio = priceAlertAudio, now = audio.currentTime;
-  [0, 0.4, 0.8].forEach((delay,index) => {
+  // 부드러운 삼각파 멜로디를 두 번 이어서 약 5초간 재생한다.
+  const melody = [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25];
+  [...melody, ...melody].forEach((frequency,index) => {
+    const delay = index * 0.4;
     const oscillator = audio.createOscillator(), gain = audio.createGain();
-    oscillator.type = 'sine'; oscillator.frequency.value = index === 1 ? 1046.5 : 880;
+    oscillator.type = 'triangle'; oscillator.frequency.value = frequency;
     gain.gain.setValueAtTime(0, now + delay);
-    gain.gain.linearRampToValueAtTime(0.22, now + delay + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.3);
+    gain.gain.linearRampToValueAtTime(0.18, now + delay + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.5);
     oscillator.connect(gain); gain.connect(audio.destination);
     oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
-    oscillator.start(now + delay); oscillator.stop(now + delay + 0.32);
+    oscillator.start(now + delay); oscillator.stop(now + delay + 0.55);
   });
 }
 alertSoundCheckbox.addEventListener('change', () => {
