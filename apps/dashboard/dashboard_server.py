@@ -1441,8 +1441,13 @@ _alert_price_cache = {}
 _alert_price_lock = threading.Lock()
 
 
+def in_alert_price_window(now=None):
+    now = now if now is not None else now_kst()
+    return now.weekday() < 5 and 8 <= now.hour < 20
+
+
 def build_alert_prices(codes):
-    if not 8 <= now_kst().hour < 20:
+    if not in_alert_price_window():
         return {'items':[], 'errors':[], 'outside_hours':True}
     codes = list(dict.fromkeys(codes))
     if len(codes) > 10 or any(len(code) != 6 or not code.isascii() or not code.isalnum() for code in codes):
@@ -1450,7 +1455,7 @@ def build_alert_prices(codes):
     items, errors = [], []
     with _alert_price_lock:
         for code in codes:
-            if not 8 <= now_kst().hour < 20:
+            if not in_alert_price_window():
                 return {'items':[], 'errors':[], 'outside_hours':True}
             cached = _alert_price_cache.get(code)
             if cached and time.time() - cached['ts'] < 5:
