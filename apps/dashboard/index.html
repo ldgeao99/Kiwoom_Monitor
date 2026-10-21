@@ -390,8 +390,7 @@
     <select id="price-alert-condition" class="chart-sel" style="margin-left:0" aria-label="알림 조건"><option value="above">이상</option><option value="below">이하</option></select>
     <button id="price-alert-add" class="prog-go" type="submit">추가</button>
   </form>
-  <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려있는 동안만 10초 갱신, 종목간 0.5초 갱신</div>
-  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><select id="price-alert-sound-preview" class="chart-sel" style="margin-left:0" aria-label="미리 들을 알림음"><option value="metal">1. 금속 타종 벨</option><option value="retro">2. 레트로 전화벨</option><option value="double">3. 이중 경보 벨</option><option value="urgent">4. 긴급 경종</option><option value="buzzer">5. 전자 버저 벨</option></select><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
+  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
   <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
   <div id="price-alert-list" style="overflow:auto"></div>
 </div>
@@ -2340,16 +2339,8 @@ async function preparePriceAlertSound() {
     return true;
   } catch(error) { status.textContent = error.message; return false; }
 }
-const priceAlertSoundSelect = document.getElementById('price-alert-sound-preview');
-try {
-  const saved = localStorage.getItem('stock_price_alert_tone');
-  if (['metal','retro','double','urgent','buzzer'].includes(saved)) priceAlertSoundSelect.value = saved;
-} catch(error) {}
-priceAlertSoundSelect.addEventListener('change', () => {
-  try { localStorage.setItem('stock_price_alert_tone', priceAlertSoundSelect.value); } catch(error) {}
-});
 const activeAlertOscillators = new Set();
-async function playPriceAlertSound(sample = priceAlertSoundSelect.value) {
+async function playPriceAlertSound(sample = 'buzzer') {
   if (!await preparePriceAlertSound()) return;
   if (!alertSoundCheckbox.checked) return;
   const audio = priceAlertAudio, now = audio.currentTime;
@@ -2386,7 +2377,7 @@ alertSoundCheckbox.addEventListener('change', () => {
 });
 document.getElementById('price-alert-sound-test').addEventListener('click', () => {
   if (!alertSoundCheckbox.checked) { document.getElementById('price-alert-sound-status').textContent = '알림음을 켜고 테스트하세요.'; return; }
-  playPriceAlertSound(document.getElementById('price-alert-sound-preview').value);
+  playPriceAlertSound();
 });
 // 사용자 조작 시 오디오를 준비해 이후 자동 가격 확인에서도 소리를 재생한다.
 document.addEventListener('pointerdown', () => { if (alertSoundCheckbox.checked && (!priceAlertAudio || priceAlertAudio.state !== 'running')) preparePriceAlertSound(); });
