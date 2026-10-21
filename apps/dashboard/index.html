@@ -391,7 +391,7 @@
     <button id="price-alert-add" class="prog-go" type="submit">추가</button>
   </form>
   <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려있는 동안만 10초 갱신, 종목간 0.5초 갱신</div>
-  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
+  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><select id="price-alert-sound-preview" class="chart-sel" style="margin-left:0" aria-label="미리 들을 알림음"><option value="melody">현재 멜로디</option><option value="bell">부드러운 벨</option><option value="warning">또렷한 경고음</option></select><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
   <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
   <div id="price-alert-list" style="overflow:auto"></div>
 </div>
@@ -2340,22 +2340,25 @@ async function preparePriceAlertSound() {
     return true;
   } catch(error) { status.textContent = error.message; return false; }
 }
-async function playPriceAlertSound() {
+async function playPriceAlertSound(sample = 'melody') {
   if (!await preparePriceAlertSound()) return;
   if (!alertSoundCheckbox.checked) return;
   const audio = priceAlertAudio, now = audio.currentTime;
-  // 부드러운 삼각파 멜로디를 두 번 이어서 약 5초간 재생한다.
   const melody = [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25];
-  [...melody, ...melody].forEach((frequency,index) => {
-    const delay = index * 0.4;
+  const notes = sample === 'bell' ? [659.25, 880, 1046.5]
+    : sample === 'warning' ? [880,1174.66,880,1174.66,880,1174.66,880,1174.66] : [...melody,...melody];
+  const spacing = sample === 'bell' ? 0.5 : sample === 'warning' ? 0.35 : 0.4;
+  const duration = sample === 'bell' ? 0.8 : sample === 'warning' ? 0.28 : 0.55;
+  notes.forEach((frequency,index) => {
+    const delay = index * spacing;
     const oscillator = audio.createOscillator(), gain = audio.createGain();
-    oscillator.type = 'triangle'; oscillator.frequency.value = frequency;
+    oscillator.type = sample === 'melody' ? 'triangle' : 'sine'; oscillator.frequency.value = frequency;
     gain.gain.setValueAtTime(0, now + delay);
     gain.gain.linearRampToValueAtTime(0.18, now + delay + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + duration - 0.025);
     oscillator.connect(gain); gain.connect(audio.destination);
     oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
-    oscillator.start(now + delay); oscillator.stop(now + delay + 0.55);
+    oscillator.start(now + delay); oscillator.stop(now + delay + duration);
   });
 }
 alertSoundCheckbox.addEventListener('change', () => {
@@ -2365,7 +2368,7 @@ alertSoundCheckbox.addEventListener('change', () => {
 });
 document.getElementById('price-alert-sound-test').addEventListener('click', () => {
   if (!alertSoundCheckbox.checked) { document.getElementById('price-alert-sound-status').textContent = '알림음을 켜고 테스트하세요.'; return; }
-  playPriceAlertSound();
+  playPriceAlertSound(document.getElementById('price-alert-sound-preview').value);
 });
 // 사용자 조작 시 오디오를 준비해 이후 자동 가격 확인에서도 소리를 재생한다.
 document.addEventListener('pointerdown', () => { if (alertSoundCheckbox.checked && (!priceAlertAudio || priceAlertAudio.state !== 'running')) preparePriceAlertSound(); });
