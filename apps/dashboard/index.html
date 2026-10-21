@@ -2400,7 +2400,7 @@ async function playPriceAlertSound(sample = 'buzzer') {
     retro: {type:'square',notes:[660,880,660,880,660,880,660,880,660,880,660,880],spacing:.4,duration:.32,partials:[1],gain:.1},
     double: {type:'triangle',notes:[740,988,740,988,740,988,740,988,740,988],spacing:.5,duration:.45,partials:[1,1.5],gain:.13},
     urgent: {type:'sawtooth',notes:[523,1046,523,1046,523,1046,523,1046,523,1046],spacing:.5,duration:.45,partials:[1],gain:.1},
-    buzzer: {type:'square',notes:Array.from({length:20},(_,i)=>i%2?587:440),spacing:.25,duration:.18,partials:[1],gain:.1}
+    buzzer: {type:'square',notes:Array.from({length:20},(_,i)=>i%2?1174:880),spacing:.25,duration:.18,partials:[1],gain:.2}
   };
   const preset = presets[sample] || presets.metal;
   preset.notes.forEach((frequency,index) => {
