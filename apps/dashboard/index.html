@@ -339,6 +339,15 @@
     <div id="prm-upper"></div>
   </div>
 </div>
+<div class="page-title" style="flex-wrap:wrap"><span>장중투자자별 매매상위(잠정)</span><button id="toggle-intraday-investors" class="view-btn" type="button" aria-controls="intraday-investors-content" aria-expanded="true">접기 ▾</button></div>
+<div id="intraday-investors-content" class="prog-wrap panel" style="padding:8px;box-sizing:border-box">
+  <div class="prog-row" style="padding:4px 0 8px">
+    <span class="market-sel"><label><input type="radio" name="intraday-side" value="1" checked>순매수</label><label><input type="radio" name="intraday-side" value="2">순매도</label></span>
+    <span class="market-sel"><label><input type="radio" name="intraday-mode" value="1" checked>금액(억)</label><label><input type="radio" name="intraday-mode" value="2">수량</label></span>
+  </div>
+  <div id="intraday-investors-status" role="status" style="font-size:12px"></div>
+  <div class="pu-both" id="intraday-investors-tables"></div>
+</div>
 <div class="page-title"><span>종목별 프로그램 순매수</span><button id="toggle-program" class="view-btn" type="button" aria-controls="program-content" aria-expanded="true">접기 ▾</button></div>
 <div class="prog-wrap" id="program-content">
   <div class="panel">
@@ -2520,7 +2529,54 @@ document.getElementById('price-alert-form').addEventListener('submit',async even
 document.getElementById('price-alert-dismiss').addEventListener('click',()=>document.getElementById('price-alert-dialog').close());
 renderPriceAlerts();checkPriceAlerts();setInterval(checkPriceAlerts,10000);
 
+let intradayInvestorGeneration=0, intradayInvestorLoading=false;
+async function loadIntradayInvestors(force=false) {
+  if(document.getElementById('intraday-investors-content').hidden || (intradayInvestorLoading&&!force))return;
+  const generation=++intradayInvestorGeneration;
+  const side=document.querySelector('input[name="intraday-side"]:checked').value;
+  const mode=document.querySelector('input[name="intraday-mode"]:checked').value;
+  const status=document.getElementById('intraday-investors-status');
+  intradayInvestorLoading=true;status.textContent='불러오는 중…';
+  try{
+    const response=await fetch('/api/intraday_investors?side='+side+'&mode='+mode,{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();if(generation!==intradayInvestorGeneration)return;
+    if(data.error)throw new Error(data.error);
+    const host=document.getElementById('intraday-investors-tables');
+    const positions=[...host.querySelectorAll('.pu-scroll')].map(el=>({top:el.scrollTop,left:el.scrollLeft}));
+    const sections=[];
+    [['9000','외국인'],['9999','기관계']].forEach(([key,name])=>{
+      const section=document.createElement('section');
+      const title=document.createElement('h3');title.textContent=name;section.append(title);
+      const scroll=document.createElement('div');scroll.className='pu-scroll';
+      const table=document.createElement('table'),header=table.createTHead().insertRow();
+      ['종목명',(side==='1'?'순매수':'순매도')+(mode==='1'?'금액(억)':'수량')].forEach(text=>{const th=document.createElement('th');th.textContent=text;header.append(th);});
+      const body=table.createTBody(),items=data.groups?.[key]||[];
+      items.forEach(item=>{
+        const row=body.insertRow();row.dataset.code=item.code;
+        const nameCell=row.insertCell();nameCell.textContent=item.name;nameCell.title=item.name;
+        const amount=row.insertCell();amount.className=cls(item.net);amount.textContent=(item.net>0?'+':'')+item.net.toLocaleString('ko-KR',{maximumFractionDigits:0});
+        row.addEventListener('click',()=>selectListedStock(item.code,item.name));
+      });
+      if(!items.length){const cell=body.insertRow().insertCell();cell.colSpan=2;cell.textContent='제공된 데이터가 없습니다.';}
+      scroll.append(table);section.append(scroll);sections.push(section);
+    });
+    host.replaceChildren(...sections);
+    host.querySelectorAll('.pu-scroll').forEach((el,i)=>{el.scrollTop=positions[i]?.top||0;el.scrollLeft=positions[i]?.left||0;});
+    status.textContent=data.note||'';
+  }catch(error){if(generation===intradayInvestorGeneration)status.textContent='잠정 수급 조회 실패: '+error.message;}
+  finally{if(generation===intradayInvestorGeneration)intradayInvestorLoading=false;}
+}
+document.querySelectorAll('input[name="intraday-side"],input[name="intraday-mode"]').forEach(input=>input.addEventListener('change',()=>loadIntradayInvestors(true)));
+(function(){
+  const button=document.getElementById('toggle-intraday-investors'),content=document.getElementById('intraday-investors-content');
+  let collapsed=false;try{collapsed=localStorage.getItem('intraday_investors_collapsed')==='1';}catch(error){}
+  const apply=()=>{content.hidden=collapsed;button.textContent=collapsed?'펼치기 ▸':'접기 ▾';button.setAttribute('aria-expanded',String(!collapsed));};apply();
+  button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('intraday_investors_collapsed',collapsed?'1':'0');}catch(error){}apply();if(!collapsed)loadIntradayInvestors(true);});
+})();
+
 async function refresh() {
+  loadIntradayInvestors();
   loadEtfQuotes();
   renderCreditRatio();
   renderStockMemo();

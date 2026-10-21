@@ -1481,6 +1481,55 @@ def build_alert_prices(codes):
     return {'items':items, 'errors':errors}
 
 
+_intraday_investor_cache = {}
+_intraday_investor_lock = threading.Lock()
+
+
+def build_intraday_investors(side='1', mode='2'):
+    side = side if side in ('1','2') else '1'
+    mode = mode if mode in ('1','2') else '2'
+    key = (side,mode)
+    with _intraday_investor_lock:
+        cached = _intraday_investor_cache.get(key)
+        if cached and time.time()-cached['ts'] < 60:
+            return cached['data']
+        def request_all(token):
+            groups = {}
+            for orgn in ('9000','9999'):
+                items, cont, cursor, seen = {}, 'N', '', set()
+                while True:
+                    response = requests.post('https://api.kiwoom.com/api/dostk/rkinfo',headers={
+                        'Content-Type':'application/json;charset=UTF-8','authorization':f'Bearer {token}',
+                        'api-id':'ka10065','cont-yn':cont,'next-key':cursor},
+                        json={'trde_tp':side,'mrkt_tp':'000','orgn_tp':orgn,'amt_qty_tp':mode},timeout=15)
+                    response.raise_for_status()
+                    body = response.json()
+                    if body.get('return_code') not in (None,0):
+                        raise RuntimeError(body.get('return_msg') or '장중 투자자별 매매상위 조회 실패')
+                    for row in body.get('opmr_invsr_trde_upper',[]):
+                        code = str(row.get('stk_cd') or '').split('_')[0]
+                        raw = row.get('netslmt')
+                        if not code or raw in (None,''):continue
+                        value = abs(to_number(raw)) / (100 if mode=='1' else 1) * (1 if side=='1' else -1)
+                        items[code] = {'code':code,'name':row.get('stk_nm',''),'net':value}
+                    cont = response.headers.get('cont-yn','N').upper()
+                    cursor = response.headers.get('next-key','')
+                    if cont != 'Y':break
+                    if not cursor or cursor in seen or len(seen)>=100:
+                        raise RuntimeError('잠정 수급 연속조회가 완료되지 않았습니다.')
+                    seen.add(cursor);time.sleep(0.5)
+                groups[orgn] = sorted(items.values(),key=lambda item:(-abs(item['net']),item['code']))
+                if orgn=='9000':time.sleep(0.5)
+            return {'groups':groups,'mode':mode,'side':side,'note':'장중 잠정치로 확정 수급과 다를 수 있습니다.'}
+        try:
+            data = request_all(cached_token())
+        except Exception:
+            _token_cache['token'] = None
+            data = request_all(cached_token())
+        _intraday_investor_cache[key] = {'ts':time.time(),'data':data}
+        return data
+
+
 # 서빙 허용 HTML 파일: 경로 -> 파일명
 PAGES = {'/': 'index.html', '/index.html': 'index.html'}
 
@@ -1559,6 +1608,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/intraday_investors':
+            qs = parse_qs(parsed.query)
+            try:
+                payload = build_intraday_investors(qs.get('side',['1'])[0],qs.get('mode',['2'])[0])
+            except Exception as error:
+                payload = {'groups':{},'error':str(error)}
+            body = json.dumps(payload,ensure_ascii=False).encode('utf-8')
+            self._send(body,'application/json; charset=utf-8')
         elif path == '/api/alert_prices':
             qs = parse_qs(parsed.query)
             try:
