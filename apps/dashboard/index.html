@@ -24,7 +24,7 @@
   .wrap { display:grid; grid-template-columns:1fr; gap:14px; max-width:1200px; margin:0 auto; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .chart-y-label, .last-close-label text, .current-amount-label text, .current-rsi-label text, .combined-current-label text { font-size:18px; font-weight:400; }
-  #price-alert-dialog::backdrop, #price-alert-edit-dialog::backdrop { background:rgba(0,0,0,.65); }
+  #price-alert-dialog::backdrop, #price-alert-edit-dialog::backdrop, #intraday-times-dialog::backdrop { background:rgba(0,0,0,.65); }
   .title { padding:10px 14px; font-size:14px; font-weight:600; border-bottom:1px solid var(--line);
     display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .title small { color:var(--muted); font-weight:400; }
@@ -343,7 +343,7 @@
 <div id="intraday-investors-content" class="prog-wrap">
   <div class="prog-row" style="padding:4px 0 8px">
     <span class="market-sel"><label><input type="radio" name="intraday-side" value="1" checked>순매수</label><label><input type="radio" name="intraday-side" value="2">순매도</label></span>
-    <small id="intraday-latest-time" style="margin-left:auto;font-size:11px">최종집계(변경확인) : -</small>
+    <span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px"><small id="intraday-latest-time" style="font-size:11px">최종집계(변경확인) : -</small><button id="intraday-times-help" type="button" aria-label="자료 집계시간 안내" style="border:1px solid var(--muted);border-radius:50%;width:20px;height:20px;padding:0;background:none;color:var(--text);font-size:12px;cursor:pointer">?</button></span>
   </div>
   <div class="panel" style="padding:8px;box-sizing:border-box">
     <div id="intraday-investors-status" role="status" style="font-size:12px"></div>
@@ -425,6 +425,12 @@
     <div id="price-alert-edit-error" role="alert" style="font-size:12px;color:#dc2626;margin-top:8px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;margin-top:20px;gap:8px"><button id="price-alert-edit-delete" class="prog-go" type="button" style="background:#dc2626;border-color:#dc2626;color:white;padding:8px 20px;width:100%;border-radius:8px">삭제</button><button class="prog-go" type="submit" style="background:#2563eb;border-color:#2563eb;color:white;padding:8px 20px;width:100%;border-radius:8px">저장</button></div>
   </form>
+</dialog>
+
+<dialog id="intraday-times-dialog" aria-labelledby="intraday-times-title" style="width:min(440px,90vw);box-sizing:border-box;border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--panel);color:var(--text)">
+  <h2 id="intraday-times-title" tabindex="-1" autofocus style="font-size:18px;margin:0 0 12px">자료 집계시간</h2>
+  <p style="font-size:14px;line-height:1.7;margin:0">자료 집계시간 : 09:30(외국인만제공), 10:00, 11:30, 13:20, 14:30</p>
+  <form method="dialog" style="margin-top:16px;text-align:right"><button class="prog-go" type="submit">확인</button></form>
 </dialog>
 
 <script>
@@ -2535,6 +2541,13 @@ document.getElementById('price-alert-form').addEventListener('submit',async even
 });
 document.getElementById('price-alert-dismiss').addEventListener('click',()=>document.getElementById('price-alert-dialog').close());
 renderPriceAlerts();checkPriceAlerts();setInterval(checkPriceAlerts,10000);
+
+document.getElementById('intraday-times-help').addEventListener('click',()=>document.getElementById('intraday-times-dialog').showModal());
+document.getElementById('intraday-times-dialog').addEventListener('click',event=>{
+  const dialog=event.currentTarget;if(event.target!==dialog)return;
+  const rect=dialog.getBoundingClientRect();
+  if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)dialog.close();
+});
 
 let intradayInvestorGeneration=0, intradayInvestorLoading=false;
 let intradaySelection=null, intradayHistoryItems=[], intradayHistoryGeneration=0;
