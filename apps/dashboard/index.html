@@ -173,6 +173,8 @@
   .pu-both tbody tr.selected td { background:var(--sel); }
   @media(max-width:560px) { .pu-both table { font-size:11px; } .pu-both th, .pu-both td { padding:7px 3px; } #pu-side label { padding:4px 10px; } }
   .pu-tbl tbody tr:hover { background:var(--head); }
+  .rank-tbl td.nxt-tradable { position:relative; }
+  .rank-tbl td.nxt-tradable::after { content:""; position:absolute; right:0; bottom:0; width:0; height:0; border-left:7px solid transparent; border-bottom:7px solid #ff0000; pointer-events:none; }
   /* 조회수 상위 종목 */
   .rank-wrap { max-width:1200px; margin:0 auto 14px; }
   /* 종목 캔들 차트 */
@@ -1039,7 +1041,7 @@ function renderRankTable() {
     + '<th>현재가</th><th>등락률</th><th>30초비</th></tr></thead><tbody>';
   shown.forEach(it => {
     html += `<tr data-code="${it.code}" title="클릭하면 종목 차트 조회"><td class="rk">${it.rank}</td>`
-      + `<td class="nm">${it.name}${rankChgHtml(it.rank_sign, it.rank_chg)}</td>`
+      + `<td class="nm${it.nxt ? ' nxt-tradable' : ''}">${it.name}${rankChgHtml(it.rank_sign, it.rank_chg)}</td>`
       + priceCell(it.price, it.psign)
       + `<td class="${pctCls(it.chgr)}">${(it.chgr > 0 ? '+' : '') + it.chgr.toFixed(2)}%</td>`
       + `<td class="${pctCls(it.prev)}">${(it.prev > 0 ? '+' : '') + it.prev.toFixed(2)}%</td></tr>`;
@@ -1107,7 +1109,10 @@ function renderAmountRankTable() {
     values.forEach((value, column) => {
       const cell = row.insertCell(); cell.textContent = value;
       cell.className = column === 0 ? 'rk' : column === 1 ? 'nm' : column < 4 ? cls(item.flu) : '';
-      if (column === 1) cell.title = item.name;
+      if (column === 1) {
+        cell.title = item.name;
+        cell.classList.toggle('nxt-tradable', item.nxt === true);
+      }
     });
     tbody.append(row);
   });

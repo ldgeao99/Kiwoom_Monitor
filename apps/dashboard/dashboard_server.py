@@ -982,7 +982,7 @@ _stock_items = {'date': None, 'items': None}   # items: [(code, name), ...]
 def stock_items():
     today = now_kst().strftime('%Y-%m-%d')
     if _stock_items['items'] is None or _stock_items['date'] != today:
-        items, c2n = [], {}
+        items, c2n, nxt_codes = [], {}, set()
         try:
             tok = cached_token()
             for mrkt in ('0', '10'):          # 0:코스피, 10:코스닥 (ka10099 시장구분)
@@ -991,14 +991,23 @@ def stock_items():
                     n = (r.get('name') or '').strip()
                     if c and n:
                         items.append((c, n)); c2n[c] = n
+                        if str(r.get('nxtEnable') or '').strip().upper() == 'Y':
+                            nxt_codes.add(c)
             print(f'[종목목록] ka10099 로드: {len(items)}개')
         except Exception as e:
             print(f'[종목목록] ka10099 로드 실패: {e}')
         if items:
             _stock_items['items'] = items
             _stock_items['c2n'] = c2n
+            _stock_items['nxt_codes'] = nxt_codes
             _stock_items['date'] = today
     return _stock_items['items'] or []
+
+
+def nxt_tradable_codes():
+    """ka10099의 NXT 거래 가능 여부(nxtEnable)를 사용한다."""
+    stock_items()
+    return _stock_items.get('nxt_codes', set())
 
 
 def _pick(items, q):
@@ -1070,6 +1079,7 @@ def build_amount_rank(cont_yn='N', next_key='', exclude_etf_etn=False):
     """ka10032: 전체 시장/통합 거래소 거래대금 순위, 한 페이지."""
     def run(token):
         excluded = exchange_traded_codes(token) if exclude_etf_etn else set()
+        nxt_codes = nxt_tradable_codes()
         response = requests.post(
             'https://api.kiwoom.com/api/dostk/rkinfo',
             headers={'Content-Type': 'application/json;charset=UTF-8',
@@ -1086,6 +1096,7 @@ def build_amount_rank(cont_yn='N', next_key='', exclude_etf_etn=False):
             if not code or code in excluded:
                 continue
             items.append({'code': code, 'name': row.get('stk_nm') or '',
+                          'nxt': code in nxt_codes,
                           'rank': int(to_number(row.get('now_rank'))),
                           'price': abs(to_number(row.get('cur_prc'))),
                           'flu': to_number(row.get('flu_rt')),
@@ -1103,10 +1114,12 @@ def build_rank():
     """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
     def run(tok):
         rows = fetch_rank(tok)
+        nxt_codes = nxt_tradable_codes()
         out = []
         for i, r in enumerate(rows[:20]):
             out.append({
                 'rank': i + 1,
+                'nxt': str(r.get('stk_cd') or '').split('_')[0] in nxt_codes,
                 'name': r.get('stk_nm', ''),
                 'code': r.get('stk_cd', ''),
                 'rank_sign': str(r.get('rank_chg_sign') or '').strip(),   # +:상승 -:하락
