@@ -385,6 +385,7 @@
     <button id="price-alert-add" class="prog-go" type="submit">알림 추가</button>
   </form>
   <div style="font-size:12px;color:var(--muted);margin-top:8px">페이지가 열려 있는 동안 약 10초마다 확인합니다. 설정은 이 브라우저에 저장되며, 알림은 조건 충족 시 1회 표시됩니다. 활성 알림은 최대 10개입니다.</div>
+  <div class="prog-row" style="margin-top:8px"><label style="font-size:13px"><input id="price-alert-sound" type="checkbox" checked>알림음</label><button id="price-alert-sound-test" class="prog-go" type="button">소리 테스트</button><small id="price-alert-sound-status" role="status">소리 테스트를 눌러 알림음을 활성화하세요.</small></div>
   <div id="price-alert-status" role="status" style="font-size:12px;margin-top:6px"></div>
   <div id="price-alert-list" style="overflow:auto"></div>
 </div>
@@ -2316,6 +2317,50 @@ try {
   if (Array.isArray(saved)) priceAlerts = saved.filter(item => item && typeof item.id === 'string' && /^[0-9A-Z]{6}$/.test(item.code) && Number.isFinite(item.target) && item.target > 0 && ['above','below'].includes(item.condition)).slice(0,100);
 } catch(error) {}
 let priceAlertPolling = false, priceAlertAdding = false;
+let priceAlertAudio = null;
+const alertSoundCheckbox = document.getElementById('price-alert-sound');
+try { alertSoundCheckbox.checked = localStorage.getItem('stock_price_alert_sound') !== '0'; } catch(error) {}
+if (!alertSoundCheckbox.checked) document.getElementById('price-alert-sound-status').textContent = '알림음 꺼짐';
+async function preparePriceAlertSound() {
+  if (!alertSoundCheckbox.checked) return false;
+  const status = document.getElementById('price-alert-sound-status');
+  try {
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio) throw new Error('이 브라우저는 알림음을 지원하지 않습니다.');
+    if (!priceAlertAudio || priceAlertAudio.state === 'closed') priceAlertAudio = new Audio();
+    if (priceAlertAudio.state !== 'running') await priceAlertAudio.resume();
+    if (priceAlertAudio.state !== 'running') throw new Error('소리 테스트를 눌러 알림음을 활성화하세요.');
+    status.textContent = '알림음 사용 준비 완료';
+    return true;
+  } catch(error) { status.textContent = error.message; return false; }
+}
+async function playPriceAlertSound() {
+  if (!await preparePriceAlertSound()) return;
+  if (!alertSoundCheckbox.checked) return;
+  const audio = priceAlertAudio, now = audio.currentTime;
+  [0, 0.4, 0.8].forEach((delay,index) => {
+    const oscillator = audio.createOscillator(), gain = audio.createGain();
+    oscillator.type = 'sine'; oscillator.frequency.value = index === 1 ? 1046.5 : 880;
+    gain.gain.setValueAtTime(0, now + delay);
+    gain.gain.linearRampToValueAtTime(0.22, now + delay + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.3);
+    oscillator.connect(gain); gain.connect(audio.destination);
+    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    oscillator.start(now + delay); oscillator.stop(now + delay + 0.32);
+  });
+}
+alertSoundCheckbox.addEventListener('change', () => {
+  try { localStorage.setItem('stock_price_alert_sound',alertSoundCheckbox.checked?'1':'0'); } catch(error) {}
+  if (alertSoundCheckbox.checked) preparePriceAlertSound();
+  else document.getElementById('price-alert-sound-status').textContent = '알림음 꺼짐';
+});
+document.getElementById('price-alert-sound-test').addEventListener('click', () => {
+  if (!alertSoundCheckbox.checked) { document.getElementById('price-alert-sound-status').textContent = '알림음을 켜고 테스트하세요.'; return; }
+  playPriceAlertSound();
+});
+// 사용자 조작 시 오디오를 준비해 이후 자동 가격 확인에서도 소리를 재생한다.
+document.addEventListener('pointerdown', () => { if (alertSoundCheckbox.checked && (!priceAlertAudio || priceAlertAudio.state !== 'running')) preparePriceAlertSound(); });
+document.addEventListener('keydown', () => { if (alertSoundCheckbox.checked && (!priceAlertAudio || priceAlertAudio.state !== 'running')) preparePriceAlertSound(); });
 const priceAlertQuotes = new Map();
 function savePriceAlerts() {
   try { localStorage.setItem('stock_price_alerts',JSON.stringify(priceAlerts)); }
@@ -2358,6 +2403,7 @@ async function checkPriceAlerts() {
       if(item.condition==='above'?quote.price>=item.target:quote.price<=item.target){item.enabled=false;triggered.push({item,quote});}
     });
     if(triggered.length){
+      playPriceAlertSound();
       savePriceAlerts();const dialog=document.getElementById('price-alert-dialog'),messages=document.getElementById('price-alert-messages');
       if(!dialog.open)messages.replaceChildren();
       triggered.forEach(({item,quote})=>{const message=document.createElement('div');message.style.marginBottom='18px';message.textContent=`${item.name||item.code} · 현재 ${quote.price.toLocaleString('ko-KR')}원 / 설정 ${item.target.toLocaleString('ko-KR')}원 ${item.condition==='above'?'이상':'이하'} 조건 충족`;messages.append(message);});
