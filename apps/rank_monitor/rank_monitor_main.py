@@ -185,7 +185,7 @@ def notify_surge_alerts(alerts):
         rank = item.get("bigd_rank", "")
         price = format_price(item.get("past_curr_prc", "0"))
         base_chgr = item.get("base_comp_chgr", "0.00")
-        lines.append(f"🟢 {name} | {rank}위 | {price}원 | {base_chgr}%")
+        lines.append(f"🟢 {rank}위 | {name} | {price}원 | {base_chgr}%")
 
     lines.append("")
     lines.append(
