@@ -206,6 +206,7 @@
   #rank-host td.nm { overflow:hidden; text-overflow:ellipsis; }
   .amount-rank-title { flex-wrap:wrap; }
   .amount-rank-filter { display:flex; align-items:center; gap:4px; margin-left:auto; font-size:13px; font-weight:400; cursor:pointer; white-space:nowrap; }
+  .amount-rank-filter + .amount-rank-filter { margin-left:0; }
   .amount-rank-title .view-btn { margin-left:0; }
   @media (max-width:560px) { .amount-rank-title { gap:6px; } .amount-rank-filter { font-size:11px; } }
   #amount-rank-host .rank-tbl { table-layout:fixed; }
@@ -327,7 +328,7 @@
     <div id="rank-host"></div>
   </div>
 </div>
-<div class="page-title amount-rank-title"><span>거래대금 상위</span><label class="amount-rank-filter"><input id="exclude-etf-etn" type="checkbox" role="switch" checked>ETF/ETN 제외</label><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
+<div class="page-title amount-rank-title"><span>거래대금 상위</span><label class="amount-rank-filter"><input id="amount-day-change" type="checkbox">대금전일비</label><label class="amount-rank-filter"><input id="exclude-etf-etn" type="checkbox" role="switch" checked>ETF/ETN 제외</label><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
 <div class="rank-wrap" id="amount-rank-content">
   <div class="panel">
     <div id="amount-rank-host"></div>
@@ -1075,6 +1076,47 @@ document.getElementById('rank-host').addEventListener('click', e => {
 // 거래대금 순위: 10행 높이, 바닥 스크롤 시 다음 페이지 조회.
 let amountRankItems = [], amountRankCont = 'N', amountRankNext = '', amountRankLoading = false;
 let amountRankGeneration = 0;
+const amountPrevious = new Map();
+let amountPreviousLoading = false;
+function amountChangeText(item) {
+  const previous = amountPrevious.get(item.code);
+  if (!previous || Date.now() - previous.ts >= 60000) return '…';
+  if (!(previous.amount > 0)) return '—';
+  const change = (item.amount_eok / previous.amount - 1) * 100;
+  return (change > 0 ? '+' : '') + change.toFixed(2) + '%';
+}
+async function loadVisibleAmountChanges() {
+  if (amountPreviousLoading || !document.getElementById('amount-day-change').checked) return;
+  amountPreviousLoading = true;
+  try {
+    while (document.getElementById('amount-day-change').checked) {
+      const scroll = document.querySelector('#amount-rank-host .rank-scroll');
+      if (!scroll || document.getElementById('amount-rank-content').hidden) break;
+      const bounds = scroll.getBoundingClientRect();
+      const row = [...scroll.querySelectorAll('tbody tr')].find(row => {
+        const rect = row.getBoundingClientRect();
+        const cached = amountPrevious.get(row.dataset.code);
+        return rect.bottom > bounds.top && rect.top < bounds.bottom
+          && (!cached || Date.now() - cached.ts >= 60000);
+      });
+      if (!row) break;
+      const code = row.dataset.code;
+      try {
+        const response = await fetch('/api/amount_previous?code=' + encodeURIComponent(code), { cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        amountPrevious.set(code, { amount: data.amount_eok, ts: Date.now() });
+      } catch (error) {
+        amountPrevious.set(code, { amount: null, ts: Date.now() });
+      }
+      if (document.getElementById('amount-day-change').checked) renderAmountRankTable();
+      // 화면에 보이는 종목만 순차 조회해 추가 API 호출을 제한한다.
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  } finally { amountPreviousLoading = false; }
+}
+
 function fitAmountRankHeight() {
   syncAmountRankColumnWidths();
   const scroll = document.querySelector('#amount-rank-host .rank-scroll');
@@ -1092,9 +1134,13 @@ function renderAmountRankTable() {
     host.innerHTML = '<div class="rank-scroll"><table class="rank-tbl"><thead><tr><th></th><th style="text-align:left">종목명</th><th>현재가</th><th>등락률</th><th>거래대금</th></tr></thead><tbody></tbody></table></div>';
     scroll = host.querySelector('.rank-scroll');
     scroll.addEventListener('scroll', () => {
+      loadVisibleAmountChanges();
       if (scroll.scrollTop > 0 && scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 60) loadAmountRank(true);
     });
   }
+  const showChange = document.getElementById('amount-day-change').checked;
+  scroll.querySelector('thead th:last-child').textContent = showChange ? '대금전일비' : '거래대금';
+  scroll.querySelector('thead th:last-child').title = showChange ? '전일 전체 거래대금 대비 증감률' : '';
   const top = scroll.scrollTop;
   const exclude = document.getElementById('exclude-etf-etn').checked;
   const tbody = scroll.querySelector('tbody');
@@ -1105,10 +1151,15 @@ function renderAmountRankTable() {
     row.title = '클릭하면 프로그램 순매수와 종목 차트 조회';
     const values = [exclude ? index + 1 : (item.rank || index + 1), item.name, item.price.toLocaleString('ko-KR'),
       (item.flu > 0 ? '+' : '') + item.flu.toFixed(2) + '%',
-      item.amount_eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억'];
+      showChange ? amountChangeText(item) : item.amount_eok.toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + '억'];
     values.forEach((value, column) => {
       const cell = row.insertCell(); cell.textContent = value;
       cell.className = column === 0 ? 'rk' : column === 1 ? 'nm' : column < 4 ? cls(item.flu) : '';
+      if (column === 4 && showChange) {
+        const previous = amountPrevious.get(item.code);
+        cell.className = previous?.amount > 0 ? cls(item.amount_eok / previous.amount - 1) : '';
+        cell.title = previous?.amount > 0 ? '전일 전체 거래대금 대비 증감률' : '전일 거래대금이 없거나 조회할 수 없습니다.';
+      }
       if (column === 1) {
         cell.title = item.name;
         cell.classList.toggle('nxt-tradable', item.nxt === true);
@@ -1117,6 +1168,7 @@ function renderAmountRankTable() {
     tbody.append(row);
   });
   fitAmountRankHeight(); scroll.scrollTop = top;
+  loadVisibleAmountChanges();
 }
 async function loadAmountRank(more = false) {
   if (amountRankLoading || (more && !(amountRankCont === 'Y' && amountRankNext))) return;
@@ -1156,6 +1208,7 @@ async function loadAmountRank(more = false) {
     }
   }
 }
+document.getElementById('amount-day-change').addEventListener('change', renderAmountRankTable);
 document.getElementById('exclude-etf-etn').addEventListener('change', () => {
   amountRankGeneration++;
   amountRankLoading = false;
@@ -1178,7 +1231,7 @@ document.getElementById('amount-rank-host').addEventListener('click', event => {
     content.hidden = collapsed;
     button.textContent = collapsed ? '펼치기 ▸' : '접기 ▾';
     button.setAttribute('aria-expanded', String(!collapsed));
-    if (!collapsed) fitAmountRankHeight();
+    if (!collapsed) { fitAmountRankHeight(); loadVisibleAmountChanges(); }
   };
   apply();
   button.addEventListener('click', () => {

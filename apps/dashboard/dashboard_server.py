@@ -1073,6 +1073,31 @@ def exchange_traded_codes(token):
         return codes
 
 
+_amount_previous_cache = {}
+_amount_previous_lock = threading.Lock()
+
+
+def build_amount_previous(code):
+    """통합 일봉의 최근 거래일 직전 거래대금. 일봉/순위 모두 백만원 단위."""
+    if len(code) != 6 or not code.isascii() or not code.isalnum():
+        raise ValueError('잘못된 종목코드')
+    today = now_kst().strftime('%Y%m%d')
+    with _amount_previous_lock:
+        cached = _amount_previous_cache.get(code)
+        if cached and cached['day'] == today and time.time() - cached['ts'] < cached['ttl']:
+            return {'amount_eok': cached['amount']}
+        rows, _, _, _ = fetch_candles(cached_token(), code, 'D')
+        dated = {str(row.get('dt') or ''): row for row in rows if row.get('dt')}
+        dates = sorted(dated, reverse=True)
+        previous = dated[dates[1]] if len(dates) > 1 else {}
+        raw = previous.get('trde_prica')
+        amount = abs(to_number(raw)) / 100 if raw not in (None, '') else None
+        # 장 시작 전 받은 일봉은 오늘 봉이 생긴 뒤 다시 확인한다.
+        ttl = 86400 if dates and dates[0] == today else 60
+        _amount_previous_cache[code] = {'day': today, 'ts': time.time(), 'ttl': ttl, 'amount': amount}
+        return {'amount_eok': amount}
+
+
 def build_amount_rank(cont_yn='N', next_key='', exclude_etf_etn=False):
     """ka10032: 전체 시장/통합 거래소 거래대금 순위, 한 페이지."""
     def run(token):
@@ -1666,6 +1691,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/summary':
             body = json.dumps(build_summary(), ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/amount_previous':
+            qs = parse_qs(parsed.query)
+            try:
+                payload = build_amount_previous(qs.get('code', [''])[0])
+            except Exception as e:
+                payload = {'amount_eok': None, 'error': str(e)}
+            self._send(json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                       'application/json; charset=utf-8')
         elif path == '/api/amount_rank':
             qs = parse_qs(parsed.query)
             try:
