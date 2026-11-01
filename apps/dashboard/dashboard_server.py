@@ -41,6 +41,7 @@ import time
 import requests
 import re
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlparse, parse_qs
 
 # 서버 환경 시간대(UTC 등)와 무관하게 항상 한국시간(KST) 기준으로 동작
@@ -128,14 +129,17 @@ TELEGRAM_CHAT_ID = _load_env_value('TELEGRAM_CHAT_ID')
 def send_telegram_message(text):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print('[텔레그램] 토큰/챗ID 미설정 — 전송 생략')
-        return
+        return False
     url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
     try:
         r = requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': text}, timeout=15)
         if r.status_code != 200:
             print(f'[텔레그램 에러] HTTP {r.status_code} - {r.text}')
+            return False
+        return r.json().get('ok') is True
     except Exception as e:
         print(f'[텔레그램 에러] {e}')
+        return False
 
 
 def notify_server_started():
@@ -1133,6 +1137,85 @@ def build_amount_rank(cont_yn='N', next_key='', exclude_etf_etn=False):
         return run(cached_token())
 
 
+def build_amount_surge_message():
+    """ETF/ETN 제외 상위 20위 중 상승·대금 전일비 30% 이상인 종목."""
+    items, codes, cursors = [], set(), set()
+    cont, cursor = 'N', ''
+    while len(items) < 20:
+        page = build_amount_rank(cont, cursor, exclude_etf_etn=True)
+        for item in sorted(page['items'], key=lambda row: row['rank']):
+            if item['code'] not in codes:
+                codes.add(item['code'])
+                items.append(item)
+        if len(items) >= 20 or page['cont'] != 'Y':
+            break
+        cursor = page['next']
+        if not cursor or cursor in cursors:
+            raise RuntimeError('거래대금 순위 연속조회 키 오류')
+        cursors.add(cursor)
+        cont = 'Y'
+
+    lines = ['🟢 거래대금 20위내 거래대금 급증종목', '',
+             '순위 | 종목명 | 등락률 | 거래대금 | 대금 전일비', '']
+    for rank, item in enumerate(items[:20], 1):
+        if item['flu'] <= 0:
+            continue
+        previous = build_amount_previous(item['code'])['amount_eok']
+        if previous is None or previous <= 0:
+            continue
+        amount = Decimal(str(item['amount_eok']))
+        change = (amount / Decimal(str(previous)) - 1) * 100
+        if change >= 30:
+            percent = change.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+            display_amount = amount.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+            lines.append(f"{rank}위 | {item['name']} | {item['flu']:+.2f}% | {display_amount:,.0f}억 | {percent:+.0f}%")
+    if len(lines) == 4:
+        lines.append('해당 종목 없음')
+    return '\n'.join(lines)
+
+
+_amount_surge_sent_day = None
+
+
+def maybe_send_amount_surge(now):
+    """매 거래일 16시 전송. 실패/16시대 재시작 시 재시도하고 성공일을 보존."""
+    global _amount_surge_sent_day
+    now = now.astimezone(KST)
+    if now.hour != 16 or now.weekday() >= 5 or is_market_holiday(now):
+        return
+    today = now.strftime('%Y-%m-%d')
+    sent_path = os.path.join(DATA_DIR, '.amount_surge_sent')
+    if _amount_surge_sent_day == today:
+        return
+    try:
+        with open(sent_path, encoding='utf-8') as f:
+            if f.read().strip() == today:
+                _amount_surge_sent_day = today
+                return
+    except FileNotFoundError:
+        pass
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    # 조회 오류는 호출자에게 전파: 일부 종목만으로 잘못된 알림을 보내지 않는다.
+    if not send_telegram_message(build_amount_surge_message()):
+        return
+    _amount_surge_sent_day = today
+    with open(sent_path + '.tmp', 'w', encoding='utf-8') as f:
+        f.write(today)
+    os.replace(sent_path + '.tmp', sent_path)
+    print(f'  → 거래대금 급증종목 알림 전송({today} 16시)')
+
+
+def amount_surge_scheduler():
+    # 다른 API 수집의 지연/실패와 무관하게 분 경계마다 확인한다.
+    while True:
+        try:
+            maybe_send_amount_surge(now_kst())
+        except Exception as e:
+            print(f'[거래대금 급증종목 알림 실패] {e}')
+        sleep_to_next_boundary(60)
+
+
 def build_rank():
     """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
     def run(tok):
@@ -1871,6 +1954,7 @@ def main():
     collecting = '--no-collect' not in args
     if collecting:
         threading.Thread(target=poller_thread, daemon=True).start()
+        threading.Thread(target=amount_surge_scheduler, daemon=True).start()
 
     stock_items()    # 종목명 맵(ka10099) 예열 — 콘솔에 개수/에러 출력
 

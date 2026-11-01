@@ -1083,7 +1083,7 @@ function amountChangeText(item) {
   if (!previous || Date.now() - previous.ts >= 60000) return '…';
   if (!(previous.amount > 0)) return '—';
   const change = (item.amount_eok / previous.amount - 1) * 100;
-  return (change > 0 ? '+' : '') + change.toFixed(2) + '%';
+  return (change > 0 ? '+' : '') + change.toFixed(0) + '%';
 }
 async function loadVisibleAmountChanges() {
   if (amountPreviousLoading || !document.getElementById('amount-day-change').checked) return;
@@ -1368,9 +1368,13 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
     if (tf === 'D') {
       const today = rsiThirtyThreshold(fullItems.slice(0, -1));
       const tomorrow = rsiThirtyThreshold(fullItems);
-      const format = result => !result || result.price <= 0 || result.strict ? '-'
-        : result.price.toLocaleString('ko-KR', {minimumFractionDigits:2,maximumFractionDigits:2});
-      forecast.textContent = `RSI 값이 30인 지점(오늘 : ${format(today)}, 내일 : ${format(tomorrow)})`;
+      const valid = result => result && Number.isFinite(result.price) && result.price > 0 && !result.strict;
+      const format = result => valid(result)
+        ? result.price.toLocaleString('ko-KR', {maximumFractionDigits:0}) : '-';
+      const previousClose = fullItems[fullItems.length - 1].previous_close ?? fullItems[fullItems.length - 2].c;
+      const change = valid(today) && previousClose > 0 ? (today.price / previousClose - 1) * 100 : null;
+      const todayChange = change === null ? '' : `(${change > 0 ? '+' : ''}${change.toFixed(2)}%)`;
+      forecast.textContent = `RSI 값이 30 인 지점(오늘 : ${format(today)}${valid(today) ? 'p' : ''}${todayChange}, 내일 : ${format(tomorrow)}${valid(tomorrow) ? 'p' : ''})`;
     }
   }
   const offset = hostId === 'index-candle-chart' ? indexCandleViewOffset : candleViewOffset;
