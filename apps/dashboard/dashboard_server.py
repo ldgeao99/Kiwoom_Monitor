@@ -1168,7 +1168,7 @@ def build_amount_surge_message():
         if change >= 30:
             percent = change.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
             display_amount = (amount / 10000).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            lines.append(f"{rank}위 | {item['name']} | {item['flu']:+.2f}% | {display_amount:,.2f}조 | {percent:+.0f}%")
+            lines.append(f"{rank}위 | {item['name']} | {item['flu']:+.1f}% | {display_amount:,.2f}조 | {percent:+.0f}%")
     if len(lines) == 4:
         lines.append('해당 종목 없음')
     return '\n'.join(lines)
