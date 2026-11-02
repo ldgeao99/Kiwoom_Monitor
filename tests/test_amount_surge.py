@@ -35,8 +35,8 @@ class MessageTests(unittest.TestCase):
             message = server.build_amount_surge_message()
         self.assertEqual(message, '🟢 거래대금 20위내 거래대금 급증종목\n\n'
                          '순위 | 종목명 | 등락률 | 거래대금 | 대금 전일비\n\n'
-                         '1위 | 종목1 | +11.98% | 130억 | +30%\n'
-                         '20위 | 종목20 | +1.00% | 1,500억 | +1400%')
+                         '1위 | 종목1 | +11.98% | 0.01조 | +30%\n'
+                         '20위 | 종목20 | +1.00% | 0.15조 | +1400%')
         rank.assert_called_once_with('N', '', exclude_etf_etn=True)
 
     def test_pagination_preserves_filtered_rank_and_deduplicates(self):
@@ -54,10 +54,21 @@ class MessageTests(unittest.TestCase):
                 patch.object(server, 'build_amount_previous', side_effect=[{'amount_eok': None}, {'amount_eok': 0}]):
             self.assertTrue(server.build_amount_surge_message().endswith('해당 종목 없음'))
 
-    def test_message_rounds_percent_and_amount_to_integers(self):
+    def test_message_rounds_percent_to_integer_and_amount_to_two_decimal_trillions(self):
         with patch.object(server, 'build_amount_rank', return_value=page([item(1, amount=130.5)])), \
                 patch.object(server, 'build_amount_previous', return_value={'amount_eok': 100}):
-            self.assertIn('1위 | 종목1 | +1.00% | 131억 | +31%', server.build_amount_surge_message())
+            self.assertIn('1위 | 종목1 | +1.00% | 0.01조 | +31%', server.build_amount_surge_message())
+
+    def test_amount_in_trillions_rounding_and_trailing_zero(self):
+        items = [item(1, amount=2684), item(2, amount=2652), item(3, amount=2486),
+                 item(4, amount=1864), item(5, amount=1620), item(6, amount=12500),
+                 item(7, amount=2500), item(8, amount=12550), item(9, amount=2000)]
+        with patch.object(server, 'build_amount_rank', return_value=page(items)), \
+                patch.object(server, 'build_amount_previous', return_value={'amount_eok': 100}):
+            message = server.build_amount_surge_message()
+        amounts = [line.split(' | ')[3] for line in message.splitlines()[4:]]
+        self.assertEqual(amounts, ['0.27조', '0.27조', '0.25조', '0.19조', '0.16조',
+                                  '1.25조', '0.25조', '1.26조', '0.20조'])
 
     def test_previous_lookup_error_aborts_instead_of_sending_partial_results(self):
         with patch.object(server, 'build_amount_rank', return_value=page([item(1), item(2)])), \
