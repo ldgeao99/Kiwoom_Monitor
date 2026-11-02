@@ -1171,6 +1171,8 @@ def build_amount_surge_message():
             lines.append(f"{rank}위 | {item['name']} | {item['flu']:+.1f}% | {display_amount:,.2f}조 | {percent:+.0f}%")
     if len(lines) == 4:
         lines.append('해당 종목 없음')
+    lines.extend(['', '* 등락률 0% 초과', '* 전일 거래대금 대비 30% 이상 증가',
+                  '* 오후 4시 발송, ETF/ETN제외'])
     return '\n'.join(lines)
 
 

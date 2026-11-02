@@ -36,7 +36,10 @@ class MessageTests(unittest.TestCase):
         self.assertEqual(message, '🟢 거래대금 20위내 거래대금 급증종목\n\n'
                          '순위 | 종목명 | 등락률 | 거래대금 | 대금 전일비\n\n'
                          '1위 | 종목1 | +12.0% | 0.01조 | +30%\n'
-                         '20위 | 종목20 | +1.0% | 0.15조 | +1400%')
+                         '20위 | 종목20 | +1.0% | 0.15조 | +1400%\n\n'
+                         '* 등락률 0% 초과\n'
+                         '* 전일 거래대금 대비 30% 이상 증가\n'
+                         '* 오후 4시 발송, ETF/ETN제외')
         rank.assert_called_once_with('N', '', exclude_etf_etn=True)
 
     def test_pagination_preserves_filtered_rank_and_deduplicates(self):
@@ -52,7 +55,9 @@ class MessageTests(unittest.TestCase):
     def test_missing_or_zero_previous_amount_is_excluded(self):
         with patch.object(server, 'build_amount_rank', return_value=page([item(1), item(2)])), \
                 patch.object(server, 'build_amount_previous', side_effect=[{'amount_eok': None}, {'amount_eok': 0}]):
-            self.assertTrue(server.build_amount_surge_message().endswith('해당 종목 없음'))
+            message = server.build_amount_surge_message()
+            self.assertIn('\n해당 종목 없음\n\n* 등락률 0% 초과', message)
+            self.assertTrue(message.endswith('* 오후 4시 발송, ETF/ETN제외'))
 
     def test_message_rounds_percent_to_integer_and_amount_to_two_decimal_trillions(self):
         with patch.object(server, 'build_amount_rank', return_value=page([item(1, amount=130.5)])), \
@@ -66,7 +71,7 @@ class MessageTests(unittest.TestCase):
         with patch.object(server, 'build_amount_rank', return_value=page(items)), \
                 patch.object(server, 'build_amount_previous', return_value={'amount_eok': 100}):
             message = server.build_amount_surge_message()
-        amounts = [line.split(' | ')[3] for line in message.splitlines()[4:]]
+        amounts = [line.split(' | ')[3] for line in message.split('\n\n')[2].splitlines()]
         self.assertEqual(amounts, ['0.27조', '0.27조', '0.25조', '0.19조', '0.16조',
                                   '1.25조', '0.25조', '1.26조', '0.20조'])
 
