@@ -42,6 +42,7 @@ import requests
 import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
+from html import escape
 from urllib.parse import urlparse, parse_qs
 
 # 서버 환경 시간대(UTC 등)와 무관하게 항상 한국시간(KST) 기준으로 동작
@@ -126,13 +127,16 @@ TELEGRAM_BOT_TOKEN = _load_env_value('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = _load_env_value('TELEGRAM_CHAT_ID')
 
 
-def send_telegram_message(text):
+def send_telegram_message(text, *, parse_mode=None):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print('[텔레그램] 토큰/챗ID 미설정 — 전송 생략')
         return False
     url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+    payload = {'chat_id': TELEGRAM_CHAT_ID, 'text': text}
+    if parse_mode:
+        payload['parse_mode'] = parse_mode
     try:
-        r = requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': text}, timeout=15)
+        r = requests.post(url, json=payload, timeout=15)
         if r.status_code != 200:
             print(f'[텔레그램 에러] HTTP {r.status_code} - {r.text}')
             return False
@@ -1240,8 +1244,7 @@ def build_investor_close_message(now):
     # fetch_row의 첫 업종 폴백을 종합지수 자료로 잘못 발송하지 않는다.
     if row.get('inds_cd') != market['inds_cd']:
         raise RuntimeError('코스피 종합 투자자별 매매동향이 없습니다.')
-    lines = [f"🟢 코스피 투자자별 매매동향({now:%Y-%m-%d, %H:%M})", '',
-             '투자주체 | 순매수']
+    rows = []
     for key, label in INVESTOR_CLOSE_FIELDS:
         raw = row.get(key)
         if raw is None or not str(raw).strip():
@@ -1253,10 +1256,19 @@ def build_investor_close_message(now):
         value = Decimal(str(to_number(raw))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         if value == 0:
             value = Decimal('0')
+        rows.append((label, f'{value:+,.0f}'))
+    # 한글은 고정폭 표시에서 영문/공백의 두 칸을 차지한다.
+    label_width = max(len(label) * 2 for label, _ in rows)
+    amount_width = max(6, max(len(amount) for _, amount in rows))
+    lines = ['투자주체' + ' ' * (label_width - 8) + ' | '
+             + ' ' * (amount_width + 2 - 6) + '순매수']
+    for label, amount in rows:
         if label == '보험':
             lines.append('')
-        lines.append(f'{label} {value:+,.0f}억')
-    return '\n'.join(lines)
+        lines.append(label + ' ' * (label_width - len(label) * 2)
+                     + ' | ' + amount.rjust(amount_width) + '억')
+    title = f"🟢 코스피 투자자별 매매동향({now:%Y-%m-%d, %H:%M})"
+    return title + '\n\n<pre>' + escape('\n'.join(lines)) + '</pre>'
 
 
 _investor_close_sent_day = None
@@ -1281,7 +1293,7 @@ def maybe_send_investor_close(now):
         pass
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
-    if not send_telegram_message(build_investor_close_message(now)):
+    if not send_telegram_message(build_investor_close_message(now), parse_mode='HTML'):
         return
     _investor_close_sent_day = today
     with open(sent_path + '.tmp', 'w', encoding='utf-8') as f:

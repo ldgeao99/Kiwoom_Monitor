@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from html import unescape
+import unicodedata
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_amount_surge import server
 
@@ -23,12 +25,22 @@ class InvestorCloseMessageTests(unittest.TestCase):
         self.addCleanup(self.fetch.stop)
 
     def test_exact_order_blank_line_signs_and_rounding(self):
-        self.assertEqual(server.build_investor_close_message(NOW),
-                         '🟢 코스피 투자자별 매매동향(2026-11-03, 16:00)\n\n'
-                         '투자주체 | 순매수\n'
-                         '개인 -1,234억\n외국인 +2,345억\n기관 -1,111억\n'
-                         '금융투자 +124억\n투신 -51억\n연기금 +0억\n기타법인 +0억\n\n'
-                         '보험 +0억\n기타금융 +0억\n은행 +0억\n사모펀드 +0억')
+        message = server.build_investor_close_message(NOW)
+        self.assertTrue(message.startswith('🟢 코스피 투자자별 매매동향(2026-11-03, 16:00)\n\n<pre>'))
+        self.assertTrue(message.endswith('</pre>'))
+        table = unescape(message.split('<pre>')[1].split('</pre>')[0])
+        self.assertEqual(table.splitlines()[0].replace(' ', ''), '투자주체|순매수')
+        data = [line for line in table.splitlines()[1:] if line]
+        self.assertEqual([line.split('|')[0].strip() for line in data],
+                         ['개인', '외국인', '기관', '금융투자', '투신', '연기금', '기타법인',
+                          '보험', '기타금융', '은행', '사모펀드'])
+        self.assertEqual([line.split('|')[1].strip() for line in data],
+                         ['-1,234억', '+2,345억', '-1,111억', '+124억', '-51억', '+0억',
+                          '+0억', '+0억', '+0억', '+0억', '+0억'])
+        self.assertIn('\n\n보험', table)
+        def width(text):
+            return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in text)
+        self.assertEqual(len({width(line[:line.index('억')]) for line in data}), 1)
         self.fetch_mock.assert_called_once_with('test', '20261103', mrkt_tp='0', inds_cd='001_AL')
 
     def test_wrong_sector_is_rejected(self):
@@ -72,7 +84,7 @@ class InvestorCloseScheduleTests(unittest.TestCase):
         self.send.assert_not_called()
         server.maybe_send_investor_close(datetime(2026, 11, 3, 7, tzinfo=timezone.utc))
         self.build.assert_called_once_with(NOW)
-        self.send.assert_called_once_with('investors')
+        self.send.assert_called_once_with('investors', parse_mode='HTML')
 
     def test_restart_dedup_and_next_trading_day(self):
         server.maybe_send_investor_close(NOW)
@@ -99,13 +111,26 @@ class InvestorCloseScheduleTests(unittest.TestCase):
         self.send.assert_not_called()
         self.assertFalse(self.state.exists())
         server.maybe_send_investor_close(NOW.replace(minute=1))
-        self.send.assert_called_once_with('investors')
+        self.send.assert_called_once_with('investors', parse_mode='HTML')
 
     def test_missing_telegram_settings_skips_query(self):
         with patch.object(server, 'TELEGRAM_BOT_TOKEN', None):
             server.maybe_send_investor_close(NOW)
         self.build.assert_not_called()
         self.send.assert_not_called()
+
+
+class InvestorCloseDeliveryTests(unittest.TestCase):
+    def test_only_formatted_messages_enable_html(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {'ok': True}
+        with patch.object(server, 'TELEGRAM_BOT_TOKEN', 'test'), \
+                patch.object(server, 'TELEGRAM_CHAT_ID', 'test'), \
+                patch.object(server.requests, 'post', return_value=response) as post:
+            self.assertTrue(server.send_telegram_message('<pre>개인 +1억</pre>', parse_mode='HTML'))
+            self.assertEqual(post.call_args.kwargs['json']['parse_mode'], 'HTML')
+            self.assertTrue(server.send_telegram_message('ordinary alert'))
+            self.assertNotIn('parse_mode', post.call_args.kwargs['json'])
 
 
 if __name__ == '__main__':
