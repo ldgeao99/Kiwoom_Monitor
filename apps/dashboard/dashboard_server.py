@@ -61,6 +61,9 @@ os.makedirs(DATA_DIR, exist_ok=True)
 sys.path.insert(0, os.path.join(REPO_ROOT, 'common'))
 
 from publish_auth_token import get_access_token
+from response_cache import ResponseCache
+
+PUBLIC_CACHE = ResponseCache(os.path.join(DATA_DIR, 'public_cache'))
 
 # 화면 표시 컬럼: (응답필드, 표시명, 색상) — 표/차트/체크박스 공통
 # 순서/이름은 HTS 투자자 선택 화면과 유사하게(공통 항목 앞, ka10051 전용 항목 뒤)
@@ -246,12 +249,14 @@ def fetch_rank(token, qry_tp='5'):
 
 
 _token_cache = {'token': None}
+_token_lock = threading.Lock()
 
 
 def cached_token():
-    if not _token_cache['token']:
-        _token_cache['token'] = get_access_token()
-    return _token_cache['token']
+    with _token_lock:
+        if not _token_cache['token']:
+            _token_cache['token'] = get_access_token()
+        return _token_cache['token']
 
 
 _name_map = None
@@ -922,11 +927,26 @@ def build_summary():
             'series': today_series,
             'series_prev': prev_series,
             # 오늘 실제 시가(ka20001 open_pric) — 차트 시가선/색 기준. 당일에만.
-            'open': (get_index_open(m, date_str) if date_str == now.strftime('%Y-%m-%d') else None),
+            'open': _open_price_cache.get((m['key'], date_str)),
         })
-    return {'markets': out, 'nasdaq': get_nasdaq_display(),
+    return {'markets': out}
+
+
+def build_overseas_summary():
+    return {'nasdaq': get_nasdaq_display(),
             'nikkei': get_overseas_index_display('^N225'),
             'taiwan': get_overseas_index_display('^TWII')}
+
+
+def warm_public_data():
+    jobs = [('rank', build_rank, 30),
+            ('amount:1', lambda: build_amount_rank(exclude_etf_etn=True), 30),
+            ('prm:all:2', lambda: build_prm_upper('all', '2'), 5),
+            ('overseas', build_overseas_summary, 60)]
+    while True:
+        for key, loader, ttl in jobs:
+            PUBLIC_CACHE.get(key, loader, ttl, wait=False)
+        time.sleep(5)
 
 
 def build_program(stk_cd, cont_yn='N', next_key='', amt_qty_tp='1'):
@@ -982,10 +1002,16 @@ def fetch_stock_list(token, mrkt_tp):
 
 
 # 종목명↔코드 맵 캐시(하루 단위) — ka10099로 코스피/코스닥 전체 수집
+_stock_items_lock = threading.Lock()
 _stock_items = {'date': None, 'items': None}   # items: [(code, name), ...]
 
 
 def stock_items():
+    with _stock_items_lock:
+        return _load_stock_items()
+
+
+def _load_stock_items():
     today = now_kst().strftime('%Y-%m-%d')
     if _stock_items['items'] is None or _stock_items['date'] != today:
         items, c2n, nxt_codes = [], {}, set()
@@ -1452,9 +1478,10 @@ def fetch_candles(token, code, tf, cont_yn='N', next_key=''):
     return rows, tkey, cy, nk
 
 
-def build_candles(code, tf, limit=240, cont_yn='N', next_key=''):
+def build_candles(code, tf, limit=240, cont_yn='N', next_key='', latest_only=False):
     """종목 캔들 차트(시간 오름차순 OHLCV).
     분봉(1/3/10/15분)은 '최신 거래일 세션'을 장시작(09:00)까지 자동 연속조회해서 보여준다.
+    latest_only=True이면 첫 페이지부터 표시하고 과거 봉은 next-key로 추가 조회한다.
     조회된 분봉은 이전 거래일 데이터까지 모두 표시한다.
     일/주/월봉은 최근 limit개를 표시하고 나머지는 history로 보존한다.
     연속조회는 다음 1페이지를 필터 없이 반환한다."""
@@ -1469,7 +1496,7 @@ def build_candles(code, tf, limit=240, cont_yn='N', next_key=''):
             rows, tkey, cy, nk2 = fetch_candles(tok, code, tf, cont, nk)
             rows_all.extend(rows)
             pages += 1
-            if not is_min or cont_yn == 'Y':
+            if latest_only or not is_min or cont_yn == 'Y':
                 break                                   # 일/주/월은 1페이지면 충분
             if session_open is None:
                 # 최신 세션 일자 = 첫 페이지의 가장 큰 날짜(오늘 or 직전 거래일)
@@ -1870,6 +1897,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/summary':
             body = json.dumps(build_summary(), ensure_ascii=False).encode('utf-8')
             self._send(body, 'application/json; charset=utf-8')
+        elif path == '/api/overseas':
+            try:
+                payload = PUBLIC_CACHE.get('overseas', build_overseas_summary, 60)
+            except Exception as error:
+                payload = {'error': str(error)}
+            self._send(json.dumps(payload, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
         elif path == '/api/amount_previous':
             qs = parse_qs(parsed.query)
             try:
@@ -1881,16 +1914,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == '/api/amount_rank':
             qs = parse_qs(parsed.query)
             try:
-                payload = build_amount_rank('Y' if qs.get('cont', ['N'])[0] == 'Y' else 'N',
-                                            qs.get('next', [''])[0],
-                                            exclude_etf_etn=qs.get('exclude_etf_etn', ['0'])[0] == '1')
+                more = qs.get('cont', ['N'])[0] == 'Y'
+                exclude = qs.get('exclude_etf_etn', ['0'])[0] == '1'
+                if more:
+                    payload = build_amount_rank('Y', qs.get('next', [''])[0], exclude_etf_etn=exclude)
+                else:
+                    payload = PUBLIC_CACHE.get(f'amount:{int(exclude)}',
+                                               lambda: build_amount_rank(exclude_etf_etn=exclude), 30)
             except Exception as e:
                 payload = {'items': [], 'cont': 'N', 'next': '', 'error': str(e)}
             self._send(json.dumps(payload, ensure_ascii=False).encode('utf-8'),
                        'application/json; charset=utf-8')
         elif path == '/api/rank':
             try:
-                payload = build_rank()
+                payload = PUBLIC_CACHE.get('rank', build_rank, 30)
             except Exception as e:
                 payload = {'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -1904,7 +1941,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if side not in ('1', '2'):
                 side = '2'
             try:
-                payload = build_prm_upper(mkey, side)
+                payload = PUBLIC_CACHE.get(f'prm:{mkey}:{side}', lambda: build_prm_upper(mkey, side), 5)
             except Exception as e:
                 payload = {'market': mkey, 'side': side, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -1919,7 +1956,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = {'code': '', 'tf': tf, 'items': [], 'error': '종목코드 없음'}
             else:
                 try:
-                    payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0])
+                    payload = build_candles(code, tf, cont_yn=qs.get('cont', ['N'])[0], next_key=qs.get('next', [''])[0], latest_only=qs.get('latest', ['0'])[0] == '1')
                 except Exception as e:
                     payload = {'code': code, 'tf': tf, 'items': [], 'error': str(e)}
             body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
@@ -2053,7 +2090,9 @@ def main():
         threading.Thread(target=amount_surge_scheduler, daemon=True).start()
         threading.Thread(target=investor_close_scheduler, daemon=True).start()
 
-    stock_items()    # 종목명 맵(ka10099) 예열 — 콘솔에 개수/에러 출력
+    # 외부 API 예열은 HTTP 포트 바인딩을 지연시키지 않는다.
+    if collecting:
+        threading.Thread(target=warm_public_data, daemon=True).start()
 
     with ThreadingHTTPServer(('', port), Handler) as httpd:
         threading.Thread(target=notify_server_started, daemon=True).start()

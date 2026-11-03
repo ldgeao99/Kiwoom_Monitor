@@ -388,7 +388,7 @@
     <span id="chart-name" class="chart-name"></span>
   </div>
   <div class="panel">
-    <div id="stock-chart"></div>
+    <div id="stock-chart"><div class="empty">차트 영역을 표시하면 조회합니다.</div></div>
   </div>
   <div id="stock-memo" class="panel" style="margin-top:8px;padding:10px 14px;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5" hidden></div>
 </div>
@@ -436,6 +436,48 @@
 </dialog>
 
 <script>
+// LOADING HELPERS START
+const requestFlights = new Map();
+let initialReady = false;
+function singleRequest(key, task) {
+  if (requestFlights.has(key)) return requestFlights.get(key);
+  const promise = Promise.resolve().then(task).finally(() => {
+    if (requestFlights.get(key) === promise) requestFlights.delete(key);
+  });
+  requestFlights.set(key, promise);
+  return promise;
+}
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener('abort', abort, {once:true});
+  const timer = setTimeout(abort, 28000);
+  try { return await fetch(url, {...options, signal: controller.signal}); }
+  finally { clearTimeout(timer); options.signal?.removeEventListener('abort', abort); }
+}
+function panelVisible(id) {
+  if (!initialReady || document.hidden) return false;
+  const host = document.getElementById(id);
+  if (!host || !host.getClientRects().length) return false;
+  const rect = host.getBoundingClientRect();
+  return rect.bottom >= -200 && rect.top <= window.innerHeight + 200;
+}
+function showCacheTime(data, id) {
+  if (!data._cache) return;
+  const host = document.getElementById(id);
+  if (!host) return;
+  let note = document.getElementById(id + '-cache-time');
+  if (!note) {
+    note = document.createElement('div'); note.id = id + '-cache-time';
+    note.style.cssText = 'font-size:11px;color:var(--muted);padding:2px 8px';
+    host.before(note);
+  }
+  note.textContent = '조회 ' + new Date(data._cache.updated_at).toLocaleString('ko-KR', {timeZone:'Asia/Seoul'})
+    + (data._cache.stale ? ' · 갱신 중 (이전 조회값)' : '');
+}
+// LOADING HELPERS END
+
 let DATA = { date:null, label:'', columns:[], points:[], default_selected:[], markets:[] };
 let selected = null;           // Set<key> — 표시할 투자자
 
@@ -935,9 +977,10 @@ function breadthTable(markets) {
   return `<table class="breadth-tbl"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 }
 
-async function renderSummaryCards() {
+function renderSummaryCards() { return singleRequest('summary', renderSummaryCardsImpl); }
+async function renderSummaryCardsImpl() {
   try {
-    const res = await fetch('/api/summary', { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/summary', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     const ms = data.markets;
@@ -951,6 +994,16 @@ async function renderSummaryCards() {
     document.getElementById('mkt-cards').innerHTML = ms.map(m => mktCard(m, m.key === strongKey)).join('')
       + (idxViewMode === 'combined' ? combinedIndexChart(ms) : '');
     document.getElementById('breadth').innerHTML = breadthTable(ms);
+  } catch (e) {}
+}
+
+function renderOverseas() { return singleRequest('overseas', renderOverseasImpl); }
+async function renderOverseasImpl() {
+  try {
+    const response = await fetchWithTimeout('/api/overseas', {cache:'no-store'});
+    if (!response.ok) return;
+    const data = await response.json();
+    showCacheTime(data, 'nasdaq-fut');
     // 해외 지수: 현재/당일 최저/최고의 전일 종가 대비 등락률.
     const f = v => (v == null) ? '-' : `<b class="${cls(v)}">${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
     const fp = v => (v == null) ? '-' : `<b>${(v > 0 ? '+' : '') + v.toFixed(2)}%</b>`;
@@ -1055,11 +1108,13 @@ function renderRankTable() {
   fitRankTableHeight();
   host.querySelector('.rank-scroll').scrollTop = prevTop;   // 갱신 시 스크롤 위치 유지
 }
-async function renderRank() {
+function renderRank() { return singleRequest('rank', renderRankImpl); }
+async function renderRankImpl() {
   try {
-    const res = await fetch('/api/rank', { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/rank', { cache: 'no-store' });
     if (!res.ok) return;
     const d = await res.json();
+    showCacheTime(d, 'rank-host');
     rankItems = d.items || [];
     renderRankTable();
   } catch (e) {}
@@ -1102,7 +1157,7 @@ async function loadVisibleAmountChanges() {
       if (!row) break;
       const code = row.dataset.code;
       try {
-        const response = await fetch('/api/amount_previous?code=' + encodeURIComponent(code), { cache: 'no-store' });
+        const response = await fetchWithTimeout('/api/amount_previous?code=' + encodeURIComponent(code), { cache: 'no-store' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const data = await response.json();
         if (data.error) throw new Error(data.error);
@@ -1184,11 +1239,12 @@ async function loadAmountRank(more = false) {
   try {
     const url = '/api/amount_rank?exclude_etf_etn=' + (exclude ? '1' : '0')
       + (more ? '&cont=Y&next=' + encodeURIComponent(cursor) : '');
-    const response = await fetch(url, { cache: 'no-store' });
+    const response = await fetchWithTimeout(url, { cache: 'no-store' });
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     if (generation !== amountRankGeneration) return;
     if (data.error) throw new Error(data.error);
+    showCacheTime(data, 'amount-rank-host');
     const merged = new Map((more ? amountRankItems : []).map(item => [item.code, item]));
     (data.items || []).forEach(item => merged.set(item.code, item));
     amountRankItems = [...merged.values()].sort((a, b) => a.rank - b.rank);
@@ -1274,7 +1330,7 @@ async function restoreStockInput(code, name, storageKey, inputId) {
   const initial = input.value;
   if (!name) {
     try {
-      const response = await fetch('/api/stock?q=' + encodeURIComponent(code), { cache: 'no-store' });
+      const response = await fetchWithTimeout('/api/stock?q=' + encodeURIComponent(code), { cache: 'no-store' });
       if (!response.ok) return;
       const stock = await response.json();
       if (stock.code !== code || !stock.name) return;
@@ -1581,6 +1637,7 @@ function drawCandles(items, tf, hostId = 'stock-chart') {
 
 let indexCandleViewCount = null, indexCandleViewOffset = 0;
 let indexCandleMarket = '', indexCandleTf = 'D', indexCandleItems = [], indexCandleHistory = [];
+let indexCandleAbort = null;
 let indexCandleNext = '', indexCandleCont = 'N', indexCandleGeneration = 0, indexCandleLoading = false;
 async function loadIndexCandles(more = false, preserveView = false) {
   if (!indexCandleMarket || (more && indexCandleLoading)) return;
@@ -1593,14 +1650,15 @@ async function loadIndexCandles(more = false, preserveView = false) {
     document.getElementById('index-rsi-forecast').hidden = true;
     indexCandleItems = []; indexCandleHistory = []; indexCandleNext = ''; indexCandleCont = 'N';
   }
+  if (!more) { indexCandleAbort?.abort(); indexCandleAbort = new AbortController(); }
   indexCandleLoading = true; button.disabled = true; status.textContent = '불러오는 중…';
   try {
     let data;
     if (more && indexCandleHistory.length) data = {items:indexCandleHistory, cont:indexCandleCont, next:indexCandleNext};
     else {
       const url = '/api/candles?code=' + encodeURIComponent('index:' + market) + '&tf=' + tf
-        + (more ? '&cont=Y&next=' + encodeURIComponent(indexCandleNext) : '');
-      const response = await fetch(url, {cache:'no-store'});
+        + (more ? '&cont=Y&next=' + encodeURIComponent(indexCandleNext) : '&latest=1');
+      const response = await fetchWithTimeout(url, {cache:'no-store', signal:indexCandleAbort?.signal});
       if (!response.ok) throw new Error('HTTP ' + response.status);
       data = await response.json();
       if (data.error) throw new Error(data.error);
@@ -1628,6 +1686,7 @@ indexTfSelect.addEventListener('change',()=>{indexCandleTf=indexTfSelect.value;l
 document.getElementById('index-candle-more').addEventListener('click',()=>loadIndexCandles(true));
 
 let candleItems = [], candleHistory = [], candleNext = '', candleCont = 'N';
+let candleAbort = null, candleRequestKey = '', candleDataKey = '', candleHistoryLoaded = false;
 let candleGeneration = 0, candleLoading = false;
 function updateCandleMore() {
   const btn = document.getElementById('chart-more');
@@ -1636,11 +1695,17 @@ function updateCandleMore() {
 }
 async function loadCandles(more = false, preserveView = false) {
   if (more && (candleLoading || (!candleHistory.length && !(candleCont === 'Y' && candleNext)))) return;
+  if (!more && !panelVisible('stock-chart')) return;
+  const requestKey = chartCode + ':' + chartTf;
+  if (!more && candleLoading && preserveView && candleRequestKey === requestKey) return;
+  if (!more && candleDataKey !== requestKey) preserveView = false;
+  candleRequestKey = requestKey;
+  if (!more) { candleAbort?.abort(); candleAbort = new AbortController(); }
   const generation = more ? candleGeneration : ++candleGeneration;
   const code = chartCode, tf = chartTf;
   const host = document.getElementById('stock-chart');
   if (!more) {
-    candleItems = []; candleHistory = []; candleNext = ''; candleCont = 'N';
+    if (!preserveView) { candleItems = []; candleHistory = []; candleNext = ''; candleCont = 'N'; candleHistoryLoaded = false; }
     if (!preserveView) { candleViewCount = null; candleViewOffset = 0; }
   }
   candleLoading = true; updateCandleMore();
@@ -1652,19 +1717,24 @@ async function loadCandles(more = false, preserveView = false) {
     } else {
       let url = '/api/candles?code=' + encodeURIComponent(code) + '&tf=' + tf;
       if (more) url += '&cont=Y&next=' + encodeURIComponent(candleNext);
-      const res = await fetch(url, { cache: 'no-store' });
+      else url += '&latest=1';
+      const res = await fetchWithTimeout(url, { cache: 'no-store', signal:candleAbort?.signal });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       data = await res.json();
       if (data.error) throw new Error(data.error);
     }
     if (generation !== candleGeneration) return;
-    const merged = new Map((more ? candleItems : []).map(item => [item.t, item]));
+    candleDataKey = requestKey;
+    const merged = new Map((more || preserveView ? candleItems : []).map(item => [item.t, item]));
     (data.items || []).forEach(item => merged.set(item.t, item));
     candleItems = [...merged.values()].sort((a, b) => a.t.localeCompare(b.t));
     const visibleCount = Math.min(candleViewCount || candleItems.length, candleItems.length);
     candleViewOffset = Math.max(0, Math.min(candleViewOffset, candleItems.length - visibleCount));
-    candleHistory = data.history || [];
-    candleCont = data.cont || 'N'; candleNext = data.next || '';
+    if (more || !preserveView || !candleHistoryLoaded) {
+      candleHistory = data.history || [];
+      candleCont = data.cont || 'N'; candleNext = data.next || '';
+    }
+    if (more) candleHistoryLoaded = true;
     document.getElementById('chart-name').textContent = '';
     drawCandles(candleItems, tf);
   } catch (e) {
@@ -1757,7 +1827,11 @@ attachCandleGestures('index-candle-chart', {
 
 let investorCode = '', investorName = '', investorMode = '1';
 let investorGeneration = 0, investorItems = [], investorNext = '', investorCont = 'N', investorLoading = false;
-async function renderStockInvestors(more = false) {
+function renderStockInvestors(more = false) {
+  return singleRequest('investors:' + investorCode + ':' + investorMode + ':' + more, () => renderStockInvestorsImpl(more));
+}
+async function renderStockInvestorsImpl(more = false) {
+  if (!panelVisible('stock-investor-content')) return;
   if (more && (investorLoading || investorCont !== 'Y' || !investorNext)) return;
   const generation = more ? investorGeneration : ++investorGeneration, code = investorCode;
   const section = document.getElementById('stock-investor-section');
@@ -1769,7 +1843,7 @@ async function renderStockInvestors(more = false) {
   try {
     const url = '/api/stock_investors?code=' + encodeURIComponent(code) + '&mode=' + investorMode
       + (more ? '&cont=Y&next=' + encodeURIComponent(investorNext) : '');
-    const response = await fetch(url, {cache:'no-store'});
+    const response = await fetchWithTimeout(url, {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     if (generation !== investorGeneration || code !== investorCode) return;
@@ -1820,7 +1894,7 @@ async function setInvestorStock(code, name = '') {
   const query = renderStockInvestors();
   if (!name) {
     try {
-      const response = await fetch('/api/stock?q=' + encodeURIComponent(code), {cache:'no-store'});
+      const response = await fetchWithTimeout('/api/stock?q=' + encodeURIComponent(code), {cache:'no-store'});
       if (response.ok) {
         const stock = await response.json();
         if (generation === investorNameGeneration && investorCode === code && stock.code === code && stock.name && input.value === '') {
@@ -1838,7 +1912,7 @@ async function searchInvestorStock() {
   const generation = ++investorSearchGeneration;
   const status = document.getElementById('stock-investor-status');
   try {
-    const response = await fetch('/api/stock?q=' + encodeURIComponent(raw), {cache:'no-store'});
+    const response = await fetchWithTimeout('/api/stock?q=' + encodeURIComponent(raw), {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const stock = await response.json();
     if (generation !== investorSearchGeneration) return;
@@ -1853,13 +1927,15 @@ document.getElementById('stock-investor-go').addEventListener('click', searchInv
 document.getElementById('stock-investor-search').addEventListener('keydown', event => { if (event.key === 'Enter') searchInvestorStock(); });
 
 let stockMemoGeneration = 0;
-async function renderStockMemo() {
+function renderStockMemo() { return singleRequest('memo' + chartCode, renderStockMemoImpl); }
+async function renderStockMemoImpl() {
+  if (!panelVisible('stock-chart')) return;
   const generation = ++stockMemoGeneration, code = chartCode;
   const host = document.getElementById('stock-memo');
   host.hidden = true; host.textContent = '';
   if (!/^[0-9A-Z]{6}$/.test(code)) return;
   try {
-    const response = await fetch('/api/stock_memo?code=' + encodeURIComponent(code), {cache:'no-store'});
+    const response = await fetchWithTimeout('/api/stock_memo?code=' + encodeURIComponent(code), {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     if (generation !== stockMemoGeneration || code !== chartCode) return;
@@ -1871,13 +1947,15 @@ async function renderStockMemo() {
 }
 
 let creditRatioGeneration = 0;
-async function renderCreditRatio() {
+function renderCreditRatio() { return singleRequest('credit' + chartCode, renderCreditRatioImpl); }
+async function renderCreditRatioImpl() {
+  if (!panelVisible('stock-chart')) return;
   const generation = ++creditRatioGeneration, code = chartCode;
   const host = document.getElementById('stock-credit-ratio');
   if (!/^[0-9A-Z]{6}$/.test(code)) { host.textContent = ''; return; }
   host.textContent = '신용잔고 조회 중…';
   try {
-    const response = await fetch('/api/credit_ratio?code=' + encodeURIComponent(code), {cache:'no-store'});
+    const response = await fetchWithTimeout('/api/credit_ratio?code=' + encodeURIComponent(code), {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     if (generation !== creditRatioGeneration || code !== chartCode) return;
@@ -1927,7 +2005,7 @@ async function resolveChart(raw) {
   if (v === '코스피' || v === '코스닥') { setChartIndex(v === '코스피' ? 'kospi' : 'kosdaq'); return; }
   if (/^[0-9A-Z]{6}$/i.test(v)) { setChartStock(v.toUpperCase(), ''); return; }
   try {
-    const res = await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
     if (!res.ok) return;
     const d = await res.json();
     if (d && d.code) setChartStock(d.code, d.name || '');
@@ -2087,9 +2165,11 @@ function progMerge(series) {
 }
 
 // 최신 페이지 갱신(매분/조회): 누적은 유지, 커서는 최초 1회만 설정
-async function renderProgram() {
+function renderProgram() { return singleRequest('program' + progStk + progAmt, renderProgramImpl); }
+async function renderProgramImpl() {
+  if (!panelVisible('program-content') || !progStk) return;
   try {
-    const res = await fetch('/api/program?stk=' + encodeURIComponent(progStk) + '&amt=' + progAmt, { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/program?stk=' + encodeURIComponent(progStk) + '&amt=' + progAmt, { cache: 'no-store' });
     if (!res.ok) return;
     const d = await res.json();
     document.getElementById('prog-name').textContent = '';
@@ -2108,7 +2188,7 @@ async function loadMoreProgram() {
   try {
     const url = '/api/program?stk=' + encodeURIComponent(progStk)
       + '&amt=' + progAmt + '&cont=Y&next=' + encodeURIComponent(progNext);
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetchWithTimeout(url, { cache: 'no-store' });
     if (res.ok) {
       const d = await res.json();
       progMerge(d.series);
@@ -2130,7 +2210,7 @@ async function loadAllProgram() {
     while (progCont === 'Y' && progNext && !progStop) {
       const url = '/api/program?stk=' + encodeURIComponent(progStk)
         + '&amt=' + progAmt + '&cont=Y&next=' + encodeURIComponent(progNext);
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetchWithTimeout(url, { cache: 'no-store' });
       if (!res.ok) {                                 // 429 등: 잠깐 쉬고 재시도
         let bodyTxt = '';
         try { bodyTxt = (await res.text()).slice(0, 200); } catch (e) {}
@@ -2192,7 +2272,7 @@ async function resolveAndLoad(raw) {
   if (digits.length === 6) { loadProgStock(digits); return; }
   const nameEl = document.getElementById('prog-name');
   try {
-    const res = await fetch('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/stock?q=' + encodeURIComponent(v), { cache: 'no-store' });
     if (!res.ok) { nameEl.textContent = `검색 실패(HTTP ${res.status}) — 서버 재시작이 필요할 수 있습니다`; return; }
     const d = await res.json();
     if (d && d.code) loadProgStock(d.code, d.name || '');
@@ -2204,7 +2284,7 @@ async function resolveAndLoad(raw) {
 
 (function () {
   const inp = document.getElementById('prog-stk');
-  restoreStockInput(progStk, '', 'netprps_prog_stk', 'prog-stk');
+  document.getElementById('prog-stk').value = progStk;
   document.getElementById('prog-go').addEventListener('click', () => resolveAndLoad(inp.value));
   document.getElementById('prog-more').addEventListener('click', () => {
     if (progLoading) progStop = true;   // 로딩 중 다시 누르면 중단
@@ -2264,7 +2344,6 @@ function renderPuSide() {
 
 let puItems = [], puBuyItems = [], puSellItems = [];
 let puSelectedCode = '';
-let puRequestGeneration = 0;
 let puExpanded = false;
 try { puExpanded = localStorage.getItem('prm_upper_expanded') === '1'; } catch (e) {}
 
@@ -2332,17 +2411,22 @@ function renderPuTable() {
   if (btn) { btn.textContent = puExpanded ? '접기 ▴' : '펼치기 ▾'; btn.style.display = puItems.length > 10 ? '' : 'none'; }
 }
 
-async function renderPrmUpper() {
-  const generation = ++puRequestGeneration;
+function renderPrmUpper() {
+  if (!panelVisible('program-rank-content')) return Promise.resolve();
   const market = puMarket, side = puSide;
+  return singleRequest('prm:' + market + ':' + side, () => renderPrmUpperImpl(market, side));
+}
+async function renderPrmUpperImpl(market, side) {
   const load = async tp => {
-    const res = await fetch('/api/prm_upper?mrkt=' + encodeURIComponent(market) + '&tp=' + tp, { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/prm_upper?mrkt=' + encodeURIComponent(market) + '&tp=' + tp, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    return (await res.json()).items || [];
+    const data = await res.json();
+    if (market === puMarket && side === puSide) showCacheTime(data, 'program-rank-content');
+    return data.items || [];
   };
   try {
     const results = await Promise.all(side === 'both' ? [load('2'), load('1')] : [load(side)]);
-    if (generation !== puRequestGeneration) return;
+    if (market !== puMarket || side !== puSide) return;
     if (side === 'both') [puBuyItems, puSellItems] = results;
     else puItems = results[0];
     renderPuTable();
@@ -2398,7 +2482,7 @@ async function loadEtfQuotes() {
   etfLoading=true;
   const status=document.getElementById('etf-status');status.textContent='불러오는 중…';
   try {
-    const response=await fetch('/api/etf_quotes',{cache:'no-store'});
+    const response=await fetchWithTimeout('/api/etf_quotes',{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(data.error)throw new Error(data.error);
     etfItems=data.items||[];renderEtfTable();
@@ -2564,7 +2648,7 @@ async function checkPriceAlerts() {
   priceAlertPolling=true;
   const status=document.getElementById('price-alert-status');
   try{
-    const response=await fetch('/api/alert_prices?codes='+encodeURIComponent(codes.join(',')),{cache:'no-store'});
+    const response=await fetchWithTimeout('/api/alert_prices?codes='+encodeURIComponent(codes.join(',')),{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(data.error)throw new Error(data.error);
     if(data.outside_hours || !priceAlertTimeActive()){status.textContent='조회 대기 · 한국시간 평일 08:00~20:00';return;}
@@ -2596,7 +2680,7 @@ document.getElementById('price-alert-form').addEventListener('submit',async even
   if(priceAlerts.filter(item=>item.enabled).length>=10){status.textContent='활성 알림은 최대 10개입니다.';return;}
   priceAlertAdding=true;document.getElementById('price-alert-add').disabled=true;
   try{
-    const response=await fetch('/api/stock?q='+encodeURIComponent(raw),{cache:'no-store'});
+    const response=await fetchWithTimeout('/api/stock?q='+encodeURIComponent(raw),{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const stock=await response.json();
     if(!/^[0-9A-Z]{6}$/.test(stock.code)||!stock.name)throw new Error('종목을 찾을 수 없습니다. 종목명 또는 코드를 확인하세요.');
@@ -2607,7 +2691,7 @@ document.getElementById('price-alert-form').addEventListener('submit',async even
   finally{priceAlertAdding=false;document.getElementById('price-alert-add').disabled=false;}
 });
 document.getElementById('price-alert-dismiss').addEventListener('click',()=>document.getElementById('price-alert-dialog').close());
-renderPriceAlerts();checkPriceAlerts();setInterval(checkPriceAlerts,10000);
+renderPriceAlerts();setInterval(() => { if(initialReady) checkPriceAlerts(); },10000);
 
 document.getElementById('intraday-times-help').addEventListener('click',()=>document.getElementById('intraday-times-dialog').showModal());
 document.getElementById('intraday-times-dialog').addEventListener('click',event=>{
@@ -2626,7 +2710,7 @@ async function loadIntradayInvestors(force=false) {
   const status=document.getElementById('intraday-investors-status');
   intradayInvestorLoading=true;status.textContent='불러오는 중…';
   try{
-    const response=await fetch('/api/intraday_investors?side='+side+'&mode='+mode,{cache:'no-store'});
+    const response=await fetchWithTimeout('/api/intraday_investors?side='+side+'&mode='+mode,{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(generation!==intradayInvestorGeneration)return;
     if(data.error)throw new Error(data.error);
@@ -2689,7 +2773,7 @@ async function loadIntradayHistory() {
   document.getElementById('intraday-history-title').textContent=selection.name+'('+selection.code+') · '+(side==='1'?'순매수':'순매도');
   status.textContent='불러오는 중…';
   try{
-    const response=await fetch('/api/intraday_investor_history?code='+encodeURIComponent(selection.code)+'&orgn='+selection.orgn+'&side='+side,{cache:'no-store'});
+    const response=await fetchWithTimeout('/api/intraday_investor_history?code='+encodeURIComponent(selection.code)+'&orgn='+selection.orgn+'&side='+side,{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const data=await response.json();if(generation!==intradayHistoryGeneration)return;
     if(data.error)throw new Error(data.error);
@@ -2710,20 +2794,15 @@ document.querySelectorAll('input[name="intraday-side"]').forEach(input=>input.ad
   button.addEventListener('click',()=>{collapsed=!collapsed;try{localStorage.setItem('intraday_investors_collapsed',collapsed?'1':'0');}catch(error){}apply();if(!collapsed)loadIntradayInvestors(true);});
 })();
 
-async function refresh() {
-  loadIntradayInvestors();
-  loadEtfQuotes();
-  renderCreditRatio();
-  renderStockMemo();
-  renderStockInvestors();
-  renderRank();           // 조회수 상위 종목 갱신
-  loadAmountRank();        // 거래대금 상위 종목 갱신
-  renderProgram();        // 하단 프로그램 순매수금액 차트도 갱신
-  renderPrmUpper();       // 프로그램 순매수 상위 종목 갱신
+function refresh() { return singleRequest('primary:' + curMarket, refreshImpl); }
+async function refreshImpl() {
+  const market = curMarket;
   try {
-    const res = await fetch('/api/netprps?mrkt=' + encodeURIComponent(curMarket), { cache: 'no-store' });
+    const res = await fetchWithTimeout('/api/netprps?mrkt=' + encodeURIComponent(market), { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    DATA = await res.json();
+    const data = await res.json();
+    if (market !== curMarket) return;
+    DATA = data;
     if (DATA.market) curMarket = DATA.market;           // 서버가 보정한 값 반영
     if (selected === null) selected = loadSelected();  // 최초 1회 초기화
 
@@ -2738,6 +2817,7 @@ async function refresh() {
     renderChart();
     if (isNew) flashDelta();
   } catch (e) {}
+  finally { if (initialReady) refreshVisiblePanels(); }
 }
 
 // 서버는 매 분 :00에 조회·기록한다. 브라우저 갱신을 :00 직후로 맞춰 지연을 최소화.
@@ -2950,13 +3030,67 @@ applyIdxView();
 renderPuSide();     // 프로그램 상위: 순매수/순매도 선택 UI
 renderPuMkt();      // 프로그램 상위: 시장 선택 UI
 renderChartTf();    // 종목 차트: 봉 주기 선택 UI
-if (chartCode.startsWith('index:')) setChartIndex(chartCode.slice(6));
-else if (chartCode) setChartStock(chartCode, '');   // 마지막 조회 종목 복원
-renderSummaryCards(); // 지수현황 최초 즉시 조회
-setInterval(renderSummaryCards, 10000); // 지수현황은 10초마다 별도 갱신
-refresh();          // 최초 즉시 1회
-scheduleRefresh();  // 이후 매 분 :00+3초에 갱신
-setInterval(renderPrmUpper, 5000);    // 프로그램 순매수 상위는 5초마다 별도 갱신
+// Upper-screen data gets the connection budget first; other panels load on approach.
+let programRestored = false;
+function restoreVisibleProgram() {
+  if (!programRestored) {
+    programRestored = true;
+    restoreStockInput(progStk, '', 'netprps_prog_stk', 'prog-stk');
+  }
+  return renderProgram();
+}
+let chartRestored = false;
+function restoreVisibleChart() {
+  if (!chartRestored && chartCode) {
+    chartRestored = true;
+    if (chartCode.startsWith('index:')) setChartIndex(chartCode.slice(6));
+    else setChartStock(chartCode, chartName);
+  } else { loadCandles(false, true); renderCreditRatio(); renderStockMemo(); }
+}
+const deferredPanels = [
+  ['rank-host', renderRank], ['amount-rank-content', loadAmountRank],
+  ['program-rank-content', renderPrmUpper], ['intraday-investors-content', loadIntradayInvestors],
+  ['etf-content', loadEtfQuotes], ['program-content', restoreVisibleProgram],
+  ['stock-investor-content', renderStockInvestors],
+  ['stock-chart', restoreVisibleChart],
+];
+function refreshVisiblePanels() {
+  deferredPanels.forEach(([id, load]) => { if (panelVisible(id)) load(); });
+}
+async function startDashboard() {
+  await Promise.allSettled([renderSummaryCards(), refresh()]);
+  requestAnimationFrame(() => {
+    initialReady = true;
+    // Restore the selected chart only after the primary screen can paint.
+    document.getElementById('chart-code').value = chartCode;
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) deferredPanels.find(([id]) => id === entry.target.id)?.[1]();
+        });
+      }, {rootMargin:'200px'});
+      deferredPanels.forEach(([id]) => { const host = document.getElementById(id); if(host) observer.observe(host); });
+    } else {
+      let scheduled = false;
+      window.addEventListener('scroll', () => {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; refreshVisiblePanels(); });
+      }, {passive:true});
+    }
+    refreshVisiblePanels();
+    renderOverseas();
+    checkPriceAlerts();
+  });
+}
+startDashboard();
+scheduleRefresh();
+setInterval(() => { if (!document.hidden) renderSummaryCards(); }, 10000);
+setInterval(() => { if (initialReady && !document.hidden) renderOverseas(); }, 60000);
+setInterval(renderPrmUpper, 5000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && initialReady) { renderSummaryCards(); refresh(); renderOverseas(); }
+});
 </script>
 </body>
 </html>
