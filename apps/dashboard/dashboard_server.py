@@ -1185,7 +1185,7 @@ def build_amount_surge_message():
         cursors.add(cursor)
         cont = 'Y'
 
-    lines = ['🟢 대금 20위내 대금 급증종목', '',
+    lines = ['🟢 거래대금 20위내 대금 급증종목', '',
              '순위 | 종목명 | 등락률 | 대금 | 대금 전일비', '']
     for rank, item in enumerate(items[:20], 1):
         if item['flu'] <= 0:

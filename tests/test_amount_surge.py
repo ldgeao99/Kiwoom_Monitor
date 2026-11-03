@@ -33,7 +33,7 @@ class MessageTests(unittest.TestCase):
         with patch.object(server, 'build_amount_rank', return_value=page(items)) as rank, \
                 patch.object(server, 'build_amount_previous', return_value={'amount_eok': 100}):
             message = server.build_amount_surge_message()
-        self.assertEqual(message, '🟢 대금 20위내 대금 급증종목\n\n'
+        self.assertEqual(message, '🟢 거래대금 20위내 대금 급증종목\n\n'
                          '순위 | 종목명 | 등락률 | 대금 | 대금 전일비\n\n'
                          '1위 | 종목1 | +12.0% | 0.01조 | +30%\n'
                          '20위 | 종목20 | +1.0% | 0.15조 | +1400%\n\n'
