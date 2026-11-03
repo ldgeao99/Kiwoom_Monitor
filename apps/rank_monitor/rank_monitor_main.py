@@ -105,28 +105,32 @@ def format_price(price_str):
         return str(price_str)
 
 
-# 종목코드별 조회순위 변화를 계산하고 last_rank_by_code를 갱신하는 함수
-# 직전 주기에도 top20 안에서 추적 중이던 종목은 우리가 직접 기록해둔 이전 순위와 비교해서 계산하고,
-# top20 밖에서 새로 진입해 비교할 기준이 없는 종목만 API의 rank_chg 값을 그대로 사용한다.
+def is_complete_rank_snapshot(items):
+    """고유 종목 20개와 1~20위가 모두 있는 응답만 비교 기준으로 사용한다."""
+    if not isinstance(items, list) or len(items) != 20:
+        return False
+    try:
+        codes = [item.get("stk_cd") for item in items]
+        ranks = [int(item.get("bigd_rank", 0)) for item in items]
+        return all(isinstance(code, str) and code for code in codes) and len(set(codes)) == 20 and set(ranks) == set(range(1, 21))
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 def compute_rank_changes(curr_data, last_rank_by_code):
-    rank_changes = {}
-    for item in curr_data:
-        code = item.get("stk_cd", "")
-        rank = int(item.get("bigd_rank", 0) or 0)
-        prev_rank = last_rank_by_code.get(code)
-
-        if prev_rank is not None:
-            rank_chg = prev_rank - rank
-        else:
-            try:
-                rank_chg = int(item.get("rank_chg", "0") or "0")
-            except ValueError:
-                rank_chg = None
-
-        rank_changes[code] = rank_chg
-        last_rank_by_code[code] = rank
-
-    return rank_changes
+    """직전 정상 top20과 비교. 신규 진입은 21-현재순위를 최소 상승폭으로 사용."""
+    if not is_complete_rank_snapshot(curr_data):
+        return {item.get("stk_cd", ""): None for item in (curr_data or []) if isinstance(item, dict)}
+    has_previous = len(last_rank_by_code) == 20 and set(last_rank_by_code.values()) == set(range(1, 21))
+    current = {item["stk_cd"]: int(item["bigd_rank"]) for item in curr_data}
+    changes = {
+        code: (last_rank_by_code.get(code, 21) - rank if has_previous else None)
+        for code, rank in current.items()
+    }
+    # 사라진 종목의 오래된 순위를 남기지 않는다.
+    last_rank_by_code.clear()
+    last_rank_by_code.update(current)
+    return changes
 
 
 # 알림 대상 종목을 찾아내는 함수
@@ -195,6 +199,7 @@ def notify_surge_alerts(alerts):
         f"(조회 {TOP_RANK_ALERT_THRESHOLD}위 이내는 직전비 +{SURGE_CHGR_THRESHOLD}%만으로 알림)"
     )
     lines.append("(08:00, 09:00 직후엔 1분간 탐지스킵)")
+    lines.append("(20위 밖 신규 진입은 최소 상승폭으로 판정)")
     lines.append("(1시간 간격 중복종목 알림생략)")
     send_telegram_message("\n".join(lines))
 
@@ -256,10 +261,10 @@ def fetch_rank_list(token, data, max_retries=2, retry_delay=0.5):
     for attempt in range(max_retries + 1):
         response_data = fn_ka00198(token=token, data=data)
         items = (response_data or {}).get("item_inq_rank") or []
-        if items:
+        if is_complete_rank_snapshot(items):
             return items
         if attempt < max_retries:
-            print(f"[경고] 빈 응답 수신 (시도 {attempt + 1}/{max_retries + 1}) - {retry_delay}초 후 재시도")
+            print(f"[경고] 빈 응답 또는 불완전한 상위 20위 수신 (시도 {attempt + 1}/{max_retries + 1}) - {retry_delay}초 후 재시도")
             time.sleep(retry_delay)
     print("[경고] 재시도 후에도 데이터를 가져오지 못했습니다.")
     return None
@@ -330,6 +335,7 @@ if __name__ == "__main__":
 
     was_recording_hours = True
     last_rank_by_code = {}
+    last_rank_date = None
     last_alert_time_by_code = {}
 
     try:
@@ -372,6 +378,10 @@ if __name__ == "__main__":
             if current_rank_list:
                 save_snapshot(now_kst(), current_rank_list)
 
+                rank_date = now_kst().date()
+                if rank_date != last_rank_date:
+                    last_rank_by_code.clear()
+                    last_rank_date = rank_date
                 rank_changes = compute_rank_changes(current_rank_list, last_rank_by_code)
                 print_surge_items(current_rank_list, rank_changes)
 

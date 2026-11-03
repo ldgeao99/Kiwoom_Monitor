@@ -586,13 +586,30 @@ refreshFilesBtn.addEventListener('click', (e) => {
 
 fileSelect.addEventListener('change', () => loadSelectedFile(fileSelect.value));
 
+// 정상 top20끼리만 비교한다. 신규 진입의 상승폭은 확정값이 아닌 하한이다.
+function compareRankSnapshot(items, previous) {
+  const current = Object.fromEntries(items.map(item => [item.stk_cd, Number(item.bigd_rank)]));
+  const complete = items.length === 20 && Object.keys(current).length === 20
+    && items.every(item => typeof item.stk_cd === 'string' && item.stk_cd.length > 0)
+    && new Set(Object.values(current)).size === 20
+    && Object.values(current).every(rank => Number.isInteger(rank) && rank >= 1 && rank <= 20);
+  const hasPrevious = Object.keys(previous).length === 20;
+  const changes = {}, minimum = {};
+  items.forEach(item => {
+    const code = item.stk_cd, rank = Number(item.bigd_rank);
+    minimum[code] = complete && hasPrevious && !Object.hasOwn(previous, code);
+    changes[code] = complete && hasPrevious ? (previous[code] ?? 21) - rank : null;
+  });
+  return {changes, minimum, next:complete ? current : previous};
+}
+
 function loadSnapshotText(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
 
   rows = [];
   snapshots = [];
   snapshotCount = 0;
-  const lastRankByCode = {};
+  let lastRankByCode = {}, lastRankDay = null;
 
   for (const line of lines) {
     let record;
@@ -603,7 +620,10 @@ function loadSnapshotText(text) {
     }
     snapshotCount++;
     const ts = record.timestamp;
-    const items = record.items || [];
+    const items = Array.isArray(record.items) ? record.items : [];
+    const day = (ts || '').slice(0, 10);
+    if (day !== lastRankDay) { lastRankByCode = {}; lastRankDay = day; }
+    const comparison = compareRankSnapshot(items, lastRankByCode);
     const snapItems = [];
     for (const item of items) {
       const code = item.stk_cd || '';
@@ -613,24 +633,16 @@ function loadSnapshotText(text) {
       const apiRankChgRaw = parseInt(item.rank_chg, 10);
       const apiRankChg = isNaN(apiRankChgRaw) ? null : apiRankChgRaw;
 
-      // 직전 스냅샷에 없던(top20에 새로 진입한) 종목만 API의 rank_chg를 신뢰해서 사용.
-      // 이미 추적 중이던 종목은 실측 결과 API의 rank_chg가 우리 폴링 주기와 안 맞아
-      // 우리가 직접 기록해둔 이전 순위와 비교해서 계산한다.
-      let prevRank, rankChg;
-      if (code in lastRankByCode) {
-        prevRank = lastRankByCode[code];
-        rankChg = prevRank - rank;
-      } else {
-        rankChg = apiRankChg;
-        prevRank = rankChg === null ? null : rank + rankChg;
-      }
-      lastRankByCode[code] = rank;
+      const rankChg = comparison.changes[code];
+      const rankChangeMinimum = comparison.minimum[code];
+      const prevRank = rankChg === null || rankChangeMinimum ? null : lastRankByCode[code];
 
       const parsed = {
         time: ts,
         rank,
         prevRank,
         rankChg,
+        rankChangeMinimum,
         apiRankChg,
         name: item.stk_nm || '',
         code,
@@ -641,6 +653,7 @@ function loadSnapshotText(text) {
       rows.push(parsed);
       snapItems.push(parsed);
     }
+    lastRankByCode = comparison.next;
     snapItems.sort((a, b) => a.rank - b.rank);
     snapshots.push({ time: ts, items: snapItems });
   }
@@ -787,10 +800,10 @@ function renderRace() {
     baseChgrEl.textContent = `${baseSign}${it.baseChgr.toFixed(2)}%`;
     baseChgrEl.style.color = it.baseChgr > 0 ? 'var(--pos)' : (it.baseChgr < 0 ? 'var(--neg)' : 'var(--muted)');
 
-    const rankChange = it.rankChg !== null ? it.rankChg : it.rank;
+    const rankChange = it.rankChg !== null ? it.rankChg : 0;
     const rankChangeSign = rankChange > 0 ? '+' : '';
     const rankChangeEl = rowEl.querySelector('.race-rank-change');
-    rankChangeEl.textContent = `${rankChangeSign}${rankChange}`;
+    rankChangeEl.textContent = it.rankChg === null ? '-' : `${it.rankChangeMinimum ? '최소 ' : ''}${rankChangeSign}${rankChange}`;
     rankChangeEl.style.color = rankChange > 0 ? 'var(--pos)' : (rankChange < 0 ? 'var(--neg)' : 'var(--muted)');
   }
 
@@ -850,7 +863,7 @@ function render() {
 
   let filtered = rows.filter(r => {
     if (onlyThreshold && r.chgr < threshold) return false;
-    const rankChange = r.rankChg !== null ? r.rankChg : r.rank;
+    const rankChange = r.rankChg !== null ? r.rankChg : 0;
     if (rankChange < rankChangeThreshold) return false;
     if (query && !(r.name.toLowerCase().includes(query) || r.code.toLowerCase().includes(query))) return false;
     const timeOfDay = (r.time || '').slice(11, 16);
@@ -916,15 +929,15 @@ function render() {
       const sign = r.chgr > 0 ? '+' : '';
       const baseChgrClass = r.baseChgr > 0 ? 'pos' : (r.baseChgr < 0 ? 'neg' : 'zero');
       const baseSign = r.baseChgr > 0 ? '+' : '';
-      const rankChange = r.rankChg !== null ? r.rankChg : r.rank;
+      const rankChange = r.rankChg !== null ? r.rankChg : 0;
       const rankChangeClass = rankChange > 0 ? 'pos' : (rankChange < 0 ? 'neg' : 'zero');
       const rankChangeSign = rankChange > 0 ? '+' : '';
       const apiRankChgSign = r.apiRankChg !== null && r.apiRankChg > 0 ? '+' : '';
       tr.innerHTML = `
         <td>${(r.time || '').slice(0,19).replace('T',' ')}</td>
-        <td>${r.prevRank ?? '-'}</td>
+        <td>${r.rankChangeMinimum ? '20위 밖' : (r.prevRank ?? '-')}</td>
         <td>${r.rank}</td>
-        <td class="${rankChangeClass}">${rankChangeSign}${rankChange}</td>
+        <td class="${rankChangeClass}">${r.rankChg === null ? '-' : (r.rankChangeMinimum ? '최소 ' : '') + rankChangeSign + rankChange}</td>
         <td>${r.apiRankChg === null ? '-' : `${apiRankChgSign}${r.apiRankChg}`}</td>
         <td>${r.name}</td>
         <td>${r.code}</td>
