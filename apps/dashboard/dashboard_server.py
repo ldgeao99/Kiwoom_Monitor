@@ -1218,6 +1218,88 @@ def amount_surge_scheduler():
         sleep_to_next_boundary(60)
 
 
+INVESTOR_CLOSE_FIELDS = (
+    ('ind_netprps', '개인'), ('frgnr_netprps', '외국인'),
+    ('orgn_netprps', '기관'), ('sc_netprps', '금융투자'),
+    ('invtrt_netprps', '투신'), ('endw_netprps', '연기금'),
+    ('etc_corp_netprps', '기타법인'), ('insrnc_netprps', '보험'),
+    ('jnsinkm_netprps', '기타금융'), ('bank_netprps', '은행'),
+    ('samo_fund_netprps', '사모펀드'),
+)
+
+
+def build_investor_close_message(now):
+    """당일 코스피 순매수를 새로 조회해 16시 알림을 구성한다."""
+    now = now.astimezone(KST)
+    market = MARKET_BY_KEY['kospi']
+    token = cached_token()
+    if not token:
+        raise RuntimeError('코스피 투자자별 매매동향 인증 실패')
+    row = fetch_row(token, now.strftime('%Y%m%d'),
+                    mrkt_tp=market['mrkt_tp'], inds_cd=market['inds_cd'])
+    # fetch_row의 첫 업종 폴백을 종합지수 자료로 잘못 발송하지 않는다.
+    if row.get('inds_cd') != market['inds_cd']:
+        raise RuntimeError('코스피 종합 투자자별 매매동향이 없습니다.')
+    lines = [f"🟢 코스피 투자자별 매매동향({now:%Y-%m-%d, %H:%M})", '',
+             '투자주체 | 순매수']
+    for key, label in INVESTOR_CLOSE_FIELDS:
+        raw = row.get(key)
+        if raw is None or not str(raw).strip():
+            raise RuntimeError(f'코스피 {label} 순매수 데이터가 없습니다.')
+        # 누락/비정상 응답을 0억으로 표시하지 않는다.
+        normalized = str(raw).strip().replace(',', '').replace('+', '')
+        if not re.fullmatch(r'-*\d+(?:\.\d+)?', normalized):
+            raise RuntimeError(f'코스피 {label} 순매수 데이터가 올바르지 않습니다.')
+        value = Decimal(str(to_number(raw))).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        if value == 0:
+            value = Decimal('0')
+        if label == '보험':
+            lines.append('')
+        lines.append(f'{label} {value:+,.0f}억')
+    return '\n'.join(lines)
+
+
+_investor_close_sent_day = None
+
+
+def maybe_send_investor_close(now):
+    """매 거래일 16시 발송; 16시대 실패 재시도 및 재시작 중복 방지."""
+    global _investor_close_sent_day
+    now = now.astimezone(KST)
+    if now.hour != 16 or now.weekday() >= 5 or is_market_holiday(now):
+        return
+    today = now.strftime('%Y-%m-%d')
+    if _investor_close_sent_day == today:
+        return
+    sent_path = os.path.join(DATA_DIR, '.kospi_investor_close_sent')
+    try:
+        with open(sent_path, encoding='utf-8') as f:
+            if f.read().strip() == today:
+                _investor_close_sent_day = today
+                return
+    except FileNotFoundError:
+        pass
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    if not send_telegram_message(build_investor_close_message(now)):
+        return
+    _investor_close_sent_day = today
+    with open(sent_path + '.tmp', 'w', encoding='utf-8') as f:
+        f.write(today)
+    os.replace(sent_path + '.tmp', sent_path)
+    print(f'  → 코스피 투자자별 매매동향 전송({today} 16시)')
+
+
+def investor_close_scheduler():
+    # 거래대금 급증 알림의 다수 종목 조회가 이 알림을 지연시키지 않도록 분리.
+    while True:
+        try:
+            maybe_send_investor_close(now_kst())
+        except Exception as e:
+            print(f'[코스피 투자자별 매매동향 알림 실패] {e}')
+        sleep_to_next_boundary(60)
+
+
 def build_rank():
     """조회수 상위 20종목: 순위/종목명/코드/등락율/부호."""
     def run(tok):
@@ -1957,6 +2039,7 @@ def main():
     if collecting:
         threading.Thread(target=poller_thread, daemon=True).start()
         threading.Thread(target=amount_surge_scheduler, daemon=True).start()
+        threading.Thread(target=investor_close_scheduler, daemon=True).start()
 
     stock_items()    # 종목명 맵(ka10099) 예열 — 콘솔에 개수/에러 출력
 
