@@ -43,6 +43,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from html import escape
+from zoneinfo import ZoneInfo
 from urllib.parse import urlparse, parse_qs
 
 # 서버 환경 시간대(UTC 등)와 무관하게 항상 한국시간(KST) 기준으로 동작
@@ -772,7 +773,8 @@ def get_nasdaq_future():
         m = r.json()['chart']['result'][0]['meta']
         price = m['regularMarketPrice']
         prev = m.get('chartPreviousClose') or m.get('previousClose')
-        data = {'price': price, 'pct': (price / prev - 1) * 100, 'prev': prev} if (price and prev) else None
+        data = {'price': price, 'pct': (price / prev - 1) * 100, 'prev': prev,
+                'quote_time': m.get('regularMarketTime')} if (price and prev) else None
         if data:
             _nasdaq_cache.update(ts=now, data=data)
         return _nasdaq_cache['data']
@@ -819,15 +821,29 @@ def get_overseas_index_display(symbol):
         return cached.get('data')
 
 
-# ── 나스닥100선물 극점 반전 알림 (07:00 KST 세션 리셋, ±0.5%) ──
+# ── 나스닥100선물 극점 반전 알림 (CME 17시: KST 동절기 08시/하절기 07시) ──
 NASDAQ_REV_PCT = 0.5
+NASDAQ_EXCHANGE_TZ = ZoneInfo('America/Chicago')
 _nasdaq_rev_state = {}   # {'date','low','high','up_armed','down_armed'}
 
 
 def _nasdaq_session_date(now):
-    """선물 세션 기준 '당일'(07:00 KST 시작). 07시 전이면 전일."""
-    base = now if now.hour >= 7 else now - timedelta(days=1)
-    return base.strftime('%Y-%m-%d')
+    """CME 현지 17시 세션 시작일을 KST 날짜로 반환(DST 자동 반영)."""
+    local = now.astimezone(NASDAQ_EXCHANGE_TZ)
+    start = local.replace(hour=17, minute=0, second=0, microsecond=0)
+    if local < start:
+        start -= timedelta(days=1)
+    return start.astimezone(KST).strftime('%Y-%m-%d')
+
+
+def _nasdaq_current_session_quote(data, now):
+    """지연 시세/통신 실패로 남은 전 세션 가격을 새 극점에 사용하지 않는다."""
+    try:
+        timestamp = float(data['quote_time'])
+        quote_time = datetime.fromtimestamp(timestamp, timezone.utc)
+        return timestamp <= now.timestamp() and _nasdaq_session_date(quote_time) == _nasdaq_session_date(now)
+    except (KeyError, TypeError, ValueError, OverflowError, OSError):
+        return False
 
 
 def get_nasdaq_display():
@@ -837,21 +853,23 @@ def get_nasdaq_display():
         return None
     prev = data.get('prev')
     st = _nasdaq_rev_state
+    current = st.get('date') == _nasdaq_session_date(now_kst()) and _nasdaq_current_session_quote(data, now_kst())
     def pct(v):
         return (v / prev - 1) * 100 if (prev and v) else None
-    return {'cur': data.get('pct'), 'low': pct(st.get('low')), 'high': pct(st.get('high'))}
+    return {'cur': data.get('pct'), 'low': pct(st.get('low')) if current else None,
+            'high': pct(st.get('high')) if current else None}
 
 
 def maybe_check_nasdaq_reversal(now):
     """당일 최저점 대비 +0.5% 상승(🟢) / 최고점 대비 -0.5% 하락(🔴) 시 텔레그램.
     새 최저/최고 갱신 시 반대 방향 감시 재무장 → 극점 반전마다 1회씩."""
     data = get_nasdaq_future()
-    if not data or data.get('price') is None:
+    if not data or data.get('price') is None or not _nasdaq_current_session_quote(data, now):
         return
     price = data['price']
     sd = _nasdaq_session_date(now)
     st = _nasdaq_rev_state
-    if st.get('date') != sd:      # 세션(07:00) 시작 → 극점 리셋
+    if st.get('date') != sd:      # 세션(CME 17시) 첫 시세 → 극점 리셋
         st.clear()
         st.update(date=sd, low=price, high=price, up_armed=True, down_armed=True)
         return
@@ -942,7 +960,7 @@ def warm_public_data():
     jobs = [('rank', build_rank, 30),
             ('amount:1', lambda: build_amount_rank(exclude_etf_etn=True), 30),
             ('prm:all:2', lambda: build_prm_upper('all', '2'), 5),
-            ('overseas', build_overseas_summary, 60)]
+            ('overseas:' + _nasdaq_session_date(now_kst()), build_overseas_summary, 60)]
     while True:
         for key, loader, ttl in jobs:
             PUBLIC_CACHE.get(key, loader, ttl, wait=False)
@@ -1899,7 +1917,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(body, 'application/json; charset=utf-8')
         elif path == '/api/overseas':
             try:
-                payload = PUBLIC_CACHE.get('overseas', build_overseas_summary, 60)
+                payload = PUBLIC_CACHE.get('overseas:' + _nasdaq_session_date(now_kst()), build_overseas_summary, 60)
             except Exception as error:
                 payload = {'error': str(error)}
             self._send(json.dumps(payload, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
