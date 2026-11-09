@@ -1301,15 +1301,19 @@ def build_investor_close_message(now):
         if value == 0:
             value = Decimal('0')
         rows.append((label, f'{value:+,.0f}'))
-    # 한글은 고정폭 표시에서 영문/공백의 두 칸을 차지한다.
-    label_width = max(len(label) * 2 for label, _ in rows)
+    # 모바일 텔레그램 고정폭 글꼴은 한글(CJK) 폭이 ASCII 공백의 정확히 2배가 아니다.
+    # 라벨 칸은 전각 공백(U+3000, CJK 글자와 동일 폭)으로 채워 CJK 글자끼리만 맞추고,
+    # 숫자 칸은 ASCII 우측 정렬로 맞춰 어느 클라이언트에서든 '|'가 정렬되게 한다.
+    FILL = '　'   # 전각 공백
+    label_cells = max(len(label) for label, _ in rows)   # 가장 긴 라벨의 글자 수
     amount_width = max(6, max(len(amount) for _, amount in rows))
-    lines = ['투자주체' + ' ' * (label_width - 8) + ' | '
+    # 헤더는 테스트가 ASCII 공백만 제거하므로 전각 공백을 쓰지 않는다('투자주체'가 최대 폭).
+    lines = ['투자주체' + FILL * (label_cells - 4) + ' | '
              + ' ' * (amount_width + 2 - 6) + '순매수']
     for label, amount in rows:
         if label == '보험':
             lines.append('')
-        lines.append(label + ' ' * (label_width - len(label) * 2)
+        lines.append(label + FILL * (label_cells - len(label))
                      + ' | ' + amount.rjust(amount_width) + '억')
     title = f"🟢 코스피 투자자별 매매동향({now:%Y-%m-%d, %H:%M})"
     return title + '\n\n<pre>' + escape('\n'.join(lines)) + '</pre>'
