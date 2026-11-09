@@ -1301,20 +1301,18 @@ def build_investor_close_message(now):
         if value == 0:
             value = Decimal('0')
         rows.append((label, f'{value:+,.0f}'))
-    # 모바일 텔레그램 고정폭 글꼴은 한글(CJK) 폭이 ASCII 공백의 정확히 2배가 아니다.
-    # 라벨 칸은 전각 공백(U+3000, CJK 글자와 동일 폭)으로 채워 CJK 글자끼리만 맞추고,
-    # 숫자 칸은 ASCII 우측 정렬로 맞춰 어느 클라이언트에서든 '|'가 정렬되게 한다.
-    FILL = '　'   # 전각 공백
-    label_cells = max(len(label) for label, _ in rows)   # 가장 긴 라벨의 글자 수
+    # 고정폭 글꼴의 한글(CJK) 폭은 플랫폼마다 다르다(PC는 ASCII 2칸, 모바일은 그 외).
+    # 한글을 '정렬 기준 칸'에 두면 어떤 채움 문자를 써도 한쪽 플랫폼이 어긋난다.
+    # 그래서 정렬이 필요한 숫자 칸을 순수 ASCII로 왼쪽에 두어 우측 정렬하고,
+    # 정렬이 필요 없는 한글 라벨은 '|' 뒤 오른쪽에 둔다. '억'과 ' | '는 매 행 동일해
+    # 폭이 어떻든 모든 행에서 '|'가 같은 위치에 와 어느 클라이언트에서든 정렬된다.
     amount_width = max(6, max(len(amount) for _, amount in rows))
-    # 헤더는 테스트가 ASCII 공백만 제거하므로 전각 공백을 쓰지 않는다('투자주체'가 최대 폭).
-    lines = ['투자주체' + FILL * (label_cells - 4) + ' | '
-             + ' ' * (amount_width + 2 - 6) + '순매수']
+    # 헤더의 '순매수'(6칸)는 숫자 칸 위에 근사 우측 정렬(PC 기준), 데이터는 항상 정확 정렬.
+    lines = [' ' * max(0, amount_width - 4) + '순매수 | 투자주체']
     for label, amount in rows:
         if label == '보험':
             lines.append('')
-        lines.append(label + FILL * (label_cells - len(label))
-                     + ' | ' + amount.rjust(amount_width) + '억')
+        lines.append(amount.rjust(amount_width) + '억 | ' + label)
     title = f"🟢 코스피 투자자별 매매동향({now:%Y-%m-%d, %H:%M})"
     return title + '\n\n<pre>' + escape('\n'.join(lines)) + '</pre>'
 

@@ -29,18 +29,19 @@ class InvestorCloseMessageTests(unittest.TestCase):
         self.assertTrue(message.startswith('🟢 코스피 투자자별 매매동향(2026-11-03, 16:00)\n\n<pre>'))
         self.assertTrue(message.endswith('</pre>'))
         table = unescape(message.split('<pre>')[1].split('</pre>')[0])
-        self.assertEqual(table.splitlines()[0].replace(' ', ''), '투자주체|순매수')
+        # 정렬 기준인 숫자 칸을 왼쪽(순수 ASCII)에, 한글 라벨을 '|' 뒤 오른쪽에 둔다.
+        self.assertEqual(table.splitlines()[0].replace(' ', ''), '순매수|투자주체')
         data = [line for line in table.splitlines()[1:] if line]
-        self.assertEqual([line.split('|')[0].strip() for line in data],
+        self.assertEqual([line.split('|')[1].strip() for line in data],
                          ['개인', '외국인', '기관', '금융투자', '투신', '연기금', '기타법인',
                           '보험', '기타금융', '은행', '사모펀드'])
-        self.assertEqual([line.split('|')[1].strip() for line in data],
+        self.assertEqual([line.split('|')[0].strip() for line in data],
                          ['-1,234억', '+2,345억', '-1,111억', '+124억', '-51억', '+0억',
                           '+0억', '+0억', '+0억', '+0억', '+0억'])
-        self.assertIn('\n\n보험', table)
-        def width(text):
-            return sum(2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in text)
-        self.assertEqual(len({width(line[:line.index('억')]) for line in data}), 1)
+        self.assertIn('\n\n+0억', table.replace(' ', ''))   # 보험 행 앞 빈 줄
+        # 숫자 칸('|' 앞 전체)은 순수 ASCII라 플랫폼과 무관하게 폭이 일정하다.
+        self.assertEqual(len({len(line.split('|')[0]) for line in data}), 1)
+        self.assertTrue(all(line.split('|')[0].rstrip().endswith('억') for line in data))
         self.fetch_mock.assert_called_once_with('test', '20261103', mrkt_tp='0', inds_cd='001_AL')
 
     def test_wrong_sector_is_rejected(self):
