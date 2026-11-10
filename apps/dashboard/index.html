@@ -2425,7 +2425,6 @@ async function renderPrmUpperImpl(market, side) {
     const res = await fetchWithTimeout('/api/prm_upper?mrkt=' + encodeURIComponent(market) + '&tp=' + tp, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (market === puMarket && side === puSide) showCacheTime(data, 'program-rank-content');
     return data.items || [];
   };
   try {
