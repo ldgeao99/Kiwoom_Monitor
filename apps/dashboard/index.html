@@ -1122,13 +1122,13 @@ async function renderRankImpl() {
     renderRankTable();
   } catch (e) {}
 }
-// 조회순위 종목 클릭 → 종목 차트 조회(+프로그램 순매수도 함께) + 차트로 스크롤
+// 조회순위 종목 클릭 → 종목 차트 조회(+프로그램 순매수도 함께), 스크롤 위치는 유지
 document.getElementById('rank-host').addEventListener('click', e => {
   const tr = e.target.closest('tr[data-code]');
   if (!tr) return;
   const code = tr.dataset.code;
   const it = (rankItems || []).find(x => x.code === code);
-  selectListedStock(code, it ? it.name : '');
+  selectListedStock(code, it ? it.name : '', false);
 });
 
 // 거래대금 순위: 10행 높이, 바닥 스크롤 시 다음 페이지 조회.
@@ -1301,10 +1301,11 @@ document.getElementById('amount-rank-host').addEventListener('click', event => {
 })();
 
 let listedStockSelection = 0;
-// 선택 즉시 하단으로 이동하고, 조회 후 화면 높이가 바뀌면 위치를 보정한다.
-async function selectListedStock(code, name) {
+// 선택 즉시 하단으로 이동하고, 조회 후 화면 높이가 바뀌면 위치를 보정한다(scroll=false면 위치 유지).
+async function selectListedStock(code, name, scroll = true) {
   const selection = ++listedStockSelection;
   const requests = [setChartStock(code, name), loadProgStock(code, name)];
+  if (!scroll) { await Promise.allSettled(requests); return; }
   const initialHeight = document.documentElement.scrollHeight;
   scrollToPageBottom();
   await Promise.allSettled(requests);
