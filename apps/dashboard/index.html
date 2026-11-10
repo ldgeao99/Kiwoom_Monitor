@@ -328,6 +328,8 @@
     <div id="rank-host"></div>
   </div>
 </div>
+<div class="page-title" style="justify-content:flex-end"><button id="toggle-mid-panels" class="view-btn" type="button" aria-controls="mid-panels" aria-expanded="true" title="거래대금 상위, 프로그램 상위, 장중투자자별 매매상위, 종목별 프로그램 순매수">아래 4개 영역 숨기기 ▴</button></div>
+<div id="mid-panels">
 <div class="page-title amount-rank-title"><span>거래대금 상위</span><label class="amount-rank-filter"><input id="amount-day-change" type="checkbox">대금전일비</label><label class="amount-rank-filter"><input id="exclude-etf-etn" type="checkbox" role="switch" checked>ETF/ETN 제외</label><button id="toggle-amount-rank" class="view-btn" type="button" aria-controls="amount-rank-content" aria-expanded="true">접기 ▾</button></div>
 <div class="rank-wrap" id="amount-rank-content">
   <div class="panel">
@@ -378,6 +380,7 @@
     <div id="prog-table"></div>
     <div id="prog-chart"></div>
   </div>
+</div>
 </div>
 <div class="page-title" id="stock-chart-title"><span>종목 차트</span><span id="stock-credit-ratio" style="font-size:12px;font-weight:400" role="status"></span><select id="chart-tf" class="chart-sel"></select><button id="toggle-chart" class="view-btn" type="button">접기 ▾</button></div>
 <div class="chart-wrap">
@@ -2975,6 +2978,27 @@ applyIdxView();
     collapsed = !collapsed;
     try { localStorage.setItem('stock_investor_collapsed', collapsed ? '1' : '0'); } catch (e) {}
     apply();
+  });
+})();
+
+// 거래대금 상위-종목별 프로그램 순매수 4개 영역 숨기기/보이기 (상태 유지, 기본 보이기)
+(function () {
+  const btn = document.getElementById('toggle-mid-panels');
+  const box = document.getElementById('mid-panels');
+  let hidden = false;
+  try { hidden = localStorage.getItem('mid_panels_hidden') === '1'; } catch (e) {}
+  const apply = () => {
+    box.hidden = hidden;
+    btn.textContent = hidden ? '숨긴 4개 영역 보이기 ▾' : '아래 4개 영역 숨기기 ▴';
+    btn.setAttribute('aria-expanded', String(!hidden));
+  };
+  apply();
+  btn.addEventListener('click', () => {
+    hidden = !hidden;
+    try { localStorage.setItem('mid_panels_hidden', hidden ? '1' : '0'); } catch (e) {}
+    apply();
+    // 영역이 다시 보이거나 아래 차트가 올라오면 화면에 들어온 패널을 바로 조회한다.
+    if (initialReady) requestAnimationFrame(refreshVisiblePanels);
   });
 })();
 
