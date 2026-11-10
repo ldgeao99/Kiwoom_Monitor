@@ -1410,7 +1410,7 @@ function renderChartTf() {
   };
 }
 
-let candleViewCount = null, candleViewOffset = 0;
+let candleViewCount = null, candleViewOffset = 0, candleViewTf = '';
 
 function drawCandles(items, tf, hostId = 'stock-chart') {
   const host = document.getElementById(hostId);
@@ -1706,7 +1706,11 @@ async function loadCandles(more = false, preserveView = false) {
   const host = document.getElementById('stock-chart');
   if (!more) {
     if (!preserveView) { candleItems = []; candleHistory = []; candleNext = ''; candleCont = 'N'; candleHistoryLoaded = false; }
-    if (!preserveView) { candleViewCount = null; candleViewOffset = 0; }
+    // 종목만 바뀌면 보던 캔들 수를 유지하고, 봉 주기가 바뀔 때만 기본값으로 되돌린다.
+    if (!preserveView) {
+      if (candleViewTf !== tf) candleViewCount = null;
+      candleViewTf = tf; candleViewOffset = 0;
+    }
   }
   candleLoading = true; updateCandleMore();
   try {
