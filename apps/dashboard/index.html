@@ -1400,7 +1400,7 @@ function rsiThirtyThreshold(items, period = 14) {
   return {price:items[items.length - 1].c + delta, strict:gain === 0 && loss === 0};
 }
 
-const CHART_TFS = [['1m','1분'],['3m','3분'],['10m','10분'],['15m','15분'],['D','일'],['W','주'],['M','월']];
+const CHART_TFS = [['1m','1분'],['3m','3분'],['5m','5분'],['10m','10분'],['15m','15분'],['D','일'],['W','주'],['M','월']];
 
 function renderChartTf() {
   const host = document.getElementById('chart-tf');

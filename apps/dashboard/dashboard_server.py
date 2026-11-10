@@ -1451,6 +1451,7 @@ def build_prm_upper(market_key, side='2'):
 _CANDLE_TF = {
     '1m':  ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '1'}),
     '3m':  ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '3'}),
+    '5m':  ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '5'}),
     '10m': ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '10'}),
     '15m': ('ka10080', 'stk_min_pole_chart_qry', 'cntr_tm', {'tic_scope': '15'}),
     'D':   ('ka10081', 'stk_dt_pole_chart_qry',  'dt', {}),
