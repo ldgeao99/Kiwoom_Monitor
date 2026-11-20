@@ -885,12 +885,12 @@ def maybe_check_nasdaq_reversal(now):
     if st.get('up_armed') and up >= NASDAQ_REV_PCT - 1e-9:
         st['up_armed'] = False
         low_pct = f"{(st['low'] / prev - 1) * 100:+.2f}%" if prev else '-'
-        send_telegram_message(f"🟢 나스닥100선물 상승\n최저점 {low_pct}, 현재 {current_pct}\n대비 +{up:.2f}%")
+        send_telegram_message(f"🟢 나스닥100선물 상승\n현재 {current_pct}, 최저점 {low_pct}\n대비 +{up:.2f}%")
         print(f"  → 텔레그램: 나스닥선물 상승 +{up:.2f}%")
     if st.get('down_armed') and dn <= -NASDAQ_REV_PCT + 1e-9:
         st['down_armed'] = False
         high_pct = f"{(st['high'] / prev - 1) * 100:+.2f}%" if prev else '-'
-        send_telegram_message(f"🔴 나스닥100선물 하락\n최고점 {high_pct}, 현재 {current_pct}\n대비 {dn:.2f}%")
+        send_telegram_message(f"🔴 나스닥100선물 하락\n현재 {current_pct}, 최고점 {high_pct}\n대비 {dn:.2f}%")
         print(f"  → 텔레그램: 나스닥선물 하락 {dn:.2f}%")
 
 
